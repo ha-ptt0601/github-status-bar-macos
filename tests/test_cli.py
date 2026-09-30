@@ -229,3 +229,30 @@ class PickerCallbacksTest(CliCase):
         code, out, _ = self.run_cli(["_repo-preview", "acme/api"])
         self.assertEqual(code, 0)
         self.assertIn("#274", out)
+
+
+class CacheTtlTest(CliCase):
+    def test_refresh_reuses_recent_fetch(self):
+        self.run_cli(["repos", "--refresh"], runner=fake_runner)
+        code, out, _ = self.run_cli(["repos", "--refresh"], runner=failing_runner)
+        self.assertEqual(code, 0)
+        self.assertIn("fetched_at", json.loads(out))
+
+    def test_force_bypasses_cache(self):
+        self.run_cli(["repos", "--refresh"], runner=fake_runner)
+        code, _, _ = self.run_cli(["repos", "--refresh", "--force"], runner=failing_runner)
+        self.assertEqual(code, 1)
+
+    def test_stale_cache_refetches(self):
+        self.run_cli(["repos", "--refresh"], runner=fake_runner)
+        last = Path(os.environ["CHIP_CACHE_DIR"]) / "last.json"
+        data = json.loads(last.read_text())
+        data["fetched_at"] -= cli.CACHE_TTL_SECONDS + 1
+        last.write_text(json.dumps(data))
+        code, _, _ = self.run_cli(["repos", "--refresh"], runner=failing_runner)
+        self.assertEqual(code, 1)
+
+    def test_all_flag_change_refetches(self):
+        self.run_cli(["repos", "--refresh"], runner=fake_runner)
+        code, _, _ = self.run_cli(["repos", "--refresh", "--all"], runner=failing_runner)
+        self.assertEqual(code, 1)

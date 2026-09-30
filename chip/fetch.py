@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Dict, List, Optional, Tuple
 
 # reviewed-by is needed: submitting a review removes you from review-requested.
@@ -70,10 +71,11 @@ def search_all(search: str, runner: Runner) -> Tuple[str, List[dict]]:
 
 
 def fetch_inbox_nodes(runner: Runner = run_gh_graphql) -> Tuple[str, List[dict]]:
-    viewer = ""
+    # Both searches run in parallel (~5s instead of ~8s); results merge in SEARCHES order.
+    with ThreadPoolExecutor(max_workers=len(SEARCHES)) as pool:
+        results = list(pool.map(lambda search: search_all(search, runner), SEARCHES))
     seen: Dict[str, dict] = {}
-    for search in SEARCHES:
-        viewer, nodes = search_all(search, runner)
+    for _, nodes in results:
         for node in nodes:
             seen.setdefault(node["id"], node)
-    return viewer, list(seen.values())
+    return results[-1][0], list(seen.values())

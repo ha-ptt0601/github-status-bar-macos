@@ -15,14 +15,15 @@ Args:
 ## 1. Choose the project
 
 ```bash
-~/work/chip/bin/chip repos --refresh     # fetches from GitHub; later: `chip repos` (no --refresh) reuses the fetch
+~/work/chip/bin/chip repos --refresh     # fetches from GitHub (~5s), or reuses a fetch < 3 min old; add --force if the user asks to reload
+                                         # later in the flow: `chip repos` (no --refresh) reuses the same fetch
 ```
 
-Output: `{total, hidden: {approved, draft}, questions}`.
+Output: `{total, hidden: {approved, draft}, updated, questions}`.
 
 - Exit 1: show stderr as-is (it includes the `! gh auth login` hint when relevant) and stop.
 - `total == 0`: "Inbox zero 🎉" plus the hidden counts, then stop.
-- Otherwise, print one line, `<total> PR đang chờ bạn (ẩn <approved> đã approve, <draft> draft)`. Then call **AskUserQuestion with `questions` exactly as given**.
+- Otherwise, print one line, `<total> PR đang chờ bạn (ẩn <approved> đã approve, <draft> draft · cập nhật <updated>)`. Then call **AskUserQuestion with `questions` exactly as given**.
 - If `Tất cả` or nothing is picked, use no repo filter. Otherwise use `--repo <picked labels joined by ,>`.
 
 ## 2. Tick PRs, page by page

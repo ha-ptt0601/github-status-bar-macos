@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,7 @@ from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "Có vẻ gh chưa đăng nhập — chạy `! gh auth login` rồi thử lại."
 PICK_FIELDS = ("index", "label", "repo", "number", "title", "url")
+CACHE_TTL_SECONDS = 180
 
 
 def cache_dir() -> Path:
@@ -29,8 +31,15 @@ def _error(message: str) -> None:
     print(f"chip: {message}", file=sys.stderr)
 
 
-def _refresh(show_all: bool, runner) -> Optional[dict]:
-    """Fetch, build and cache the inbox; None (error already printed) on failure."""
+def _refresh(show_all: bool, runner, force: bool = False) -> Optional[dict]:
+    """Fetch, build and cache the inbox (reusing a fetch younger than CACHE_TTL_SECONDS
+    unless `force`); None (error already printed) on failure."""
+    last = cache_dir() / "last.json"
+    if not force and last.exists():
+        cached = json.loads(last.read_text())
+        fresh = time.time() - cached.get("fetched_at", 0) < CACHE_TTL_SECONDS
+        if fresh and cached.get("show_all") == show_all:
+            return cached
     try:
         viewer, nodes = fetch.fetch_inbox_nodes(runner)
     except fetch.FetchError as exc:
@@ -40,6 +49,8 @@ def _refresh(show_all: bool, runner) -> Optional[dict]:
         return None
     inbox = model.build_inbox(nodes, viewer, datetime.now(timezone.utc), show_all=show_all)
     menu.assign_labels(inbox["rows"])
+    inbox["fetched_at"] = time.time()
+    inbox["show_all"] = show_all
     cache_dir().mkdir(parents=True, exist_ok=True)
     (cache_dir() / "last.json").write_text(json.dumps(inbox, ensure_ascii=False, indent=1))
     return inbox
@@ -158,14 +169,20 @@ def cmd_internal(args) -> int:
 
 def cmd_repos(args, runner) -> int:
     if args.refresh:
-        inbox = _refresh(args.all, runner)
+        inbox = _refresh(args.all, runner, force=args.force)
         if inbox is None:
             return 1
     else:
         inbox = _cached_inbox()
         if inbox is None:
             return 2
-    out = {"total": len(inbox["rows"]), "hidden": inbox["hidden"], "questions": menu.repo_questions(inbox["rows"])}
+    out = {
+        "total": len(inbox["rows"]),
+        "hidden": inbox["hidden"],
+        "fetched_at": inbox.get("fetched_at"),
+        "updated": datetime.fromtimestamp(inbox.get("fetched_at", time.time())).strftime("%H:%M"),
+        "questions": menu.repo_questions(inbox["rows"]),
+    }
     print(json.dumps(out, ensure_ascii=False, indent=1))
     return 0
 
@@ -216,6 +233,7 @@ def main(argv=None, runner=None) -> int:
     p_repos = sub.add_parser("repos", help="câu hỏi AskUserQuestion chọn project (JSON)")
     p_repos.add_argument("--refresh", action="store_true", help="tải lại PR từ GitHub trước")
     p_repos.add_argument("--all", action="store_true", help="hiện cả PR đã approve và draft")
+    p_repos.add_argument("--force", action="store_true", help="bỏ qua dữ liệu tải trong 3 phút gần đây")
     for name in ("_toggle", "_prs", "_repo-preview"):
         sub.add_parser(name).add_argument("arg")
     sub.add_parser("open", help="mở `chip` (ô tìm PR) trong cửa sổ terminal mới")
