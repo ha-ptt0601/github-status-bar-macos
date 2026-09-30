@@ -11,7 +11,9 @@ WAITING = "waiting-author"
 COMMENTED = "commented"
 APPROVED = "approved"
 
-STATUS_GROUP = {REREVIEW: 0, NEW: 1, WAITING: 2, COMMENTED: 2, APPROVED: 3}
+STATUS_GROUP = {REREVIEW: 0, NEW: 1, WAITING: 2, COMMENTED: 2, APPROVED: 4}
+STALE_GROUP = 3
+STALE_DAYS = 30
 TRUNK_BRANCHES = {"dev", "develop", "main", "master"}
 JIRA_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 CI_MAP = {"SUCCESS": "✓", "FAILURE": "✗", "ERROR": "✗", "PENDING": "…", "EXPECTED": "…"}
@@ -88,6 +90,7 @@ def build_row(node: dict, viewer: str, now: datetime) -> dict:
         "author": _login(node.get("author")) or "ghost",
         "created_at": node["createdAt"],
         "wait": format_wait(node["createdAt"], now),
+        "stale": (now - parse_ts(node["createdAt"])).days > STALE_DAYS,
         "status": my_status(node, viewer),
         "decision": decision(node),
         "size": f"+{node.get('additions', 0)}/-{node.get('deletions', 0)} {node.get('changedFiles', 0)}f",
@@ -100,6 +103,14 @@ def build_row(node: dict, viewer: str, now: datetime) -> dict:
     }
 
 
+def _group(row: dict) -> int:
+    """Re-review always first; other PRs older than STALE_DAYS sink below the fresh ones."""
+    group = STATUS_GROUP[row["status"]]
+    if row["stale"] and group in (STATUS_GROUP[NEW], STATUS_GROUP[WAITING]):
+        return STALE_GROUP
+    return group
+
+
 def build_inbox(nodes: List[dict], viewer: str, now: datetime, show_all: bool = False) -> dict:
     hidden = {"approved": 0, "draft": 0}
     rows = []
@@ -110,7 +121,7 @@ def build_inbox(nodes: List[dict], viewer: str, now: datetime, show_all: bool = 
             hidden["approved"] += 1
         else:
             rows.append(row)
-    rows.sort(key=lambda r: (STATUS_GROUP[r["status"]], r["created_at"]))
+    rows.sort(key=lambda r: (_group(r), r["created_at"]))
     for index, row in enumerate(rows, 1):
         row["index"] = index
     return {"viewer": viewer, "rows": rows, "hidden": hidden}

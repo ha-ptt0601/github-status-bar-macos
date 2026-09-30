@@ -116,3 +116,21 @@ class InboxTest(unittest.TestCase):
         inbox = model.build_inbox(self.nodes(), "me", NOW, show_all=True)
         self.assertEqual(len(inbox["rows"]), 6)
         self.assertEqual(inbox["hidden"], {"approved": 0, "draft": 0})
+
+
+class StaleOrderTest(unittest.TestCase):
+    def test_stale_prs_go_last_but_rereview_stays_first(self):
+        nodes = [
+            make_node(id="old-new", number=1, createdAt="2026-05-01T00:00:00Z"),
+            make_node(id="fresh", number=2, createdAt="2026-09-29T00:00:00Z"),
+            make_node(id="old-waiting", number=3, createdAt="2026-06-01T00:00:00Z",
+                      latestReviews=reviews(review("me", "CHANGES_REQUESTED", MINE_AT))),
+            make_node(id="fresh-waiting", number=4, createdAt="2026-09-20T00:00:00Z",
+                      latestReviews=reviews(review("me", "CHANGES_REQUESTED", MINE_AT))),
+            make_node(id="old-rereview", number=5, createdAt="2026-04-01T00:00:00Z",
+                      commits=commits_at("2026-09-30T01:00:00Z"),
+                      latestReviews=reviews(review("me", "COMMENTED", MINE_AT))),
+        ]
+        inbox = model.build_inbox(nodes, "me", NOW)
+        self.assertEqual([r["number"] for r in inbox["rows"]], [5, 2, 4, 1, 3])
+        self.assertEqual([r["stale"] for r in inbox["rows"]], [True, False, False, True, True])
