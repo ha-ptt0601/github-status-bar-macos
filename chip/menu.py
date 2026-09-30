@@ -8,6 +8,7 @@ from chip import model
 from chip.render import STATUS_LABEL
 
 PER_PAGE = 12
+ONE_SCREEN = 16  # 4 questions x 4 options: fits without a nav question
 PER_QUESTION = 4
 REVIEW_NOW = "Review các PR đã chọn"
 NEXT_PAGE = "Xem trang tiếp"
@@ -51,17 +52,19 @@ def _repo_description(rs: List[dict]) -> str:
     return f"{len(rs)} PR" + (f" · {rereview} {STATUS_LABEL[model.REREVIEW]}" if rereview else "")
 
 
-def repo_questions(rows: List[dict]) -> List[dict]:
-    """Multi-select project questions: `Tất cả` first, then each repo busiest first (max 15 repos)."""
+def project_question(rows: List[dict]) -> dict:
+    """One single-select question: `Tất cả` + the 3 busiest repos; the rest are typed via Other."""
     names = _repo_names(rows)
     counts = Counter(r["repo"] for r in rows)
+    ordered = sorted(counts, key=lambda f: (-counts[f], names[f]))
+    top, rest = ordered[:PER_QUESTION - 1], ordered[PER_QUESTION - 1:]
     options = [{"label": ALL_REPOS, "description": _repo_description(rows)}]
-    for full in sorted(counts, key=lambda f: (-counts[f], names[f])):
+    for full in top:
         options.append({"label": names[full], "description": _repo_description([r for r in rows if r["repo"] == full])})
-    return [
-        {"question": "Chọn project (chọn nhiều được)", "header": f"Project {i + 1}", "multiSelect": True, "options": chunk}
-        for i, chunk in enumerate(_chunks(options)[:4])
-    ]
+    question = "Chọn project"
+    if rest:
+        question += " — repo khác gõ tên vào ô trống: " + ", ".join(f"{names[f]} ({counts[f]})" for f in rest)
+    return {"question": question, "header": "Project", "multiSelect": False, "options": options}
 
 
 def _description(r: dict) -> str:
@@ -84,24 +87,29 @@ def _chunks(items: List[dict]) -> List[List[dict]]:
 
 
 def build_page(rows: List[dict], page: int, filter_text: str = "") -> dict:
-    pages = max(1, -(-len(rows) // PER_PAGE))
+    single = len(rows) <= ONE_SCREEN
+    per_page = ONE_SCREEN if single else PER_PAGE
+    pages = max(1, -(-len(rows) // per_page))
     if not 1 <= page <= pages:
         raise ValueError(f"trang {page} ngoài khoảng 1-{pages}")
-    start = (page - 1) * PER_PAGE
+    start = (page - 1) * per_page
     questions = []
     offset = start
-    for chunk in _chunks(rows[start:start + PER_PAGE]):
+    for chunk in _chunks(rows[start:start + per_page]):
         first, last = offset + 1, offset + len(chunk)
         offset = last
         options = [{"label": r["label"], "description": _description(r)} for r in chunk]
         if len(options) == 1:
             options.append({"label": SKIP, "description": "Không review PR nào"})
         questions.append({
-            "question": f"Chọn PR để review ({first}–{last} / {len(rows)})",
+            "question": f"Chọn PR để review ({first}–{last} / {len(rows)})"
+            + (" — Space tick, Tab nhóm kế; ô trống: gõ từ khoá / tên project" if first == start + 1 else ""),
             "header": f"PR {first}-{last}",
             "multiSelect": True,
             "options": options,
         })
+    if single:
+        return {"page": page, "pages": pages, "total": len(rows), "filter": filter_text, "questions": questions}
     nav = [{"label": REVIEW_NOW, "description": "Dừng chọn, review các PR đã tick"}]
     if page < pages:
         nxt_first, nxt_last = page * PER_PAGE + 1, min(len(rows), (page + 1) * PER_PAGE)

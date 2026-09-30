@@ -1,7 +1,7 @@
 import unittest
 
 from chip import model
-from chip.menu import PER_PAGE, assign_labels, build_page, filter_rows, repo_questions
+from chip.menu import assign_labels, build_page, filter_rows, project_question
 
 
 def row(i, repo="acme/shopbox-api", **overrides):
@@ -62,12 +62,32 @@ class BuildPageTest(unittest.TestCase):
 
     def test_question_text_and_header(self):
         q = pr_questions(build_page(rows(39), 2))[0]
-        self.assertEqual(q["question"], "Chọn PR để review (13–16 / 39)")
+        self.assertEqual(q["question"], "Chọn PR để review (13–16 / 39) — Space tick, Tab nhóm kế; ô trống: gõ từ khoá / tên project")
+        self.assertEqual(pr_questions(build_page(rows(39), 2))[1]["question"], "Chọn PR để review (17–20 / 39)")
         self.assertEqual(q["header"], "PR 13-16")
+
+    def test_up_to_16_prs_fit_one_screen_without_nav(self):
+        for n, sizes in ((6, [4, 2]), (16, [4, 4, 4, 4])):
+            page = build_page(rows(n), 1)
+            with self.subTest(n=n):
+                self.assertEqual(page["pages"], 1)
+                self.assertEqual([len(q["options"]) for q in page["questions"]], sizes)
+                self.assertTrue(all(q["multiSelect"] for q in page["questions"]))
+
+    def test_17_prs_page_with_nav(self):
+        page = build_page(rows(17), 1)
+        self.assertEqual(page["pages"], 2)
+        self.assertEqual([len(q["options"]) for q in pr_questions(page)], [4, 4, 4])
+        self.assertFalse(page["questions"][-1]["multiSelect"])
+
+    def test_question_texts_unique(self):
+        for n in (6, 39):
+            texts = [q["question"] for q in build_page(rows(n), 1)["questions"]]
+            self.assertEqual(len(texts), len(set(texts)))
 
     def test_no_single_option_question(self):
         for n in (5, 9, 13):
-            page = build_page(rows(n), (n - 1) // PER_PAGE + 1)
+            page = build_page(rows(n), 1)
             with self.subTest(n=n):
                 self.assertTrue(all(len(q["options"]) >= 2 for q in page["questions"]))
 
@@ -112,23 +132,24 @@ class FilterTest(unittest.TestCase):
         self.assertEqual(page["filter"], "q=thing 1")
 
 
-class RepoQuestionsTest(unittest.TestCase):
-    def test_repo_options_with_counts(self):
-        labelled = assign_labels([
-            row(1, repo="acme/api", status=model.REREVIEW), row(2, repo="acme/api"), row(3),
-        ])
-        questions = repo_questions(labelled)
-        self.assertEqual(len(questions), 1)
-        self.assertTrue(questions[0]["multiSelect"])
-        self.assertEqual(questions[0]["options"], [
-            {"label": "Tất cả", "description": "3 PR · 1 cần re-review"},
-            {"label": "api", "description": "2 PR · 1 cần re-review"},
-            {"label": "shopbox-api", "description": "1 PR"},
-        ])
+class ProjectQuestionTest(unittest.TestCase):
+    def labelled(self, repos):
+        return assign_labels([row(i, repo=r) for i, r in enumerate(repos, 1)])
 
-    def test_many_repos_split_into_questions_of_four(self):
-        labelled = assign_labels([row(i, repo=f"o/r{i}") for i in range(1, 10)])
-        self.assertEqual([len(q["options"]) for q in repo_questions(labelled)], [4, 4, 2])
+    def test_one_single_select_question_all_plus_top_three(self):
+        repos = ["o/a"] * 3 + ["o/b"] * 2 + ["o/c"] * 2 + ["o/d"] + ["o/e"]
+        q = project_question(self.labelled(repos))
+        self.assertFalse(q["multiSelect"])
+        self.assertEqual([o["label"] for o in q["options"]], ["Tất cả", "a", "b", "c"])
+        self.assertEqual(q["options"][0]["description"], "9 PR")
+        self.assertEqual(q["options"][1]["description"], "3 PR")
+        self.assertIn("gõ tên vào ô trống: d (1), e (1)", q["question"])
 
-    def test_single_repo_still_has_two_options(self):
-        self.assertEqual([o["label"] for o in repo_questions(rows(2))[0]["options"]], ["Tất cả", "shopbox-api"])
+    def test_rereview_count_in_description(self):
+        labelled = assign_labels([row(1, repo="o/a", status=model.REREVIEW), row(2, repo="o/a")])
+        self.assertEqual(project_question(labelled)["options"][1]["description"], "2 PR · 1 cần re-review")
+
+    def test_few_repos_no_hint(self):
+        q = project_question(self.labelled(["o/a", "o/b"]))
+        self.assertEqual([o["label"] for o in q["options"]], ["Tất cả", "a", "b"])
+        self.assertEqual(q["question"], "Chọn project")

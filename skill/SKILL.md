@@ -12,41 +12,43 @@ Args:
 - `/chip <words>`: skip step 1 and start step 2 with `--q "<words>"` (the search matches title, author, Jira, repo and base).
 - `/chip terminal`: run `~/work/chip/bin/chip open`. That opens the fzf picker in a new Terminal window. Reply with its stdout (or stderr on failure) and stop.
 
-## 1. Choose the project
+## 1. Choose the project (one keystroke)
 
 ```bash
 ~/work/chip/bin/chip repos --refresh     # fetches from GitHub (~5s), or reuses a fetch < 3 min old; add --force if the user asks to reload
                                          # later in the flow: `chip repos` (no --refresh) reuses the same fetch
 ```
 
-Output: `{total, hidden: {approved, draft}, updated, questions}`.
+Output: `{total, hidden: {approved, draft}, updated, questions}`. `questions` holds ONE single-select question: `Tất cả` plus the 3 busiest repos. The other repos are listed in the question text for typing.
 
 - Exit 1: show stderr as-is (it includes the `! gh auth login` hint when relevant) and stop.
 - `total == 0`: "Inbox zero 🎉" plus the hidden counts, then stop.
 - Otherwise, print one line, `<total> PR đang chờ bạn (ẩn <approved> đã approve, <draft> draft · cập nhật <updated>)`. Then call **AskUserQuestion with `questions` exactly as given**.
-- If `Tất cả` or nothing is picked, use no repo filter. Otherwise use `--repo <picked labels joined by ,>`.
+- Answer `Tất cả`: no filter. A repo label: `--repo <label>`. Other text: if it equals or contains a repo name from the question, use `--repo <that name>`; otherwise use `--q "<text>"`.
 
-## 2. Tick PRs, page by page
+## 2. Tick PRs
 
 ```bash
-~/work/chip/bin/chip menu --cached [--repo a,b] [--q "<words>"] [--page N]
+~/work/chip/bin/chip menu --cached [--repo a] [--q "<words>"] [--page N]
 ```
 
 (For `/chip <words>`, where step 1 was skipped, the first call is `chip menu --q "<words>"` without `--cached`. It fetches from GitHub.)
 
 The output is `{page, pages, total, filter, hidden, questions}`. Call **AskUserQuestion with `questions` exactly as given**. If `total == 0`, say "Không có PR khớp `<filter>`" and go back to step 1.
 
-Keep the filter state (`repo`, `q`) and **every label picked so far** across pages, project changes and searches. After each page, collect the labels from every `multiSelect` question, ignoring `Không chọn`. Then act on the nav answer ("Tiếp theo?"):
+When the result has **16 PRs or fewer**, `questions` contains only multi-select PR questions and no nav question: the user ticks and submits once. Collect the ticked labels, ignoring `Không chọn`, and go straight to step 3. If an Other answer holds text instead, treat that text like the Other answer of step 1 (switch project or search), keep the labels ticked so far, and rerun this step.
+
+When the result has **more than 16 PRs**, there are pages of 12 plus a nav question "Tiếp theo?". Keep the filter state and **every label picked so far** across pages:
 
 | Nav answer | Do |
 |---|---|
 | `Xem trang tiếp` | the same command with `--page <page+1>` |
-| `Đổi project` | step 1 again, using `chip repos` without `--refresh`. Keep `--q`. |
-| `Tìm kiếm` | ask in plain text "Gõ từ khoá (title, author, Jira, repo) — hoặc `bỏ lọc`:" and wait, then rerun with `--q "<text>"`. `bỏ lọc` clears `q`. |
-| Other (free text) | the same as `Tìm kiếm` with that text |
+| `Đổi project` | step 1 again, using `chip repos` without `--refresh` |
+| `Tìm kiếm` | ask in plain text "Gõ từ khoá (title, author, Jira, repo) — hoặc `bỏ lọc`:" and wait, then rerun with `--q "<text>"` |
+| Other (free text) | the same as the Other answer of step 1 |
 | `Review các PR đã chọn` | go to step 3 |
 
-Before each re-ask after the first, print one line with the labels picked so far. If nothing was picked at review time, say so in one line and stop.
+If nothing was picked at review time, say so in one line and stop.
 
 ## 3. Pick
 

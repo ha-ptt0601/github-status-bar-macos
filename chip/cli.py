@@ -181,7 +181,7 @@ def cmd_repos(args, runner) -> int:
         "hidden": inbox["hidden"],
         "fetched_at": inbox.get("fetched_at"),
         "updated": datetime.fromtimestamp(inbox.get("fetched_at", time.time())).strftime("%H:%M"),
-        "questions": menu.repo_questions(inbox["rows"]),
+        "questions": [menu.project_question(inbox["rows"])],
     }
     print(json.dumps(out, ensure_ascii=False, indent=1))
     return 0
