@@ -17,15 +17,16 @@ Every day there are many PRs waiting for the user (GitHub login `ha-ptt0601`) to
 
 ```
 /chip (skill, SKILL.md)
-  ├─ runs  bin/chip-list --json      → deterministic data: PR rows + hidden counts
-  ├─ renders table, asks user to pick (free text: "1,3", "2-4", "all")
+  ├─ runs  bin/chip list              → markdown table (deterministic); rows saved to ~/.cache/chip/last.json
+  ├─ asks user to pick (free text: "1,3", "2-4", "all")
+  ├─ runs  bin/chip pick "<text>"     → JSON of picked rows (validated against last.json)
   └─ for each picked PR, one at a time:
-       bin/chip-repo owner/repo      → local clone path (discover / cache / clone)
+       bin/chip repo owner/repo       → local clone path (discover / cache / clone)
        invoke /my-review-skill <PR url>  (from that repo dir)
        ask "Tiếp PR kế?" before the next one
 ```
 
-The two scripts are Python 3.9 with the stdlib only, and they call `gh`. The skill contains no data logic of its own. It only renders, asks and orchestrates.
+`bin/chip` is Python 3.9 with the stdlib only, and it calls `gh`. The skill contains no data logic of its own. It only shows the output, asks and orchestrates.
 
 ### Files (`~/work/chip`)
 
@@ -33,10 +34,11 @@ The two scripts are Python 3.9 with the stdlib only, and they call `gh`. The ski
 |---|---|
 | `chip/fetch.py` | Build and run the GraphQL searches through `gh api graphql`, merge and dedupe the results |
 | `chip/model.py` | Pure functions: raw PR node → row (status, CI, size, stacked, Jira key, wait time), sorting, visibility |
-| `chip/select.py` | Parse the user's selection string → list of row indexes |
+| `chip/selection.py` | Parse the user's selection string → list of row indexes (not `select.py`: that shadows the stdlib module) |
+| `chip/render.py` | Inbox → markdown table |
+| `chip/cli.py` | `list` / `pick` / `repo` subcommands, cache paths (`CHIP_CACHE_DIR`, `CHIP_WORK_ROOT` override for tests) |
 | `chip/repos.py` | Find a local clone for `owner/repo`: cache, scan, clone |
-| `bin/chip-list` | CLI: fetch → model → JSON on stdout (or a plain-text table with `--table`) |
-| `bin/chip-repo` | CLI: `chip-repo owner/repo [--clone]` → prints the path, or exits 2 if no clone is found |
+| `bin/chip` | Thin launcher for `chip.cli.main` |
 | `skill/SKILL.md` | The `/chip` skill; symlinked to `~/.claude/skills/chip` |
 | `tests/` | `unittest` tests with fixture JSON, no network |
 
@@ -72,7 +74,7 @@ If the viewer has been explicitly re-requested (the viewer is in `reviewRequests
 - `size`: `+additions/-deletions Nf`.
 - `ci`: `SUCCESS` → ✓, `FAILURE` or `ERROR` → ✗, `PENDING` or `EXPECTED` → ⏳, none → `-`.
 - `conflict`: shows `⚠` when `mergeable == CONFLICTING`.
-- `base`: `baseRefName`, plus a `stacked` flag when it differs from the default branch.
+- `base`: `baseRefName`, plus a `stacked` flag when it is neither the default branch nor one of `dev`, `develop`, `main`, `master` (real repos default to `master` but merge into `dev`).
 - `jira`: first match of `[A-Z][A-Z0-9]+-\d+` in the title, then in `headRefName`; empty if none.
 
 **Visibility.** `approved` rows and drafts are hidden by default. The JSON output includes `hidden: {approved: N, draft: M}`, and `--all` shows every row.
@@ -81,14 +83,14 @@ If the viewer has been explicitly re-requested (the viewer is in `reviewRequests
 
 ## Selection
 
-The user types free text: `1,3,5`, `2-4`, `1,3-5`, or `all`. Whitespace is ignored. Out-of-range or malformed tokens raise an error that lists the bad token, and the skill asks again. Duplicates are removed and the displayed order is kept.
+The user types free text: `1,3,5`, `2-4`, `1,3-5`, or `all`. Whitespace is ignored. Out-of-range or malformed tokens raise an error that lists the bad token, and the skill asks again. Duplicates are removed and the result is sorted ascending (table order).
 
-## Local repo resolution (`chip-repo`)
+## Local repo resolution (`chip repo`)
 
 1. Look up the cache at `~/.cache/chip/repos.json` (`{"owner/repo": "/abs/path"}`). A cached entry is used only if the path still exists and its `origin` still matches.
 2. Otherwise scan `~/work` up to 3 levels deep for `.git` directories, skipping `node_modules`, `vendor` and `.chip-repos` itself. Match the `origin` URL, normalizing ssh/https and a trailing `.git`. Every match found is written back to the cache.
 3. Also check `~/work/.chip-repos/<repo>`.
-4. If nothing is found, exit with code 2. The skill then asks the user and, on yes, runs `chip-repo owner/repo --clone`, which does `gh repo clone owner/repo ~/work/.chip-repos/<repo>` and prints the path.
+4. If nothing is found, exit with code 2. The skill then asks the user and, on yes, runs `chip repo owner/repo --clone`, which does `gh repo clone owner/repo ~/work/.chip-repos/<repo>` and prints the path.
 
 ## Review loop (skill)
 
@@ -106,8 +108,8 @@ For each selected row, in order:
 
 ## Testing
 
-`python3 -m unittest discover tests` (Python 3.9 stdlib, since pytest is not installed):
+`python3 -m unittest discover -s tests -t .` (Python 3.9 stdlib, since pytest is not installed):
 - `model`: each status branch, the re-request override, CI mapping, stacked flag, Jira regex, wait formatting, sort order, visibility.
-- `select`: valid forms, ranges, `all`, duplicates, errors.
+- `selection`: valid forms, ranges, `all`, duplicates, errors.
 - `repos`: remote URL normalization; scanning a temp directory tree with fake git repos (real `git init` plus `remote add`); cache invalidation.
 - `fetch`: merge and dedupe of two fixture responses (the `gh` call is injected).
