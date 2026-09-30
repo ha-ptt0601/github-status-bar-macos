@@ -5,57 +5,57 @@ description: Use when the user runs /chip or asks which PRs are waiting for thei
 
 # chip — PR review inbox
 
-`~/work/chip/bin/chip` does all the data work. You only pass its output to AskUserQuestion, collect the picks, and run the review loop. Never build, re-sort or filter the PR options yourself, and never print the PR list as a table.
+`~/work/chip/bin/chip` does all the data work. You only pass its JSON to AskUserQuestion, collect the picks, and run the review loop. Never build, re-sort or filter options yourself, never reword them, and never print the PR list as a table.
 
-## 0. Default: open the search picker in a new terminal window
+Args:
+- `/chip`: the in-chat flow below.
+- `/chip <words>`: skip step 1 and start step 2 with `--q "<words>"` (the search matches title, author, Jira, repo and base).
+- `/chip terminal`: run `~/work/chip/bin/chip open`. That opens the fzf picker in a new Terminal window. Reply with its stdout (or stderr on failure) and stop.
 
-Unless the args contain `menu` (for example `/chip menu` or `/chip menu newsletter`), run:
-
-```bash
-~/work/chip/bin/chip open
-```
-
-- **Exit 0:** reply with one line, "Đã mở `chip` trong cửa sổ Terminal mới: chọn project → Tab tick PR → Enter review (Esc quay lại; review chạy trong cửa sổ đó).", and **stop**. Do not load the menu, and do not review anything in this session.
-- **Exit 1 or 2:** show stderr, then continue with step 1 (the in-chat menu).
-
-## 1. Menu — pick PRs with AskUserQuestion (`/chip menu`, or when `chip open` failed)
+## 1. Choose the project
 
 ```bash
-~/work/chip/bin/chip menu [--q "<words>"] [--repo a,b]          # fetch from GitHub (first call only); add --all for approved/draft too
-~/work/chip/bin/chip menu --cached [--page N] [--q …] [--repo …] # every later call: same fetch, no GitHub call
-~/work/chip/bin/chip repos                                        # repo-filter questions, from the same fetch
+~/work/chip/bin/chip repos --refresh     # fetches from GitHub; later: `chip repos` (no --refresh) reuses the fetch
 ```
 
-If `/chip menu` was given more args (e.g. `/chip menu newsletter`), pass the words after `menu` as `--q "<words>"` on the first call. The search matches title, author, Jira key, repo and base, and every word must match.
-
-The output is JSON: `{page, pages, total, filter, hidden: {approved, draft}, questions: [...]}`.
+Output: `{total, hidden: {approved, draft}, questions}`.
 
 - Exit 1: show stderr as-is (it includes the `! gh auth login` hint when relevant) and stop.
-- `total == 0` with no filter: say "Inbox zero 🎉" plus the hidden counts, and stop.
-- `total == 0` with a filter: say "Không có PR khớp `<filter>`", then ask for a new keyword, or offer to clear the filter.
-- Otherwise, before the first page, print one line: `<total> PR đang chờ bạn (ẩn <approved> đã approve, <draft> draft)`. Add `· lọc: <filter>` when there is a filter. Then call **AskUserQuestion with `questions` exactly as given**, without adding, removing or rewording anything.
+- `total == 0`: "Inbox zero 🎉" plus the hidden counts, then stop.
+- Otherwise, print one line, `<total> PR đang chờ bạn (ẩn <approved> đã approve, <draft> draft)`. Then call **AskUserQuestion with `questions` exactly as given**.
+- If `Tất cả` or nothing is picked, use no repo filter. Otherwise use `--repo <picked labels joined by ,>`.
 
-Keep the current filter state (`q`, `repo`) and **every label picked so far** across pages and filter changes. After each page, collect the selected labels from every `multiSelect` question, ignoring `Không chọn`. Then act on the nav question ("Tiếp theo?"):
+## 2. Tick PRs, page by page
+
+```bash
+~/work/chip/bin/chip menu --cached [--repo a,b] [--q "<words>"] [--page N]
+```
+
+(For `/chip <words>`, where step 1 was skipped, the first call is `chip menu --q "<words>"` without `--cached`. It fetches from GitHub.)
+
+The output is `{page, pages, total, filter, hidden, questions}`. Call **AskUserQuestion with `questions` exactly as given**. If `total == 0`, say "Không có PR khớp `<filter>`" and go back to step 1.
+
+Keep the filter state (`repo`, `q`) and **every label picked so far** across pages, project changes and searches. After each page, collect the labels from every `multiSelect` question, ignoring `Không chọn`. Then act on the nav answer ("Tiếp theo?"):
 
 | Nav answer | Do |
 |---|---|
-| `Xem trang tiếp` | `chip menu --cached --page <page+1>`, with the same `--q`/`--repo` |
-| `Lọc theo repo` | `chip repos` → AskUserQuestion with its `questions` as given → `chip menu --cached --repo <picked names joined by ,>` (keep `--q`). If nothing is picked, or only `Không chọn`, clear the repo filter. |
-| `Tìm kiếm` | Ask in plain text "Gõ từ khoá (title, author, Jira, repo) — hoặc `bỏ lọc`:" and wait. Then run `chip menu --cached --q "<text>"` (keep `--repo`). On `bỏ lọc`, drop both filters. |
-| Other (free text) | Treat as a search keyword, the same as `Tìm kiếm` with that text. `bỏ lọc` clears the filters. |
-| `Review các PR đã chọn` | Go to step 2. |
+| `Xem trang tiếp` | the same command with `--page <page+1>` |
+| `Đổi project` | step 1 again, using `chip repos` without `--refresh`. Keep `--q`. |
+| `Tìm kiếm` | ask in plain text "Gõ từ khoá (title, author, Jira, repo) — hoặc `bỏ lọc`:" and wait, then rerun with `--q "<text>"`. `bỏ lọc` clears `q`. |
+| Other (free text) | the same as `Tìm kiếm` with that text |
+| `Review các PR đã chọn` | go to step 3 |
 
-Before each re-ask after the first, print one line with the labels picked so far. If nothing was picked when the user chooses review, say so in one line and stop.
+Before each re-ask after the first, print one line with the labels picked so far. If nothing was picked at review time, say so in one line and stop.
 
-## 2. Pick
+## 3. Pick
 
 ```bash
 ~/work/chip/bin/chip pick "<label1>,<label2>,…"
 ```
 
-On exit 2, show the error and re-ask the page that holds the bad label. On exit 0 the output is a JSON array of `{index, label, repo, number, title, url}` in list order.
+On exit 2, show the error and re-ask. On exit 0 the output is a JSON array of `{index, label, repo, number, title, url}` in list order.
 
-## 3. Review loop — one PR at a time
+## 4. Review loop — one PR at a time
 
 For item i of n:
 
