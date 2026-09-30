@@ -22,7 +22,7 @@ def failing_runner(search, after):
     raise fetch.FetchError("HTTP 401: Bad credentials")
 
 
-class CliTest(unittest.TestCase):
+class CliCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.env = {k: os.environ.get(k) for k in ("CHIP_CACHE_DIR", "CHIP_WORK_ROOT")}
@@ -43,6 +43,8 @@ class CliTest(unittest.TestCase):
             code = cli.main(argv, runner=runner)
         return code, out.getvalue(), err.getvalue()
 
+
+class CliTest(CliCase):
     def test_list_prints_table_and_saves_rows(self):
         code, out, _ = self.run_cli(["list"], runner=fake_runner)
         self.assertEqual(code, 0)
@@ -61,7 +63,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         picked = json.loads(out)
         self.assertEqual(picked, [{
-            "index": 1, "repo": "acme/api", "number": 274,
+            "index": 1, "label": "api#274", "repo": "acme/api", "number": 274,
             "title": "feat: thing", "url": "https://github.com/acme/api/pull/1",
         }])
 
@@ -74,9 +76,44 @@ class CliTest(unittest.TestCase):
     def test_pick_without_list(self):
         code, _, err = self.run_cli(["pick", "1"])
         self.assertEqual(code, 2)
-        self.assertIn("chip list", err)
+        self.assertIn("chip menu", err)
 
     def test_repo_missing(self):
         code, _, err = self.run_cli(["repo", "acme/nope"])
         self.assertEqual(code, 2)
         self.assertIn("acme/nope", err)
+
+
+class MenuCliTest(CliCase):
+    def test_menu_first_page_fetches_and_labels(self):
+        code, out, _ = self.run_cli(["menu"], runner=fake_runner)
+        self.assertEqual(code, 0)
+        page = json.loads(out)
+        self.assertEqual((page["page"], page["pages"], page["total"]), (1, 1, 1))
+        self.assertEqual(page["hidden"], {"approved": 0, "draft": 0})
+        self.assertEqual(page["questions"][0]["options"][0]["label"], "api#274")
+
+    def test_menu_next_page_reads_cache_without_fetch(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, out, _ = self.run_cli(["menu", "--page", "1"], runner=failing_runner)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["page"], 1)
+
+    def test_menu_page_out_of_range(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, _, err = self.run_cli(["menu", "--page", "5"])
+        self.assertEqual(code, 2)
+        self.assertIn("trang 5", err)
+
+    def test_menu_inbox_zero(self):
+        empty = lambda s, a: {"viewer": {"login": "me"},
+                              "search": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []}}
+        code, out, _ = self.run_cli(["menu"], runner=empty)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["total"], 0)
+
+    def test_pick_by_label(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, out, _ = self.run_cli(["pick", "api#274"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)[0]["label"], "api#274")
