@@ -11,9 +11,10 @@ PER_PAGE = 12
 PER_QUESTION = 4
 REVIEW_NOW = "Review các PR đã chọn"
 NEXT_PAGE = "Xem trang tiếp"
-FILTER_REPO = "Lọc theo repo"
+FILTER_REPO = "Đổi project"
 SEARCH = "Tìm kiếm"
 SKIP = "Không chọn"
+ALL_REPOS = "Tất cả"
 
 
 def _repo_names(rows: List[dict]) -> dict:
@@ -45,21 +46,20 @@ def filter_rows(rows: List[dict], repos: Iterable[str] = (), query: str = "") ->
     return kept
 
 
+def _repo_description(rs: List[dict]) -> str:
+    rereview = sum(1 for r in rs if r["status"] == model.REREVIEW)
+    return f"{len(rs)} PR" + (f" · {rereview} {STATUS_LABEL[model.REREVIEW]}" if rereview else "")
+
+
 def repo_questions(rows: List[dict]) -> List[dict]:
-    """Multi-select questions listing each repo with its PR count, busiest first."""
+    """Multi-select project questions: `Tất cả` first, then each repo busiest first (max 15 repos)."""
     names = _repo_names(rows)
     counts = Counter(r["repo"] for r in rows)
-    rereview = Counter(r["repo"] for r in rows if r["status"] == model.REREVIEW)
-    options = []
+    options = [{"label": ALL_REPOS, "description": _repo_description(rows)}]
     for full in sorted(counts, key=lambda f: (-counts[f], names[f])):
-        description = f"{counts[full]} PR"
-        if rereview[full]:
-            description += f" · {rereview[full]} {STATUS_LABEL[model.REREVIEW]}"
-        options.append({"label": names[full], "description": description})
-    if len(options) == 1:
-        options.append({"label": SKIP, "description": "Không lọc"})
+        options.append({"label": names[full], "description": _repo_description([r for r in rows if r["repo"] == full])})
     return [
-        {"question": "Lọc theo repo (chọn nhiều)", "header": f"Repo {i + 1}", "multiSelect": True, "options": chunk}
+        {"question": "Chọn project (chọn nhiều được)", "header": f"Project {i + 1}", "multiSelect": True, "options": chunk}
         for i, chunk in enumerate(_chunks(options)[:4])
     ]
 
@@ -107,7 +107,7 @@ def build_page(rows: List[dict], page: int, filter_text: str = "") -> dict:
         nxt_first, nxt_last = page * PER_PAGE + 1, min(len(rows), (page + 1) * PER_PAGE)
         nav.append({"label": NEXT_PAGE, "description": f"PR {nxt_first}–{nxt_last}; lựa chọn ở trang này được giữ"})
     nav += [
-        {"label": FILTER_REPO, "description": "Chỉ hiện PR của các repo bạn chọn"},
+        {"label": FILTER_REPO, "description": "Chọn lại project"},
         {"label": SEARCH, "description": "Theo title, author, Jira, repo — hoặc gõ từ khoá vào Other"},
     ]
     questions.append({

@@ -159,7 +159,13 @@ class FilterCliTest(CliCase):
         self.run_cli(["menu"], runner=self.runner)
         code, out, _ = self.run_cli(["repos"])
         options = json.loads(out)["questions"][0]["options"]
-        self.assertEqual((code, [o["label"] for o in options]), (0, ["api", "shopbox-api"]))
+        self.assertEqual((code, [o["label"] for o in options]), (0, ["Tất cả", "api", "shopbox-api"]))
+
+    def test_repos_refresh_fetches_first(self):
+        code, out, _ = self.run_cli(["repos", "--refresh"], runner=self.runner)
+        data = json.loads(out)
+        self.assertEqual((code, data["total"], data["hidden"]), (0, 2, {"approved": 0, "draft": 0}))
+        self.assertEqual(data["questions"][0]["options"][0]["label"], "Tất cả")
 
 
 class PreviewCliTest(CliCase):

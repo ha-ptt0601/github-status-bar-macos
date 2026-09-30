@@ -40,14 +40,14 @@ class BuildPageTest(unittest.TestCase):
         nav = page["questions"][-1]
         self.assertFalse(nav["multiSelect"])
         self.assertEqual([o["label"] for o in nav["options"]],
-                         ["Review các PR đã chọn", "Xem trang tiếp", "Lọc theo repo", "Tìm kiếm"])
+                         ["Review các PR đã chọn", "Xem trang tiếp", "Đổi project", "Tìm kiếm"])
         self.assertEqual(nav["header"], "Trang 1/4")
 
     def test_last_page_nav_has_no_next(self):
         page = build_page(rows(39), 4)
         self.assertEqual([len(q["options"]) for q in pr_questions(page)], [3])
         self.assertEqual([o["label"] for o in page["questions"][-1]["options"]],
-                         ["Review các PR đã chọn", "Lọc theo repo", "Tìm kiếm"])
+                         ["Review các PR đã chọn", "Đổi project", "Tìm kiếm"])
 
     def test_option_content(self):
         r = row(1, title="fix(orders): only require a customer", status=model.REREVIEW,
@@ -121,10 +121,14 @@ class RepoQuestionsTest(unittest.TestCase):
         self.assertEqual(len(questions), 1)
         self.assertTrue(questions[0]["multiSelect"])
         self.assertEqual(questions[0]["options"], [
+            {"label": "Tất cả", "description": "3 PR · 1 cần re-review"},
             {"label": "api", "description": "2 PR · 1 cần re-review"},
             {"label": "shopbox-api", "description": "1 PR"},
         ])
 
     def test_many_repos_split_into_questions_of_four(self):
         labelled = assign_labels([row(i, repo=f"o/r{i}") for i in range(1, 10)])
-        self.assertEqual([len(q["options"]) for q in repo_questions(labelled)], [4, 3, 2])
+        self.assertEqual([len(q["options"]) for q in repo_questions(labelled)], [4, 4, 2])
+
+    def test_single_repo_still_has_two_options(self):
+        self.assertEqual([o["label"] for o in repo_questions(rows(2))[0]["options"]], ["Tất cả", "shopbox-api"])
