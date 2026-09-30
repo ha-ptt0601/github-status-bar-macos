@@ -7,7 +7,18 @@ description: Use when the user runs /chip or asks which PRs are waiting for thei
 
 `~/work/chip/bin/chip` does all the data work. You only pass its output to AskUserQuestion, collect the picks, and run the review loop. Never build, re-sort or filter the PR options yourself, and never print the PR list as a table.
 
-## 1. Menu — pick PRs with AskUserQuestion
+## 0. Default: open the search picker in a new terminal window
+
+Unless the args contain `menu` (for example `/chip menu` or `/chip menu newsletter`), run:
+
+```bash
+~/work/chip/bin/chip open
+```
+
+- **Exit 0:** reply with one line, "Đã mở `chip` trong cửa sổ Terminal mới: gõ để tìm, Tab tick, Enter review (review chạy trong cửa sổ đó).", and **stop**. Do not load the menu, and do not review anything in this session.
+- **Exit 1 or 2:** show stderr, then continue with step 1 (the in-chat menu).
+
+## 1. Menu — pick PRs with AskUserQuestion (`/chip menu`, or when `chip open` failed)
 
 ```bash
 ~/work/chip/bin/chip menu [--q "<words>"] [--repo a,b]          # fetch from GitHub (first call only); add --all for approved/draft too
@@ -15,7 +26,7 @@ description: Use when the user runs /chip or asks which PRs are waiting for thei
 ~/work/chip/bin/chip repos                                        # repo-filter questions, from the same fetch
 ```
 
-If `/chip` was given args (e.g. `/chip newsletter`, `/chip shopbox-api`), pass them as `--q "<args>"` on the first call. The search matches title, author, Jira key, repo and base, and every word must match.
+If `/chip menu` was given more args (e.g. `/chip menu newsletter`), pass the words after `menu` as `--q "<words>"` on the first call. The search matches title, author, Jira key, repo and base, and every word must match.
 
 The output is JSON: `{page, pages, total, filter, hidden: {approved, draft}, questions: [...]}`.
 

@@ -184,3 +184,24 @@ class PreviewCliTest(CliCase):
         finally:
             cli.tui.run_ui = original
         self.assertEqual((code, seen["rows"]), (0, 1))
+
+
+class OpenCliTest(CliCase):
+    def test_open_runs_osascript_for_apple_terminal(self):
+        calls = []
+        original = cli.subprocess.run
+        cli.subprocess.run = lambda cmd, **kw: calls.append(cmd) or cli.subprocess.CompletedProcess(cmd, 0, "", "")
+        term = os.environ.get("TERM_PROGRAM")
+        os.environ["TERM_PROGRAM"] = "Apple_Terminal"
+        try:
+            code, out, _ = self.run_cli(["open"])
+        finally:
+            cli.subprocess.run = original
+            if term is None:
+                os.environ.pop("TERM_PROGRAM", None)
+            else:
+                os.environ["TERM_PROGRAM"] = term
+        self.assertEqual(code, 0)
+        self.assertEqual(calls[0][:2], ["osascript", "-e"])
+        self.assertIn('tell application "Terminal"', calls[0][2])
+        self.assertIn("bin/chip", calls[0][2])

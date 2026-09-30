@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -115,6 +116,27 @@ def cmd_ui(runner) -> int:
     )
 
 
+OPEN_SCRIPTS = {
+    "Apple_Terminal": 'tell application "Terminal"\n activate\n do script "{cmd}"\nend tell',
+    "iTerm.app": 'tell application "iTerm"\n activate\n create window with default profile command "{cmd}"\nend tell',
+}
+
+
+def cmd_open() -> int:
+    """Open the fzf picker in a new terminal window (skills cannot draw a TUI inside Claude Code)."""
+    term = os.environ.get("TERM_PROGRAM", "")
+    script = OPEN_SCRIPTS.get(term)
+    if script is None:
+        _error(f"chưa hỗ trợ tự mở terminal {term or '(không rõ)'} — mở terminal và gõ `chip`.")
+        return 2
+    proc = subprocess.run(["osascript", "-e", script.format(cmd=tui.BIN)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        _error(proc.stderr.strip() or "osascript thất bại")
+        return 1
+    print(f"Đã mở chip trong cửa sổ {term} mới.")
+    return 0
+
+
 def cmd_repos() -> int:
     inbox = _cached_inbox()
     if inbox is None:
@@ -167,6 +189,7 @@ def main(argv=None, runner=None) -> int:
     p_menu.add_argument("--repo", help="chỉ repo này (tên ngắn hoặc owner/repo), nhiều repo cách nhau dấu phẩy")
     p_menu.add_argument("--q", help="từ khoá: title, author, Jira, repo, base (mọi từ phải khớp)")
     sub.add_parser("repos", help="câu hỏi AskUserQuestion chọn repo để lọc (JSON)")
+    sub.add_parser("open", help="mở `chip` (ô tìm PR) trong cửa sổ terminal mới")
     p_preview = sub.add_parser("preview", help="chi tiết PR số N từ danh sách gần nhất (khung preview của fzf)")
     p_preview.add_argument("index", type=int)
     p_pick = sub.add_parser("pick", help="chọn PR từ danh sách gần nhất: repo#N | 1,3 | 2-4 | all")
@@ -178,6 +201,8 @@ def main(argv=None, runner=None) -> int:
 
     if args.cmd is None:
         return cmd_ui(runner or fetch.run_gh_graphql)
+    if args.cmd == "open":
+        return cmd_open()
     if args.cmd == "preview":
         return cmd_preview(args)
     if args.cmd == "list":
