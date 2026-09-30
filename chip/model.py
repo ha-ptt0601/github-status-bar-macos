@@ -1,0 +1,116 @@
+"""Turn raw GraphQL PullRequest nodes into inbox rows."""
+from __future__ import annotations
+
+import re
+from datetime import datetime
+from typing import List, Optional
+
+NEW = "new"
+REREVIEW = "re-review"
+WAITING = "waiting-author"
+COMMENTED = "commented"
+APPROVED = "approved"
+
+STATUS_GROUP = {REREVIEW: 0, NEW: 1, WAITING: 2, COMMENTED: 2, APPROVED: 3}
+TRUNK_BRANCHES = {"dev", "develop", "main", "master"}
+JIRA_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+CI_MAP = {"SUCCESS": "✓", "FAILURE": "✗", "ERROR": "✗", "PENDING": "…", "EXPECTED": "…"}
+DECISION_MAP = {"APPROVED": "APPROVED", "CHANGES_REQUESTED": "CHANGES_REQ", "REVIEW_REQUIRED": "REQUIRED"}
+
+
+def parse_ts(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def format_wait(created_at: str, now: datetime) -> str:
+    seconds = max(0, int((now - parse_ts(created_at)).total_seconds()))
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h"
+    return f"{seconds // 86400}d"
+
+
+def _nodes(node: dict, key: str) -> List[dict]:
+    return (node.get(key) or {}).get("nodes") or []
+
+
+def _login(obj: Optional[dict]) -> Optional[str]:
+    return (obj or {}).get("login")
+
+
+def _last_commit(node: dict) -> dict:
+    commits = _nodes(node, "commits")
+    return (commits[-1].get("commit") or {}) if commits else {}
+
+
+def my_status(node: dict, viewer: str) -> str:
+    mine = [
+        r for r in _nodes(node, "latestReviews")
+        if _login(r.get("author")) == viewer and r.get("submittedAt")
+    ]
+    if not mine:
+        return NEW
+    latest = max(mine, key=lambda r: parse_ts(r["submittedAt"]))
+    re_requested = any(_login(r.get("requestedReviewer")) == viewer for r in _nodes(node, "reviewRequests"))
+    committed = _last_commit(node).get("committedDate")
+    if re_requested or (committed and parse_ts(committed) > parse_ts(latest["submittedAt"])):
+        return REREVIEW
+    if latest["state"] == "APPROVED":
+        return APPROVED
+    if latest["state"] == "CHANGES_REQUESTED":
+        return WAITING
+    return COMMENTED
+
+
+def decision(node: dict) -> str:
+    label = DECISION_MAP.get(node.get("reviewDecision") or "", "-")
+    states = [r.get("state") for r in _nodes(node, "latestReviews")]
+    approved, changes = states.count("APPROVED"), states.count("CHANGES_REQUESTED")
+    if approved:
+        label += f" {approved}✓"
+    if changes:
+        label += f" {changes}✗"
+    return label
+
+
+def build_row(node: dict, viewer: str, now: datetime) -> dict:
+    repo = node["repository"]
+    default_branch = (repo.get("defaultBranchRef") or {}).get("name")
+    base = node.get("baseRefName") or ""
+    rollup = _last_commit(node).get("statusCheckRollup") or {}
+    jira = JIRA_RE.search(node.get("title") or "") or JIRA_RE.search(node.get("headRefName") or "")
+    return {
+        "repo": repo["nameWithOwner"],
+        "number": node["number"],
+        "title": node.get("title") or "",
+        "url": node["url"],
+        "author": _login(node.get("author")) or "ghost",
+        "created_at": node["createdAt"],
+        "wait": format_wait(node["createdAt"], now),
+        "status": my_status(node, viewer),
+        "decision": decision(node),
+        "size": f"+{node.get('additions', 0)}/-{node.get('deletions', 0)} {node.get('changedFiles', 0)}f",
+        "ci": CI_MAP.get(rollup.get("state") or "", "-"),
+        "conflict": node.get("mergeable") == "CONFLICTING",
+        "base": base,
+        "stacked": base != default_branch and base not in TRUNK_BRANCHES,
+        "jira": jira.group(0) if jira else "",
+        "draft": bool(node.get("isDraft")),
+    }
+
+
+def build_inbox(nodes: List[dict], viewer: str, now: datetime, show_all: bool = False) -> dict:
+    hidden = {"approved": 0, "draft": 0}
+    rows = []
+    for row in (build_row(n, viewer, now) for n in nodes):
+        if not show_all and row["draft"]:
+            hidden["draft"] += 1
+        elif not show_all and row["status"] == APPROVED:
+            hidden["approved"] += 1
+        else:
+            rows.append(row)
+    rows.sort(key=lambda r: (STATUS_GROUP[r["status"]], r["created_at"]))
+    for index, row in enumerate(rows, 1):
+        row["index"] = index
+    return {"viewer": viewer, "rows": rows, "hidden": hidden}
