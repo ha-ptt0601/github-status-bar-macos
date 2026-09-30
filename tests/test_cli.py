@@ -256,3 +256,10 @@ class CacheTtlTest(CliCase):
         self.run_cli(["repos", "--refresh"], runner=fake_runner)
         code, _, _ = self.run_cli(["repos", "--refresh", "--all"], runner=failing_runner)
         self.assertEqual(code, 1)
+
+
+class MentionPickTest(CliCase):
+    def test_pick_accepts_resource_mentions(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, out, _ = self.run_cli(["pick", "review @chip:pr://api/274-feat-thing please"])
+        self.assertEqual((code, json.loads(out)[0]["label"]), (0, "api#274"))

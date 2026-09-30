@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import fetch, menu, model, render, repos, tui
+from chip import fetch, mcp_server, menu, model, render, repos, tui
 from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "Có vẻ gh chưa đăng nhập — chạy `! gh auth login` rồi thử lại."
@@ -167,6 +167,20 @@ def cmd_internal(args) -> int:
     return 0
 
 
+def cmd_mcp(runner) -> int:
+    """Serve PRs as MCP resources; first refresh reuses a recent fetch, later ones always refetch."""
+    last = cache_dir() / "last.json"
+    initial = json.loads(last.read_text()) if last.exists() else {"rows": [], "hidden": {"approved": 0, "draft": 0}}
+    calls = {"n": 0}
+
+    def refresh():
+        calls["n"] += 1
+        return _refresh(False, runner, force=calls["n"] > 1)
+
+    mcp_server.serve(initial, refresh)
+    return 0
+
+
 def cmd_repos(args, runner) -> int:
     if args.refresh:
         inbox = _refresh(args.all, runner, force=args.force)
@@ -192,8 +206,11 @@ def cmd_pick(args) -> int:
     if inbox is None:
         return 2
     rows = inbox["rows"]
+    selection = args.selection
+    if "pr://" in selection:  # `@chip:pr://repo/N-slug` mentions typed in the prompt bar
+        selection = ",".join(mcp_server.labels_in(selection))
     try:
-        picked = parse_selection(args.selection, len(rows), [r.get("label", "") for r in rows])
+        picked = parse_selection(selection, len(rows), [r.get("label", "") for r in rows])
     except SelectionError as exc:
         _error(str(exc))
         return 2
@@ -236,6 +253,7 @@ def main(argv=None, runner=None) -> int:
     p_repos.add_argument("--force", action="store_true", help="bỏ qua dữ liệu tải trong 3 phút gần đây")
     for name in ("_toggle", "_prs", "_repo-preview"):
         sub.add_parser(name).add_argument("arg")
+    sub.add_parser("mcp", help="MCP server (stdio): mỗi PR là một resource cho @-mention")
     sub.add_parser("open", help="mở `chip` (ô tìm PR) trong cửa sổ terminal mới")
     p_preview = sub.add_parser("preview", help="chi tiết PR số N từ danh sách gần nhất (khung preview của fzf)")
     p_preview.add_argument("index", type=int)
@@ -250,6 +268,8 @@ def main(argv=None, runner=None) -> int:
         return cmd_ui(runner or fetch.run_gh_graphql)
     if args.cmd in ("_toggle", "_prs", "_repo-preview"):
         return cmd_internal(args)
+    if args.cmd == "mcp":
+        return cmd_mcp(runner or fetch.run_gh_graphql)
     if args.cmd == "open":
         return cmd_open()
     if args.cmd == "preview":

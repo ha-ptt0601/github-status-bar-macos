@@ -7,10 +7,13 @@ description: Use when the user runs /chip or asks which PRs are waiting for thei
 
 `~/work/chip/bin/chip` does all the data work. You only pass its JSON to AskUserQuestion, collect the picks, and run the review loop. Never build, re-sort or filter options yourself, never reword them, and never print the PR list as a table.
 
+The main way to pick PRs is **in the prompt bar**: the `chip` MCP server exposes every waiting PR as a resource, so typing `@` (or `@chip:`) followed by a few letters of the repo, number or title shows them in the autocomplete. The user can mention several.
+
 Args:
-- `/chip`: the in-chat flow below.
-- `/chip <words>`: skip step 1 and start step 2 with `--q "<words>"` (the search matches title, author, Jira, repo and base).
-- `/chip terminal`: run `~/work/chip/bin/chip open`. That opens the fzf picker in a new Terminal window. Reply with its stdout (or stderr on failure) and stop.
+- **Args contain `pr://`** (e.g. `/chip @chip:pr://shopbox-api/274-fix-orders… @chip:pr://api/2069-…`): run `~/work/chip/bin/chip pick "<args verbatim>"` and go straight to step 4 (review loop) with its output. Show no menus. If it exits 2, show stderr and tell the user the list may be stale; they can say "tải lại", which runs `chip repos --refresh --force`, and mention again.
+- **No args**: reply with exactly one line, "Gõ `/chip @` rồi gõ tên repo / số PR / từ khoá để chọn (chọn nhiều được), Enter để review. Cần menu: `/chip menu`." and stop.
+- `/chip menu [words]`: the in-chat menus below (steps 1–3). With words, skip step 1 and start step 2 with `--q "<words>"`.
+- `/chip terminal`: run `~/work/chip/bin/chip open`, which opens the fzf picker in a new Terminal window. Reply with its stdout (or stderr on failure) and stop.
 
 ## 1. Choose the project (one keystroke)
 
@@ -32,7 +35,7 @@ Output: `{total, hidden: {approved, draft}, updated, questions}`. `questions` ho
 ~/work/chip/bin/chip menu --cached [--repo a] [--q "<words>"] [--page N]
 ```
 
-(For `/chip <words>`, where step 1 was skipped, the first call is `chip menu --q "<words>"` without `--cached`. It fetches from GitHub.)
+(For `/chip menu <words>`, where step 1 was skipped, the first call is `chip menu --q "<words>"` without `--cached`. It fetches from GitHub.)
 
 The output is `{page, pages, total, filter, hidden, questions}`. Call **AskUserQuestion with `questions` exactly as given**. If `total == 0`, say "Không có PR khớp `<filter>`" and go back to step 1.
 
