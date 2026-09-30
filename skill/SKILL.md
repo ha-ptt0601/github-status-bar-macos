@@ -15,7 +15,7 @@ Unless the args contain `menu` (for example `/chip menu` or `/chip menu newslett
 ~/work/chip/bin/chip open
 ```
 
-- **Exit 0:** reply with one line, "Đã mở `chip` trong cửa sổ Terminal mới: gõ để tìm, Tab tick, Enter review (review chạy trong cửa sổ đó).", and **stop**. Do not load the menu, and do not review anything in this session.
+- **Exit 0:** reply with one line, "Đã mở `chip` trong cửa sổ Terminal mới: chọn project → Tab tick PR → Enter review (Esc quay lại; review chạy trong cửa sổ đó).", and **stop**. Do not load the menu, and do not review anything in this session.
 - **Exit 1 or 2:** show stderr, then continue with step 1 (the in-chat menu).
 
 ## 1. Menu — pick PRs with AskUserQuestion (`/chip menu`, or when `chip open` failed)

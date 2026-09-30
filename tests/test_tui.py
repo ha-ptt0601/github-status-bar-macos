@@ -1,5 +1,7 @@
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 from chip import model, tui
 from chip.menu import assign_labels
@@ -20,78 +22,144 @@ def inbox(*rows):
     return {"viewer": "me", "rows": assign_labels(list(rows)), "hidden": {"approved": 2, "draft": 0}}
 
 
-class LinesTest(unittest.TestCase):
-    def test_line_starts_with_hidden_index_and_shows_columns(self):
-        line = tui.fzf_lines(inbox(row(1, jira="MYS-1")))[0]
-        index, visible = line.split("\t", 1)
-        self.assertEqual(index, "1")
-        plain = tui.strip_ansi(visible)
-        for part in ("shopbox-api#101", "2d", "mới", "feat: thing 1", "alice", "MYS-1"):
-            self.assertIn(part, plain)
+INBOX = inbox(
+    row(1, status=model.REREVIEW, wait="1h"),
+    row(2, repo="acme/api", jira="MYS-1", conflict=True),
+    row(3),
+)
+
+
+def plain(lines):
+    return [tui.strip_ansi(line) for line in lines]
+
+
+class RepoLinesTest(unittest.TestCase):
+    def test_all_line_first_then_busiest_repo(self):
+        lines = plain(tui.repo_lines(INBOX, picked={2}))
+        self.assertTrue(lines[0].startswith("*\t"))
+        self.assertIn("Tất cả", lines[0])
+        self.assertIn("3 PR", lines[0])
+        self.assertIn("☑ 1", lines[0])
+        key, text = lines[1].split("\t", 1)
+        self.assertEqual(key, "acme/shopbox-api")
+        self.assertIn("shopbox-api", text)
+        self.assertIn("2 PR", text)
+        self.assertIn("1 cần re-review", text)
+        self.assertIn("mới nhất 1h", text)
+        self.assertEqual(lines[2].split("\t", 1)[0], "acme/api")
+        self.assertIn("☑ 1", lines[2])
+
+    def test_repo_preview_lists_titles(self):
+        text = tui.strip_ansi(tui.repo_preview(INBOX, "acme/shopbox-api"))
+        self.assertIn("#101", text)
+        self.assertIn("feat: thing 3", text)
+        self.assertNotIn("#102", text)
+
+
+class PrLinesTest(unittest.TestCase):
+    def test_checkbox_and_description(self):
+        lines = plain(tui.pr_lines(INBOX, "acme/api", picked={2}))
+        self.assertEqual(len(lines), 1)
+        index, text = lines[0].split("\t", 1)
+        self.assertEqual(index, "2")
+        self.assertTrue(text.startswith("☑ #102"))
+        for part in ("feat: thing 2", "alice", "2d", "mới", "MYS-1", "conflict"):
+            self.assertIn(part, text)
+
+    def test_unpicked_and_all_repos_use_labels(self):
+        lines = plain(tui.pr_lines(INBOX, "*", picked=set()))
+        self.assertEqual([l.split("\t")[0] for l in lines], ["1", "2", "3"])
+        self.assertTrue(lines[0].split("\t", 1)[1].startswith("☐ shopbox-api#101"))
 
     def test_preview(self):
-        text = tui.preview_text(assign_labels([row(1, stacked=True, base="feature/a", conflict=True, jira="MYS-1",
-                                                   decision="CHANGES_REQ 1✗", status=model.REREVIEW)])[0])
-        self.assertIn("shopbox-api#101", text)
-        self.assertIn("https://github.com/acme/shopbox-api/pull/101", text)
-        self.assertIn("feature/a (stacked)", text)
-        self.assertIn("conflict", text)
-        self.assertIn("cần re-review", text)
+        text = tui.preview_text(INBOX["rows"][1])
+        for part in ("api#102", "https://github.com/acme/api/pull/102", "conflict", "MYS-1"):
+            self.assertIn(part, text)
 
-    def test_selected_indexes(self):
-        output = "3\tshopbox-api#103 …\n1\tshopbox-api#101 …\n"
-        self.assertEqual(tui.selected_indexes(output), [3, 1])
+
+class PickedStateTest(unittest.TestCase):
+    def test_toggle_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "picked.json"
+            self.assertEqual(tui.load_picked(path), set())
+            tui.toggle_picked(path, 3)
+            tui.toggle_picked(path, 1)
+            self.assertEqual(tui.load_picked(path), {1, 3})
+            tui.toggle_picked(path, 3)
+            self.assertEqual(tui.load_picked(path), {1})
 
 
 class RunUiTest(unittest.TestCase):
     def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = Path(self.tmp.name) / "picked.json"
         self.claude_calls, self.asked, self.printed = [], [], []
 
-    def fzf(self, output, code=0):
-        return lambda lines, header: subprocess.CompletedProcess([], code, output, "")
+    def tearDown(self):
+        self.tmp.cleanup()
 
-    def claude(self, prompt, cwd):
-        self.claude_calls.append((prompt, cwd))
+    def fzf(self, script):
+        """script: list of (kind, returncode, stdout, indexes_to_toggle) consumed in order."""
+        steps = list(script)
 
-    def ask(self, answers):
+        def _fzf(kind, lines, header, repo=None):
+            expected_kind, code, stdout, toggles = steps.pop(0)
+            assert kind == expected_kind, (kind, expected_kind)
+            for i in toggles:
+                tui.toggle_picked(self.state, i)
+            return subprocess.CompletedProcess([], code, stdout, "")
+        return _fzf
+
+    def run_ui(self, script, answers=(), resolve=lambda slug: f"/src/{slug}"):
         answers = list(answers)
 
-        def _ask(question):
-            self.asked.append(question)
+        def ask(q):
+            self.asked.append(q)
             return answers.pop(0)
-        return _ask
-
-    def run_ui(self, fzf, answers=(), resolve=lambda slug: f"/src/{slug}", clone=None):
         return tui.run_ui(
-            inbox(row(1), row(2, repo="acme/api")),
-            fzf=fzf, claude=self.claude, resolve=resolve,
-            clone=clone or (lambda slug: f"/clones/{slug}"),
-            ask=self.ask(answers), out=self.printed.append,
+            INBOX, self.state, fzf=self.fzf(script),
+            claude=lambda prompt, cwd: self.claude_calls.append((prompt, cwd)),
+            resolve=resolve, clone=lambda slug: f"/clones/{slug}", ask=ask, out=self.printed.append,
         )
 
-    def test_reviews_each_pick_in_its_repo_and_asks_between(self):
-        code = self.run_ui(self.fzf("1\tx\n2\ty\n"), answers=[""])
-        self.assertEqual(code, 0)
+    def test_repo_then_ticked_prs_are_reviewed(self):
+        self.run_ui([
+            ("repos", 0, "acme/shopbox-api\tx\n", []),
+            ("prs", 0, "3\tx\n", [1, 3]),
+        ], answers=[""])
         self.assertEqual(self.claude_calls, [
             ("/my-review-skill https://github.com/acme/shopbox-api/pull/101", "/src/acme/shopbox-api"),
-            ("/my-review-skill https://github.com/acme/api/pull/102", "/src/acme/api"),
+            ("/my-review-skill https://github.com/acme/shopbox-api/pull/103", "/src/acme/shopbox-api"),
         ])
-        self.assertEqual(len(self.asked), 1)
-        self.assertIn("api#102", self.asked[0])
+
+    def test_enter_without_ticks_reviews_current_line(self):
+        self.run_ui([("repos", 0, "*\tx\n", []), ("prs", 0, "2\tx\n", [])])
+        self.assertEqual([c[0] for c in self.claude_calls], ["/my-review-skill https://github.com/acme/api/pull/102"])
+
+    def test_escape_in_prs_goes_back_to_repos(self):
+        self.run_ui([
+            ("repos", 0, "acme/api\tx\n", []),
+            ("prs", 130, "", []),
+            ("repos", 130, "", []),
+        ])
+        self.assertEqual(self.claude_calls, [])
+
+    def test_picks_start_empty_each_run(self):
+        tui.toggle_picked(self.state, 1)
+        self.run_ui([("repos", 130, "", [])])
+        self.assertEqual(tui.load_picked(self.state), set())
 
     def test_stop_between_prs(self):
-        self.run_ui(self.fzf("1\tx\n2\ty\n"), answers=["n"])
+        self.run_ui([("repos", 0, "*\tx\n", []), ("prs", 0, "1\tx\n", [1, 2])], answers=["n"])
         self.assertEqual(len(self.claude_calls), 1)
 
-    def test_escape_does_nothing(self):
-        code = self.run_ui(self.fzf("", code=130))
-        self.assertEqual((code, self.claude_calls), (0, []))
-
     def test_missing_clone_declined_is_skipped(self):
-        self.run_ui(self.fzf("1\tx\n"), answers=["n"], resolve=lambda slug: None)
+        self.run_ui([("repos", 0, "*\tx\n", []), ("prs", 0, "1\tx\n", [])], answers=["n"],
+                    resolve=lambda slug: None)
         self.assertEqual(self.claude_calls, [])
         self.assertTrue(any("Bỏ qua" in p for p in self.printed))
 
-    def test_missing_clone_accepted_is_cloned(self):
-        self.run_ui(self.fzf("1\tx\n"), answers=["y"], resolve=lambda slug: None)
-        self.assertEqual(self.claude_calls[0][1], "/clones/acme/shopbox-api")
+    def test_inbox_zero(self):
+        code = tui.run_ui({"rows": [], "hidden": {"approved": 0, "draft": 0}}, self.state,
+                          fzf=None, out=self.printed.append)
+        self.assertEqual((code, self.printed), (0, ["Inbox zero 🎉"]))

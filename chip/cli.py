@@ -111,13 +111,17 @@ def cmd_ui(runner) -> int:
     cache = cache_dir() / "repos.json"
     return tui.run_ui(
         inbox,
+        cache_dir() / "picked.json",
         resolve=lambda slug: repos.resolve(slug, work_root(), cache),
         clone=lambda slug: repos.clone(slug, work_root(), cache),
     )
 
 
 OPEN_SCRIPTS = {
-    "Apple_Terminal": 'tell application "Terminal"\n activate\n do script "{cmd}"\nend tell',
+    "Apple_Terminal": (
+        'tell application "Terminal"\n activate\n do script "{cmd}"\n'
+        ' set bounds of front window to {{80, 60, 1580, 960}}\nend tell'
+    ),
     "iTerm.app": 'tell application "iTerm"\n activate\n create window with default profile command "{cmd}"\nend tell',
 }
 
@@ -134,6 +138,21 @@ def cmd_open() -> int:
         _error(proc.stderr.strip() or "osascript thất bại")
         return 1
     print(f"Đã mở chip trong cửa sổ {term} mới.")
+    return 0
+
+
+def cmd_internal(args) -> int:
+    """Callbacks for the fzf picker: `_toggle N`, `_prs REPO`, `_repo-preview REPO`."""
+    inbox = _cached_inbox()
+    if inbox is None:
+        return 2
+    picked_path = cache_dir() / "picked.json"
+    if args.cmd == "_toggle":
+        tui.toggle_picked(picked_path, int(args.arg))
+    elif args.cmd == "_prs":
+        print("\n".join(tui.pr_lines(inbox, args.arg, tui.load_picked(picked_path))))
+    else:
+        print(tui.repo_preview(inbox, args.arg))
     return 0
 
 
@@ -189,6 +208,8 @@ def main(argv=None, runner=None) -> int:
     p_menu.add_argument("--repo", help="chỉ repo này (tên ngắn hoặc owner/repo), nhiều repo cách nhau dấu phẩy")
     p_menu.add_argument("--q", help="từ khoá: title, author, Jira, repo, base (mọi từ phải khớp)")
     sub.add_parser("repos", help="câu hỏi AskUserQuestion chọn repo để lọc (JSON)")
+    for name in ("_toggle", "_prs", "_repo-preview"):
+        sub.add_parser(name).add_argument("arg")
     sub.add_parser("open", help="mở `chip` (ô tìm PR) trong cửa sổ terminal mới")
     p_preview = sub.add_parser("preview", help="chi tiết PR số N từ danh sách gần nhất (khung preview của fzf)")
     p_preview.add_argument("index", type=int)
@@ -201,6 +222,8 @@ def main(argv=None, runner=None) -> int:
 
     if args.cmd is None:
         return cmd_ui(runner or fetch.run_gh_graphql)
+    if args.cmd in ("_toggle", "_prs", "_repo-preview"):
+        return cmd_internal(args)
     if args.cmd == "open":
         return cmd_open()
     if args.cmd == "preview":

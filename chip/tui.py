@@ -1,12 +1,14 @@
-"""`chip` with no subcommand: an fzf picker (like Claude Code's prompt search) that opens claude per PR."""
+"""`chip` with no subcommand: pick a project, tick its PRs in fzf, then open claude per PR in its repo."""
 from __future__ import annotations
 
+import json
 import re
 import shlex
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Set
 
 from chip import model
 from chip.render import STATUS_LABEL
@@ -19,9 +21,13 @@ STATUS_COLOR = {
     model.COMMENTED: "90",
     model.APPROVED: "36",   # cyan
 }
-LABEL_WIDTH = 30
+ALL = "*"
+NAME_WIDTH = 28
 BIN = Path(__file__).resolve().parents[1] / "bin" / "chip"
+CMD = f"{shlex.quote(sys.executable)} {shlex.quote(str(BIN))}"
 REVIEW_PROMPT = "/my-review-skill {url}"
+# Preview on the right, or below when the window is narrower than 110 columns.
+PREVIEW_WINDOW = "right,45%,wrap,border-rounded,<110(down,45%,wrap,border-rounded)"
 
 
 def _c(code: str, text: str) -> str:
@@ -32,18 +38,74 @@ def strip_ansi(text: str) -> str:
     return ANSI_RE.sub("", text)
 
 
-def fzf_lines(inbox: dict) -> List[str]:
-    """One line per row: hidden `index<TAB>` then the coloured, searchable columns."""
+def load_picked(path) -> Set[int]:
+    try:
+        return set(json.loads(Path(path).read_text()))
+    except (OSError, ValueError):
+        return set()
+
+
+def save_picked(path, picked: Set[int]) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(sorted(picked)))
+
+
+def toggle_picked(path, index: int) -> None:
+    picked = load_picked(path)
+    picked ^= {index}
+    save_picked(path, picked)
+
+
+def _short(full: str) -> str:
+    return full.split("/")[-1]
+
+
+def repo_lines(inbox: dict, picked: Set[int]) -> List[str]:
+    """`repo<TAB>text` per repo (busiest first), after an `*` line for all repos."""
+    rows = inbox["rows"]
+    counts = Counter(r["repo"] for r in rows)
+
+    def ticks(rs) -> str:
+        n = sum(1 for r in rs if r["index"] in picked)
+        return f"  {_c('32', f'☑ {n}')}" if n else ""
+
+    lines = [f"{ALL}\t{'Tất cả'.ljust(NAME_WIDTH)} {len(rows)} PR{ticks(rows)}"]
+    for full in sorted(counts, key=lambda f: (-counts[f], _short(f))):
+        rs = [r for r in rows if r["repo"] == full]
+        parts = [f"{counts[full]} PR"]
+        rereview = sum(1 for r in rs if r["status"] == model.REREVIEW)
+        if rereview:
+            parts.append(_c(STATUS_COLOR[model.REREVIEW], f"{rereview} {STATUS_LABEL[model.REREVIEW]}"))
+        newest = max(rs, key=lambda r: r.get("created_at", ""))
+        parts.append(_c("90", f"mới nhất {newest['wait']}"))
+        lines.append(f"{full}\t{_short(full).ljust(NAME_WIDTH)} {' · '.join(parts)}{ticks(rs)}")
+    return lines
+
+
+def repo_preview(inbox: dict, repo: str) -> str:
+    rows = [r for r in inbox["rows"] if repo == ALL or r["repo"] == repo]
+    lines = []
+    for r in rows:
+        name = r["label"] if repo == ALL else f"#{r['number']}"
+        lines.append(f"{name}  {_c(STATUS_COLOR[r['status']], STATUS_LABEL[r['status']])}  {_c('90', r['wait'])}")
+        lines.append(f"  {r['title']}")
+    return "\n".join(lines)
+
+
+def pr_lines(inbox: dict, repo: str, picked: Set[int]) -> List[str]:
+    """`index<TAB>☐/☑ #N  title  · author · wait · status …` for one repo (or all)."""
     lines = []
     for r in inbox["rows"]:
-        status = STATUS_LABEL[r["status"]]
-        extra = "  ".join(x for x in (r["jira"], "conflict" if r["conflict"] else "") if x)
-        lines.append("\t".join([
-            str(r["index"]),
-            f"{_c('90', r['wait'].rjust(5))}  {r['label'].ljust(LABEL_WIDTH)} "
-            f"{_c(STATUS_COLOR[r['status']], status.ljust(13))} {r['title']}  {_c('90', '· ' + r['author'])}"
-            + (f"  {_c('35', extra)}" if extra else ""),
-        ]))
+        if repo != ALL and r["repo"] != repo:
+            continue
+        box = _c("32", "☑") if r["index"] in picked else "☐"
+        name = r["label"] if repo == ALL else f"#{r['number']}"
+        meta = [r["author"], r["wait"], _c(STATUS_COLOR[r["status"]], STATUS_LABEL[r["status"]])]
+        if r["jira"]:
+            meta.append(_c("35", r["jira"]))
+        if r["conflict"]:
+            meta.append(_c("31", "conflict"))
+        lines.append(f"{r['index']}\t{box} {name}  {r['title']}  {_c('90', '·')} {' · '.join(meta)}")
     return lines
 
 
@@ -68,16 +130,24 @@ def selected_indexes(output: str) -> List[int]:
     return [int(line.split("\t", 1)[0]) for line in output.splitlines() if line.strip()]
 
 
-def run_fzf(lines: List[str], header: str) -> subprocess.CompletedProcess:
-    preview = f"{shlex.quote(sys.executable)} {shlex.quote(str(BIN))} preview {{1}}"
+def run_fzf(kind: str, lines: List[str], header: str, repo: Optional[str] = None) -> subprocess.CompletedProcess:
     cmd = [
         # --exact + --no-sort: substring search (space = AND) that keeps the inbox priority order
-        "fzf", "--multi", "--ansi", "--exact", "--no-sort", "--delimiter=\t", "--with-nth=2..",
-        "--border=rounded", "--border-label= chip · PR chờ review ", "--border-label-pos=3",
-        "--prompt=⌕ ", "--pointer=❯", "--marker=◉", "--info=inline-right",
-        f"--header={header}", "--header-first",
-        f"--preview={preview}", "--preview-window=right,40%,wrap,border-rounded",
+        "fzf", "--ansi", "--exact", "--no-sort", "--delimiter=\t", "--with-nth=2..",
+        "--border=rounded", "--border-label-pos=3", "--prompt=⌕ ", "--pointer=❯", "--info=inline-right",
+        f"--header={header}", "--header-first", f"--preview-window={PREVIEW_WINDOW}",
     ]
+    if kind == "repos":
+        cmd += ["--border-label= chip · chọn project ", f"--preview={CMD} _repo-preview {{1}}"]
+    else:
+        label = "tất cả project" if repo == ALL else _short(repo)
+        cmd += [
+            f"--border-label= chip · {label} ", f"--preview={CMD} preview {{1}}",
+            # Tab ticks via our own state file, then reloads so the ☐/☑ in the line updates;
+            # --track/--id-nth keep the cursor on the same PR across the reload.
+            "--track", "--id-nth=1",
+            f"--bind=tab:execute-silent({CMD} _toggle {{1}})+reload({CMD} _prs {shlex.quote(repo)})+down",
+        ]
     return subprocess.run(cmd, input="\n".join(lines), stdout=subprocess.PIPE, text=True)
 
 
@@ -87,6 +157,7 @@ def run_claude(prompt: str, cwd: str) -> None:
 
 def run_ui(
     inbox: dict,
+    state_path,
     fzf: Callable = run_fzf,
     claude: Callable[[str, str], None] = run_claude,
     resolve: Callable[[str], Optional[str]] = None,
@@ -99,12 +170,22 @@ def run_ui(
         out("Inbox zero 🎉")
         return 0
     hidden = inbox["hidden"]
-    header = (f"{len(rows)} PR · ẩn {hidden['approved']} đã approve, {hidden['draft']} draft"
-              "   Tab tick · Enter review · Esc thoát")
-    result = fzf(fzf_lines(inbox), header)
-    if result.returncode != 0:
-        return 0
-    picked = [rows[i - 1] for i in selected_indexes(result.stdout)]
+    save_picked(state_path, set())
+    repos_header = (f"{len(rows)} PR · ẩn {hidden['approved']} đã approve, {hidden['draft']} draft"
+                    "   Enter mở project · Esc thoát")
+    prs_header = "Tab tick ☐/☑ · Enter review các PR đã tick · Esc quay lại project"
+    while True:
+        result = fzf("repos", repo_lines(inbox, load_picked(state_path)), repos_header)
+        if result.returncode != 0:
+            return 0
+        repo = result.stdout.split("\t", 1)[0].strip()
+        result = fzf("prs", pr_lines(inbox, repo, load_picked(state_path)), prs_header, repo)
+        if result.returncode != 0:
+            continue
+        chosen = load_picked(state_path) or set(selected_indexes(result.stdout))
+        break
+
+    picked = [r for r in rows if r["index"] in chosen]
     for n, r in enumerate(picked, 1):
         out(f"[{n}/{len(picked)}] {r['label']} {r['title']}")
         path = resolve(r["repo"])

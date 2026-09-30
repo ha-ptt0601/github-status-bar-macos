@@ -178,7 +178,7 @@ class PreviewCliTest(CliCase):
     def test_no_subcommand_opens_ui(self):
         seen = {}
         original = cli.tui.run_ui
-        cli.tui.run_ui = lambda inbox, **kw: seen.setdefault("rows", len(inbox["rows"])) and 0
+        cli.tui.run_ui = lambda inbox, state, **kw: seen.setdefault("rows", len(inbox["rows"])) and 0
         try:
             code, _, _ = self.run_cli([], runner=fake_runner)
         finally:
@@ -205,3 +205,21 @@ class OpenCliTest(CliCase):
         self.assertEqual(calls[0][:2], ["osascript", "-e"])
         self.assertIn('tell application "Terminal"', calls[0][2])
         self.assertIn("bin/chip", calls[0][2])
+
+
+class PickerCallbacksTest(CliCase):
+    def test_toggle_then_prs_shows_tick(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        self.run_cli(["_toggle", "1"])
+        code, out, _ = self.run_cli(["_prs", "acme/api"])
+        self.assertEqual(code, 0)
+        self.assertIn("☑", out)
+        self.run_cli(["_toggle", "1"])
+        _, out, _ = self.run_cli(["_prs", "*"])
+        self.assertIn("☐", out)
+
+    def test_repo_preview(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, out, _ = self.run_cli(["_repo-preview", "acme/api"])
+        self.assertEqual(code, 0)
+        self.assertIn("#274", out)
