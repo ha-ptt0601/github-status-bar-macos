@@ -1,0 +1,82 @@
+import io
+import json
+import os
+import tempfile
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
+
+from chip import cli, fetch
+from tests.factory import make_node
+
+
+def fake_runner(search, after):
+    nodes = [make_node(id="a", number=274)] if search == fetch.SEARCHES[0] else []
+    return {
+        "viewer": {"login": "me"},
+        "search": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes},
+    }
+
+
+def failing_runner(search, after):
+    raise fetch.FetchError("HTTP 401: Bad credentials")
+
+
+class CliTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = {k: os.environ.get(k) for k in ("CHIP_CACHE_DIR", "CHIP_WORK_ROOT")}
+        os.environ["CHIP_CACHE_DIR"] = str(Path(self.tmp.name) / "cache")
+        os.environ["CHIP_WORK_ROOT"] = str(Path(self.tmp.name) / "work")
+
+    def tearDown(self):
+        for key, value in self.env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        self.tmp.cleanup()
+
+    def run_cli(self, argv, runner=None):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = cli.main(argv, runner=runner)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_list_prints_table_and_saves_rows(self):
+        code, out, _ = self.run_cli(["list"], runner=fake_runner)
+        self.assertEqual(code, 0)
+        self.assertIn("| 1 | api | #274 |", out)
+        saved = json.loads((Path(os.environ["CHIP_CACHE_DIR"]) / "last.json").read_text())
+        self.assertEqual(saved["rows"][0]["number"], 274)
+
+    def test_list_auth_error(self):
+        code, _, err = self.run_cli(["list"], runner=failing_runner)
+        self.assertEqual(code, 1)
+        self.assertIn("gh auth login", err)
+
+    def test_pick(self):
+        self.run_cli(["list"], runner=fake_runner)
+        code, out, _ = self.run_cli(["pick", "1"])
+        self.assertEqual(code, 0)
+        picked = json.loads(out)
+        self.assertEqual(picked, [{
+            "index": 1, "repo": "acme/api", "number": 274,
+            "title": "feat: thing", "url": "https://github.com/acme/api/pull/1",
+        }])
+
+    def test_pick_bad_selection(self):
+        self.run_cli(["list"], runner=fake_runner)
+        code, _, err = self.run_cli(["pick", "9"])
+        self.assertEqual(code, 2)
+        self.assertIn("'9'", err)
+
+    def test_pick_without_list(self):
+        code, _, err = self.run_cli(["pick", "1"])
+        self.assertEqual(code, 2)
+        self.assertIn("chip list", err)
+
+    def test_repo_missing(self):
+        code, _, err = self.run_cli(["repo", "acme/nope"])
+        self.assertEqual(code, 2)
+        self.assertIn("acme/nope", err)
