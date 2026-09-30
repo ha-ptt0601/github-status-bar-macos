@@ -1,4 +1,4 @@
-"""`chip menu | list | pick | repo` — the commands the /chip skill calls."""
+"""`chip menu | repos | list | pick | repo` — the commands the /chip skill calls."""
 from __future__ import annotations
 
 import argparse
@@ -61,24 +61,40 @@ def cmd_list(args, runner) -> int:
 
 
 def cmd_menu(args, runner) -> int:
-    if args.page is None:
-        inbox = _refresh(args.all, runner)
-        if inbox is None:
-            return 1
-    else:
+    if args.cached or args.page is not None:
         inbox = _cached_inbox()
         if inbox is None:
             return 2
-    if not inbox["rows"]:
-        page = {"page": 0, "pages": 0, "total": 0, "questions": []}
+    else:
+        inbox = _refresh(args.all, runner)
+        if inbox is None:
+            return 1
+    repo_filter = [r for r in (args.repo or "").split(",") if r.strip()]
+    rows = menu.filter_rows(inbox["rows"], repos=repo_filter, query=args.q or "")
+    filter_text = " · ".join(
+        part for part in (
+            f"repo={','.join(repo_filter)}" if repo_filter else "",
+            f"q={args.q}" if args.q else "",
+        ) if part
+    )
+    if not rows:
+        page = {"page": 0, "pages": 0, "total": 0, "filter": filter_text, "questions": []}
     else:
         try:
-            page = menu.build_page(inbox["rows"], args.page or 1)
+            page = menu.build_page(rows, args.page or 1, filter_text)
         except ValueError as exc:
             _error(str(exc))
             return 2
     page["hidden"] = inbox["hidden"]
     print(json.dumps(page, ensure_ascii=False, indent=1))
+    return 0
+
+
+def cmd_repos() -> int:
+    inbox = _cached_inbox()
+    if inbox is None:
+        return 2
+    print(json.dumps({"questions": menu.repo_questions(inbox["rows"])}, ensure_ascii=False, indent=1))
     return 0
 
 
@@ -122,6 +138,10 @@ def main(argv=None, runner=None) -> int:
     p_menu = sub.add_parser("menu", help="trang câu hỏi AskUserQuestion (JSON); không có --page thì tải lại")
     p_menu.add_argument("--page", type=int, help="trang N từ danh sách đã tải, không gọi GitHub")
     p_menu.add_argument("--all", action="store_true", help="hiện cả PR đã approve và draft")
+    p_menu.add_argument("--cached", action="store_true", help="dùng danh sách đã tải, không gọi GitHub")
+    p_menu.add_argument("--repo", help="chỉ repo này (tên ngắn hoặc owner/repo), nhiều repo cách nhau dấu phẩy")
+    p_menu.add_argument("--q", help="từ khoá: title, author, Jira, repo, base (mọi từ phải khớp)")
+    sub.add_parser("repos", help="câu hỏi AskUserQuestion chọn repo để lọc (JSON)")
     p_pick = sub.add_parser("pick", help="chọn PR từ danh sách gần nhất: repo#N | 1,3 | 2-4 | all")
     p_pick.add_argument("selection")
     p_repo = sub.add_parser("repo", help="đường dẫn clone local của owner/repo")
@@ -133,6 +153,8 @@ def main(argv=None, runner=None) -> int:
         return cmd_list(args, runner or fetch.run_gh_graphql)
     if args.cmd == "menu":
         return cmd_menu(args, runner or fetch.run_gh_graphql)
+    if args.cmd == "repos":
+        return cmd_repos()
     if args.cmd == "pick":
         return cmd_pick(args)
     return cmd_repo(args)

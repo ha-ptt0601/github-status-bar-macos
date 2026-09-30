@@ -10,21 +10,31 @@ description: Use when the user runs /chip or asks which PRs are waiting for thei
 ## 1. Menu — pick PRs with AskUserQuestion
 
 ```bash
-~/work/chip/bin/chip menu          # page 1, fetches from GitHub; add --all if the user asks for approved/draft PRs too
-~/work/chip/bin/chip menu --page N # page N from the same fetch (no GitHub call)
+~/work/chip/bin/chip menu [--q "<words>"] [--repo a,b]          # fetch from GitHub (first call only); add --all for approved/draft too
+~/work/chip/bin/chip menu --cached [--page N] [--q …] [--repo …] # every later call: same fetch, no GitHub call
+~/work/chip/bin/chip repos                                        # repo-filter questions, from the same fetch
 ```
 
-Output is JSON: `{page, pages, total, hidden: {approved, draft}, questions: [...]}`.
+If `/chip` was given args (e.g. `/chip newsletter`, `/chip shopbox-api`), pass them as `--q "<args>"` on the first call. The search matches title, author, Jira key, repo and base, and every word must match.
+
+The output is JSON: `{page, pages, total, filter, hidden: {approved, draft}, questions: [...]}`.
 
 - Exit 1: show stderr as-is (it includes the `! gh auth login` hint when relevant) and stop.
-- `total == 0`: say "Inbox zero 🎉" plus the hidden counts, and stop.
-- Otherwise, before the first page, print one line: `<total> PR đang chờ bạn (ẩn <approved> đã approve, <draft> draft)`. Then call **AskUserQuestion with `questions` exactly as given**, without adding, removing or rewording anything.
+- `total == 0` with no filter: say "Inbox zero 🎉" plus the hidden counts, and stop.
+- `total == 0` with a filter: say "Không có PR khớp `<filter>`", then ask for a new keyword, or offer to clear the filter.
+- Otherwise, before the first page, print one line: `<total> PR đang chờ bạn (ẩn <approved> đã approve, <draft> draft)`. Add `· lọc: <filter>` when there is a filter. Then call **AskUserQuestion with `questions` exactly as given**, without adding, removing or rewording anything.
 
-After each page:
-- Collect the selected labels from every `multiSelect` question and ignore `Không chọn`. An "Other" answer counts as labels or numbers typed by the user.
-- If the nav question ("Tiếp theo?") was answered `Xem trang tiếp`, run `chip menu --page <page+1>` and ask again. Keep the labels you already collected.
-- Otherwise (`Review các PR đã chọn`, or the last page), go to step 2.
-- If nothing was picked on any page, say so in one line and stop.
+Keep the current filter state (`q`, `repo`) and **every label picked so far** across pages and filter changes. After each page, collect the selected labels from every `multiSelect` question, ignoring `Không chọn`. Then act on the nav question ("Tiếp theo?"):
+
+| Nav answer | Do |
+|---|---|
+| `Xem trang tiếp` | `chip menu --cached --page <page+1>`, with the same `--q`/`--repo` |
+| `Lọc theo repo` | `chip repos` → AskUserQuestion with its `questions` as given → `chip menu --cached --repo <picked names joined by ,>` (keep `--q`). If nothing is picked, or only `Không chọn`, clear the repo filter. |
+| `Tìm kiếm` | Ask in plain text "Gõ từ khoá (title, author, Jira, repo) — hoặc `bỏ lọc`:" and wait. Then run `chip menu --cached --q "<text>"` (keep `--repo`). On `bỏ lọc`, drop both filters. |
+| Other (free text) | Treat as a search keyword, the same as `Tìm kiếm` with that text. `bỏ lọc` clears the filters. |
+| `Review các PR đã chọn` | Go to step 2. |
+
+Before each re-ask after the first, print one line with the labels picked so far. If nothing was picked when the user chooses review, say so in one line and stop.
 
 ## 2. Pick
 

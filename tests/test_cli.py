@@ -117,3 +117,46 @@ class MenuCliTest(CliCase):
         code, out, _ = self.run_cli(["pick", "api#274"])
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)[0]["label"], "api#274")
+
+
+class FilterCliTest(CliCase):
+    def runner(self, search, after):
+        nodes = [
+            make_node(id="a", number=1, title="update(newsletter): migrate"),
+            make_node(id="b", number=2, title="fix(orders)", repository={
+                "nameWithOwner": "acme/shopbox-api", "defaultBranchRef": {"name": "master"}}),
+        ] if search == fetch.SEARCHES[0] else []
+        return {"viewer": {"login": "me"},
+                "search": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes}}
+
+    def labels(self, page):
+        return [o["label"] for q in page["questions"] if q["multiSelect"] for o in q["options"]]
+
+    def test_query_on_first_fetch(self):
+        code, out, _ = self.run_cli(["menu", "--q", "newsletter"], runner=self.runner)
+        page = json.loads(out)
+        self.assertEqual((code, page["total"], page["filter"]), (0, 1, "q=newsletter"))
+        self.assertEqual(self.labels(page), ["api#1", "Không chọn"])
+
+    def test_repo_filter_from_cache(self):
+        self.run_cli(["menu"], runner=self.runner)
+        code, out, _ = self.run_cli(["menu", "--cached", "--repo", "shopbox-api"], runner=failing_runner)
+        page = json.loads(out)
+        self.assertEqual((code, page["total"], page["filter"]), (0, 1, "repo=shopbox-api"))
+        self.assertEqual(self.labels(page)[0], "shopbox-api#2")
+
+    def test_filter_without_match(self):
+        self.run_cli(["menu"], runner=self.runner)
+        code, out, _ = self.run_cli(["menu", "--cached", "--q", "nothing-here"])
+        self.assertEqual((code, json.loads(out)["total"]), (0, 0))
+
+    def test_pick_label_outside_current_filter(self):
+        self.run_cli(["menu", "--q", "newsletter"], runner=self.runner)
+        code, out, _ = self.run_cli(["pick", "shopbox-api#2"])
+        self.assertEqual((code, json.loads(out)[0]["number"]), (0, 2))
+
+    def test_repos_questions(self):
+        self.run_cli(["menu"], runner=self.runner)
+        code, out, _ = self.run_cli(["repos"])
+        options = json.loads(out)["questions"][0]["options"]
+        self.assertEqual((code, [o["label"] for o in options]), (0, ["api", "shopbox-api"]))
