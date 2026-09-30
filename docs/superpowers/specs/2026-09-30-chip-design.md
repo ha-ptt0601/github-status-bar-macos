@@ -72,12 +72,12 @@ If the viewer has been explicitly re-requested (the viewer is in `reviewRequests
 - `wait`: time since `createdAt`, formatted as `45m`, `6h` or `9d`.
 - `decision`: `APPROVED` / `CHANGES_REQ` / `REQUIRED` / `-`, followed by the ✓ and ✗ counts taken from `latestReviews`.
 - `size`: `+additions/-deletions Nf`.
-- `ci`: `SUCCESS` → ✓, `FAILURE` or `ERROR` → ✗, `PENDING` or `EXPECTED` → ⏳, none → `-`.
-- `conflict`: shows `⚠` when `mergeable == CONFLICTING`.
+- `ci`: `SUCCESS` → ✓, `FAILURE` or `ERROR` → ✗, `PENDING` or `EXPECTED` → `…` (single-width, keeps the table aligned), none → `-`.
+- `merge`: `conflict` when `mergeable == CONFLICTING`, otherwise `ok`.
 - `base`: `baseRefName`, plus a `stacked` flag when it is neither the default branch nor one of `dev`, `develop`, `main`, `master` (real repos default to `master` but merge into `dev`).
 - `jira`: first match of `[A-Z][A-Z0-9]+-\d+` in the title, then in `headRefName`; empty if none.
 
-**Visibility.** `approved` rows and drafts are hidden by default. The JSON output includes `hidden: {approved: N, draft: M}`, and `--all` shows every row.
+**Visibility.** `approved` rows and drafts are hidden by default. The inbox (and `last.json`) includes `hidden: {approved: N, draft: M}`, the table footer shows these counts,, and `--all` shows every row.
 
 **Sort order.** `re-review`, then `new`, then `waiting-author`/`commented`. Within each group, the oldest `createdAt` comes first. Rows are numbered from 1 after sorting.
 
