@@ -160,3 +160,27 @@ class FilterCliTest(CliCase):
         code, out, _ = self.run_cli(["repos"])
         options = json.loads(out)["questions"][0]["options"]
         self.assertEqual((code, [o["label"] for o in options]), (0, ["api", "shopbox-api"]))
+
+
+class PreviewCliTest(CliCase):
+    def test_preview_from_cache(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, out, _ = self.run_cli(["preview", "1"])
+        self.assertEqual(code, 0)
+        self.assertIn("api#274", out)
+        self.assertIn("https://github.com/acme/api/pull/1", out)
+
+    def test_preview_bad_index(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, _, _ = self.run_cli(["preview", "9"])
+        self.assertEqual(code, 2)
+
+    def test_no_subcommand_opens_ui(self):
+        seen = {}
+        original = cli.tui.run_ui
+        cli.tui.run_ui = lambda inbox, **kw: seen.setdefault("rows", len(inbox["rows"])) and 0
+        try:
+            code, _, _ = self.run_cli([], runner=fake_runner)
+        finally:
+            cli.tui.run_ui = original
+        self.assertEqual((code, seen["rows"]), (0, 1))

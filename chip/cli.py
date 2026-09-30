@@ -1,4 +1,4 @@
-"""`chip menu | repos | list | pick | repo` — the commands the /chip skill calls."""
+"""`chip` (fzf picker) and `chip menu | repos | list | pick | repo | preview` for the /chip skill."""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import fetch, menu, model, render, repos
+from chip import fetch, menu, model, render, repos, tui
 from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "Có vẻ gh chưa đăng nhập — chạy `! gh auth login` rồi thử lại."
@@ -90,6 +90,31 @@ def cmd_menu(args, runner) -> int:
     return 0
 
 
+def cmd_preview(args) -> int:
+    inbox = _cached_inbox()
+    if inbox is None:
+        return 2
+    rows = inbox["rows"]
+    if not 1 <= args.index <= len(rows):
+        _error(f"không có PR số {args.index}")
+        return 2
+    print(tui.preview_text(rows[args.index - 1]))
+    return 0
+
+
+def cmd_ui(runner) -> int:
+    print("Đang tải PR từ GitHub…", file=sys.stderr)
+    inbox = _refresh(False, runner)
+    if inbox is None:
+        return 1
+    cache = cache_dir() / "repos.json"
+    return tui.run_ui(
+        inbox,
+        resolve=lambda slug: repos.resolve(slug, work_root(), cache),
+        clone=lambda slug: repos.clone(slug, work_root(), cache),
+    )
+
+
 def cmd_repos() -> int:
     inbox = _cached_inbox()
     if inbox is None:
@@ -132,7 +157,7 @@ def cmd_repo(args) -> int:
 
 def main(argv=None, runner=None) -> int:
     parser = argparse.ArgumentParser(prog="chip", description="PR review inbox")
-    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub = parser.add_subparsers(dest="cmd")
     p_list = sub.add_parser("list", help="bảng PR đang chờ bạn review")
     p_list.add_argument("--all", action="store_true", help="hiện cả PR đã approve và draft")
     p_menu = sub.add_parser("menu", help="trang câu hỏi AskUserQuestion (JSON); không có --page thì tải lại")
@@ -142,6 +167,8 @@ def main(argv=None, runner=None) -> int:
     p_menu.add_argument("--repo", help="chỉ repo này (tên ngắn hoặc owner/repo), nhiều repo cách nhau dấu phẩy")
     p_menu.add_argument("--q", help="từ khoá: title, author, Jira, repo, base (mọi từ phải khớp)")
     sub.add_parser("repos", help="câu hỏi AskUserQuestion chọn repo để lọc (JSON)")
+    p_preview = sub.add_parser("preview", help="chi tiết PR số N từ danh sách gần nhất (khung preview của fzf)")
+    p_preview.add_argument("index", type=int)
     p_pick = sub.add_parser("pick", help="chọn PR từ danh sách gần nhất: repo#N | 1,3 | 2-4 | all")
     p_pick.add_argument("selection")
     p_repo = sub.add_parser("repo", help="đường dẫn clone local của owner/repo")
@@ -149,6 +176,10 @@ def main(argv=None, runner=None) -> int:
     p_repo.add_argument("--clone", action="store_true", help="clone vào ~/work/.chip-repos nếu chưa có")
     args = parser.parse_args(argv)
 
+    if args.cmd is None:
+        return cmd_ui(runner or fetch.run_gh_graphql)
+    if args.cmd == "preview":
+        return cmd_preview(args)
     if args.cmd == "list":
         return cmd_list(args, runner or fetch.run_gh_graphql)
     if args.cmd == "menu":
