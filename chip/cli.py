@@ -11,20 +11,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import fetch, mcp_server, menu, model, render, repos, tui
+from chip import fetch, mcp_server, menu, model, render, repos, store, tui
 from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "gh does not seem to be logged in — run `! gh auth login` and try again."
 PICK_FIELDS = ("index", "label", "repo", "number", "title", "url")
-CACHE_TTL_SECONDS = 180
+CACHE_TTL_SECONDS = store.CACHE_TTL_SECONDS
 
 
 def cache_dir() -> Path:
-    return Path(os.environ.get("CHIP_CACHE_DIR") or Path.home() / ".cache" / "chip")
+    return store.cache_dir()
 
 
 def work_root() -> Path:
-    return Path(os.environ.get("CHIP_WORK_ROOT") or Path.home() / "work")
+    return store.work_root()
 
 
 def _error(message: str) -> None:
@@ -32,36 +32,22 @@ def _error(message: str) -> None:
 
 
 def _refresh(show_all: bool, runner, force: bool = False) -> Optional[dict]:
-    """Fetch, build and cache the inbox (reusing a fetch younger than CACHE_TTL_SECONDS
-    unless `force`); None (error already printed) on failure."""
-    last = cache_dir() / "last.json"
-    if not force and last.exists():
-        cached = json.loads(last.read_text())
-        fresh = time.time() - cached.get("fetched_at", 0) < CACHE_TTL_SECONDS
-        if fresh and cached.get("show_all") == show_all:
-            return cached
-    try:
-        viewer, nodes = fetch.fetch_inbox_nodes(runner)
-    except fetch.FetchError as exc:
-        _error(str(exc))
-        if "auth" in str(exc).lower() or "401" in str(exc):
+    """Visible view of the cached/fetched inbox; None (error already printed) on failure."""
+    inbox, error = store.load_all(runner, force)
+    if error:
+        _error(error)
+        if "auth" in error.lower() or "401" in error:
             print(AUTH_HINT, file=sys.stderr)
         return None
-    inbox = model.build_inbox(nodes, viewer, datetime.now(timezone.utc), show_all=show_all)
-    menu.assign_labels(inbox["rows"])
-    inbox["fetched_at"] = time.time()
-    inbox["show_all"] = show_all
-    cache_dir().mkdir(parents=True, exist_ok=True)
-    (cache_dir() / "last.json").write_text(json.dumps(inbox, ensure_ascii=False, indent=1))
-    return inbox
+    return model.visible_view(inbox, show_all)
 
 
-def _cached_inbox() -> Optional[dict]:
-    last = cache_dir() / "last.json"
-    if not last.exists():
+def _cached_inbox(show_all: bool = False) -> Optional[dict]:
+    inbox = store.cached_all()
+    if inbox is None or not inbox.get("all_rows"):
         _error("no list yet — run `chip menu` first.")
         return None
-    return json.loads(last.read_text())
+    return model.visible_view(inbox, show_all)
 
 
 def cmd_list(args, runner) -> int:
@@ -169,8 +155,8 @@ def cmd_internal(args) -> int:
 
 def cmd_mcp(runner) -> int:
     """Serve PRs as MCP resources; first refresh reuses a recent fetch, later ones always refetch."""
-    last = cache_dir() / "last.json"
-    initial = json.loads(last.read_text()) if last.exists() else {"rows": [], "hidden": {"approved": 0, "draft": 0}}
+    cached = store.cached_all()
+    initial = model.visible_view(cached) if cached and cached.get("all_rows") else {"rows": [], "hidden": {"approved": 0, "draft": 0}}
     calls = {"n": 0}
 
     def refresh():

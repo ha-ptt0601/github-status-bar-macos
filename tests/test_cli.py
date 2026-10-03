@@ -252,10 +252,10 @@ class CacheTtlTest(CliCase):
         code, _, _ = self.run_cli(["repos", "--refresh"], runner=failing_runner)
         self.assertEqual(code, 1)
 
-    def test_all_flag_change_refetches(self):
+    def test_all_flag_reuses_cache(self):
         self.run_cli(["repos", "--refresh"], runner=fake_runner)
         code, _, _ = self.run_cli(["repos", "--refresh", "--all"], runner=failing_runner)
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 0)
 
 
 class MentionPickTest(CliCase):
