@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import tempfile
@@ -27,6 +28,11 @@ def render(rows, records=None, views=None, **kw):
 
 
 class HelpersTest(unittest.TestCase):
+    def test_sf_config_is_base64_palette_json(self):
+        import base64
+        decoded = json.loads(base64.b64decode(swiftbar.sf_config("#FF9500")))
+        self.assertEqual(decoded, {"renderingMode": "Palette", "colors": ["#FF9500"]})
+
     def test_escape(self):
         self.assertEqual(swiftbar.esc("a|b"), "a¦b")
         self.assertTrue(swiftbar.esc("-x").startswith("​"))
@@ -53,7 +59,7 @@ class RenderTest(unittest.TestCase):
         lines = render([row(1), row(2)])
         self.assertIn("API · 2 PRs | size=11 color=#8E8E93", lines)
         pr = next(l for l in lines if l.startswith("#2001"))
-        self.assertIn("sfimage=sparkle sfcolor=#34C759 font=Menlo size=12", pr)
+        self.assertIn(f"sfimage=sparkle sfconfig={swiftbar.sf_config('#34C759')} font=Menlo size=12", pr)
         self.assertIn("--api#2001 | disabled=true", lines)
         self.assertIn("--New · by alice · opened 2 days ago | disabled=true", lines)
         self.assertIn('--Run "Full review" | sfimage=play.fill bash=/p/chip.3m.sh terminal=false '
@@ -73,9 +79,9 @@ class RenderTest(unittest.TestCase):
     def test_paging_with_nested_next(self):
         lines = render([row(i) for i in range(1, 31)])
         self.assertEqual(len([l for l in lines if l.startswith("#")]), 12)
-        self.assertIn("Next 12 ›  (13–24 of 30) | sfimage=chevron.right", lines)
+        self.assertIn("Next 12 ›  (13–24 of 30)", lines)
         self.assertIn("--API (cont.) | size=11 color=#8E8E93", lines)
-        self.assertIn("--Next 6 ›  (25–30 of 30) | sfimage=chevron.right", lines)
+        self.assertIn("--Next 6 ›  (25–30 of 30)", lines)
         self.assertIn("----API (cont.) | size=11 color=#8E8E93", lines)
 
     def test_stale_go_to_older_submenu_but_rereview_stays(self):
@@ -95,7 +101,8 @@ class RenderTest(unittest.TestCase):
         views = {"api#2001::Full review": {"kind": "running", "text": "running 3m"}}
         lines = render([row(1)], records, views)
         self.assertIn("Reviews by chip | size=11 color=#8E8E93", lines)
-        self.assertIn("api#2001 · Full review · running 3m | sfimage=circle.lefthalf.filled sfcolor=#0A84FF", lines)
+        self.assertIn(f"api#2001 · Full review · running 3m | sfimage=circle.lefthalf.filled "
+                      f"sfconfig={swiftbar.sf_config('#0A84FF')}", lines)
         self.assertIn("--View session | sfimage=eye bash=/p/chip.3m.sh terminal=false param1=attach param2=ab12cd34",
                       lines)
         self.assertIn("--Stop | sfimage=stop.circle bash=/p/chip.3m.sh terminal=false param1=stop param2=ab12cd34 "

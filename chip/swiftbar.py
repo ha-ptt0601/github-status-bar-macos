@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import re
 import textwrap
 import time
@@ -31,6 +32,15 @@ RUN_SYMBOL = {
     "gone": ("xmark.circle", GREY),
     "other": ("questionmark.circle", GREY),
 }
+
+
+def sf_config(color: str) -> str:
+    """SwiftBar `sfconfig`: base64 JSON that tints an SF Symbol (palette mode works on SwiftBar 2.1)."""
+    return base64.b64encode(json.dumps({"renderingMode": "Palette", "colors": [color]}).encode()).decode()
+
+
+def symbol(name: str, color: str) -> dict:
+    return {"sfimage": name, "sfconfig": sf_config(color)}
 
 
 def icon_b64() -> str:
@@ -94,9 +104,9 @@ def _project(r: dict) -> str:
 
 
 def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
-    name, symbol, color = STATUS[r["status"]]
+    name, sf_name, color = STATUS[r["status"]]
     title = r["title"] if len(r["title"]) <= 44 else r["title"][:43] + "…"
-    lines = [item(f"#{r['number']:<6}{title:<45} {r['author']}", depth, sfimage=symbol, sfcolor=color, **ROW_FONT)]
+    lines = [item(f"#{r['number']:<6}{title:<45} {r['author']}", depth, **symbol(sf_name, color), **ROW_FONT)]
     d = depth + 1
     lines.append(item(r["label"], d, disabled="true"))
     for chunk in textwrap.wrap(r["title"], 60) or [""]:
@@ -151,8 +161,7 @@ def pr_pages(rows: List[dict], depth: int, ctx: dict) -> List[str]:
         start += PAGE
         if start < len(entries):
             end = min(start + PAGE, len(entries))
-            lines.append(item(f"Next {end - start} ›  ({start + 1}–{end} of {len(entries)})", depth,
-                              sfimage="chevron.right"))
+            lines.append(item(f"Next {end - start} ›  ({start + 1}–{end} of {len(entries)})", depth))
             depth += 1
     return lines
 
@@ -163,8 +172,8 @@ def run_lines(records: Dict[str, dict], views: Dict[str, dict], ctx: dict) -> Li
     lines = ["---", item("Reviews by chip", 0, **HEADER)]
     for key, rec in sorted(records.items(), key=lambda kv: -kv[1].get("started_at", 0)):
         view = views[key]
-        symbol, color = RUN_SYMBOL[view["kind"]]
-        lines.append(item(f"{rec['label']} · {rec['skill']} · {view['text']}", 0, sfimage=symbol, sfcolor=color))
+        sf_name, color = RUN_SYMBOL[view["kind"]]
+        lines.append(item(f"{rec['label']} · {rec['skill']} · {view['text']}", 0, **symbol(sf_name, color)))
         if view["kind"] != "gone":
             lines.append(item("View session", 1, sfimage="eye", **action(ctx["plugin"], "attach", rec["id"], refresh=False)))
         if view["kind"] in ("running", "needs_you"):
@@ -192,8 +201,8 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     title = "!" if error else (str(count) if count else "")
     lines = [item(title, 0, templateImage=icon_b64()), "---"]
     if newer:
-        lines.append(item(f"Update available: v{newer} — Update now", 0, sfimage="arrow.up.circle.fill",
-                          sfcolor="#FF9500", color="#FF9500", **action(plugin, "update")))
+        lines.append(item(f"Update available: v{newer} — Update now", 0, **symbol("arrow.up.circle.fill", "#FF9500"),
+                          color="#FF9500", **action(plugin, "update")))
     if error:
         lines.append(item(f"Could not refresh: {error[:90]}", 0, sfimage="exclamationmark.triangle", color="#FF3B30"))
     for message in cfg.get("errors", [])[:1]:
