@@ -129,7 +129,7 @@ Anyone can run their own skill instead of, or next to, `/my-review-skill`. The c
 {
   "work_root": "~/work",
   "skills": [
-    {"name": "Review đầy đủ", "prompt": "/my-review-skill {url}"}
+    {"name": "Full review", "prompt": "/my-review-skill {url}"}
   ],
   "permission_mode": "auto",
   "disallowed_tools": ["Edit", "Write", "NotebookEdit"]
@@ -137,7 +137,7 @@ Anyone can run their own skill instead of, or next to, `/my-review-skill`. The c
 ```
 
 - **`skills`:** each entry becomes one ▶ item in every PR's submenu, as `▶ <name>`. The first entry is the default. `prompt` is any text that Claude Code accepts as a first message, usually a slash command. It is filled from the placeholders `{url}`, `{repo}` (`owner/repo`), `{number}`, `{label}` and `{title}`. Unknown placeholders are an error that `chip config check` reports.
-- **Running a skill:** `chip run <label> [--skill <index>]` runs the chosen entry, and the session name becomes `chip · <label> · <skill name>`. One label can then have several runs, one per skill, each listed under "Review của chip" with its skill name. `runs.json` is keyed by `<label>::<skill name>`. Menu actions refer to a run by its short session id, because SwiftBar uses `|` to separate parameters.
+- **Running a skill:** `chip run <label> [--skill <index>]` runs the chosen entry, and the session name becomes `chip · <label> · <skill name>`. One label can then have several runs, one per skill, each listed under "Reviews by chip" with its skill name. `runs.json` is keyed by `<label>::<skill name>`. Menu actions refer to a run by its short session id, because SwiftBar uses `|` to separate parameters.
 - **`work_root`:** where `chip repo` scans for clones and where `.chip-repos/` lives. `CHIP_WORK_ROOT` still overrides it.
 - **`permission_mode` / `disallowed_tools`:** passed to `claude --bg` as is. Users who want a skill that fixes code can drop `Edit`/`Write` from the list, at their own risk.
 - **Bad JSON or a bad entry:** the menu shows one error line and falls back to the defaults, so it never goes blank.
