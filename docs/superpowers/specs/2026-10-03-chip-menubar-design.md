@@ -114,7 +114,22 @@ Anyone can run their own skill instead of, or next to, `/my-review-skill`. The c
 
 The `/chip` skill and the fzf picker use the same config: their review step uses the default skill's prompt instead of the hard-coded `/my-review-skill`.
 
-## Install (`chip menubar install`)
+## Sharing with other people (private repo `ha-ptt0601/chip`)
+
+Other people clone the repo anywhere and run one command. Nothing may assume `/Users/me` or `~/work/chip`.
+
+- **No hard-coded paths.** The repo location comes from the launcher's real path (`bin/chip` already resolves it). Generated files (the skill, the SwiftBar plugin, the MCP registration) embed the absolute path of *that* clone at install time. `work_root` comes from the config.
+- **`chip install`** (idempotent) checks the prerequisites (`python3` ≥ 3.9, `gh` authenticated, `claude`; `fzf` and SwiftBar are optional) and prints `brew install …` for anything missing. It then:
+  - links `~/.local/bin/chip` to the repo's `bin/chip` (warning if `~/.local/bin` is not on `PATH`);
+  - installs the `/chip` skill into `~/.claude/skills/chip`, rendered from `skill/SKILL.md` with the real `chip` path;
+  - registers the MCP server: `claude mcp add --scope user chip -- <repo>/bin/chip mcp`;
+  - installs the SwiftBar plugin (next section);
+  - runs `chip config init`.
+  Anything that already exists and points elsewhere is reported, not overwritten.
+- **`chip uninstall`** removes exactly what `install` added.
+- **Personal files stay out of the repo.** `backup/my-review-skill.SKILL.md*` move out of the repo (they are the owner's personal skill). The default config ships `/my-review-skill {url}` only as an example. A README explains install, config and the three ways to pick PRs.
+
+## SwiftBar plugin install (part of `chip install`)
 
 - `brew install swiftbar` (the user runs it, or the command prints it when SwiftBar is missing).
 - Plugin folder: SwiftBar's configured `PluginDirectory`. If it is unset, use `~/Library/Application Support/SwiftBar/Plugins` and write that path with `defaults write com.ameba.SwiftBar PluginDirectory`.
