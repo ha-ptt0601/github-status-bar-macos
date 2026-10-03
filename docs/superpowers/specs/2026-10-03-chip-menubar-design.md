@@ -22,8 +22,8 @@ A GitHub icon in the macOS menu bar lists the PRs waiting for the user's review,
 | `chip swiftbar` (`chip/swiftbar.py`) | Prints the SwiftBar menu text: icon line, header, PR sections, chip review runs, and the Refresh item. It also sends the notifications (see below). |
 | `chip run <label> [--skill N]` (`chip/runs.py`) | Starts a background review for one PR with the chosen skill and records it. |
 | `chip/config.py` | Loads and validates `~/.config/chip/config.json` (skills, work root, permissions), with defaults. |
-| `chip attach <key>` / `chip stop <key>` / `chip forget <key>` (key = `<label>|<skill>`) / `chip update` / `chip copy <label>` | Opens `claude attach <id>` in a new Terminal window / runs `claude stop <id>` / runs `claude rm <id>` and drops the record. |
-| `~/.cache/chip/runs.json` | `{"<label>|<skill name>": {id, url, repo, skill, started_at}}` for each review chip started. |
+| `chip attach <key>` / `chip stop <key>` / `chip forget <key>` (by short session id) / `chip update` / `chip copy <label>` | Opens `claude attach <id>` in a new Terminal window / runs `claude stop <id>` / runs `claude rm <id>` and drops the record. |
+| `~/.cache/chip/runs.json` | `{"<label>::<skill name>": {id, label, title, url, repo, skill, started_at, done_at?}}` for each review chip started. |
 | `~/.cache/chip/notify.json` | Snapshot from the previous refresh, used to diff for notifications. |
 
 Every piece reuses the existing inbox code (`fetch`, `model`, `menu.assign_labels`, the 3-minute cache) and `repos.resolve/clone`.
@@ -57,6 +57,8 @@ Show approved & drafts (11)  ▸
 Settings  ▸                                       Open config · Reinstall · Check for updates · About chip v0.3.0
 ```
 
+**Paging.** Each list (fresh PRs, "Older than 30 days", "Show approved & drafts") shows 12 PR rows per page. When a list has more, its last line is `Next 12 ›  (13–24 of 44)`, a submenu that holds the next page, which in turn ends with its own `Next ›`. Moving the pointer is enough, and the menu never closes. Going back to the parent menu acts as Previous. A project that continues onto the next page repeats its header as `API (cont.)`.
+
 Submenu of a PR row:
 
 ```
@@ -86,7 +88,7 @@ Copy link
 2. Resolve the local clone. If there is none, clone into `<work_root>/.chip-repos/<repo>` without asking, since clicking Run is the consent.
 3. From that directory run the following. **The prompt must come first**: `--disallowedTools` takes a variadic list and swallows a trailing prompt, and `--bg` then waits idle. The tool list is passed comma-joined.
    `claude "<skill prompt, filled>" --bg --name "chip · <label> · <skill>" --permission-mode <permission_mode> --disallowedTools "<Edit,Write,NotebookEdit>"`
-4. Parse the short id from the first stdout line, which looks like `backgrounded · b19aff59 · <name>`. Save `{id, url, repo, skill, started_at}` under `<label>|<skill>` in `runs.json`, and notify "Reviewing <label> (<skill>)".
+4. Parse the short id from the first stdout line, which looks like `backgrounded · b19aff59 · <name>`. Save `{id, url, repo, skill, started_at}` under `<label>::<skill>` in `runs.json`, and notify "Reviewing <label> (<skill>)".
 
 ## Run status
 
@@ -135,7 +137,7 @@ Anyone can run their own skill instead of, or next to, `/my-review-skill`. The c
 ```
 
 - **`skills`:** each entry becomes one ▶ item in every PR's submenu, as `▶ <name>`. The first entry is the default. `prompt` is any text that Claude Code accepts as a first message, usually a slash command. It is filled from the placeholders `{url}`, `{repo}` (`owner/repo`), `{number}`, `{label}` and `{title}`. Unknown placeholders are an error that `chip config check` reports.
-- **Running a skill:** `chip run <label> [--skill <index>]` runs the chosen entry, and the session name becomes `chip · <label> · <skill name>`. One label can then have several runs, one per skill, each listed under "Review của chip" with its skill name. `runs.json` is keyed by `<label>|<skill name>`.
+- **Running a skill:** `chip run <label> [--skill <index>]` runs the chosen entry, and the session name becomes `chip · <label> · <skill name>`. One label can then have several runs, one per skill, each listed under "Review của chip" with its skill name. `runs.json` is keyed by `<label>::<skill name>`. Menu actions refer to a run by its short session id, because SwiftBar uses `|` to separate parameters.
 - **`work_root`:** where `chip repo` scans for clones and where `.chip-repos/` lives. `CHIP_WORK_ROOT` still overrides it.
 - **`permission_mode` / `disallowed_tools`:** passed to `claude --bg` as is. Users who want a skill that fixes code can drop `Edit`/`Write` from the list, at their own risk.
 - **Bad JSON or a bad entry:** the menu shows one error line and falls back to the defaults, so it never goes blank.
