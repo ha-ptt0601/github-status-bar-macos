@@ -40,14 +40,14 @@ class BuildPageTest(unittest.TestCase):
         nav = page["questions"][-1]
         self.assertFalse(nav["multiSelect"])
         self.assertEqual([o["label"] for o in nav["options"]],
-                         ["Review các PR đã chọn", "Xem trang tiếp", "Đổi project", "Tìm kiếm"])
-        self.assertEqual(nav["header"], "Trang 1/4")
+                         ["Review selected PRs", "Next page", "Change project", "Search"])
+        self.assertEqual(nav["header"], "Page 1/4")
 
     def test_last_page_nav_has_no_next(self):
         page = build_page(rows(39), 4)
         self.assertEqual([len(q["options"]) for q in pr_questions(page)], [3])
         self.assertEqual([o["label"] for o in page["questions"][-1]["options"]],
-                         ["Review các PR đã chọn", "Đổi project", "Tìm kiếm"])
+                         ["Review selected PRs", "Change project", "Search"])
 
     def test_option_content(self):
         r = row(1, title="fix(orders): only require a customer", status=model.REREVIEW,
@@ -56,14 +56,14 @@ class BuildPageTest(unittest.TestCase):
         self.assertEqual(option["label"], "shopbox-api#101")
         self.assertEqual(
             option["description"],
-            "fix(orders): only require a customer · alice · 2d · cần re-review · CHANGES_REQ 1✗"
+            "fix(orders): only require a customer · alice · 2d · Re-review · CHANGES_REQ 1✗"
             " · +1/-0 1f · feature/a (stacked) · conflict · MYS-1",
         )
 
     def test_question_text_and_header(self):
         q = pr_questions(build_page(rows(39), 2))[0]
-        self.assertEqual(q["question"], "Chọn PR để review (13–16 / 39) — Space tick, Tab nhóm kế; ô trống: gõ từ khoá / tên project")
-        self.assertEqual(pr_questions(build_page(rows(39), 2))[1]["question"], "Chọn PR để review (17–20 / 39)")
+        self.assertEqual(q["question"], "Pick PRs to review (13–16 / 39) — Space to tick, Tab for the next group; type keywords or a project in the empty field")
+        self.assertEqual(pr_questions(build_page(rows(39), 2))[1]["question"], "Pick PRs to review (17–20 / 39)")
         self.assertEqual(q["header"], "PR 13-16")
 
     def test_up_to_16_prs_fit_one_screen_without_nav(self):
@@ -93,7 +93,7 @@ class BuildPageTest(unittest.TestCase):
 
     def test_single_pr_gets_skip_option(self):
         options = build_page(rows(1), 1)["questions"][0]["options"]
-        self.assertEqual([o["label"] for o in options], ["shopbox-api#101", "Không chọn"])
+        self.assertEqual([o["label"] for o in options], ["shopbox-api#101", "None"])
 
     def test_page_out_of_range(self):
         with self.assertRaises(ValueError):
@@ -140,16 +140,16 @@ class ProjectQuestionTest(unittest.TestCase):
         repos = ["o/a"] * 3 + ["o/b"] * 2 + ["o/c"] * 2 + ["o/d"] + ["o/e"]
         q = project_question(self.labelled(repos))
         self.assertFalse(q["multiSelect"])
-        self.assertEqual([o["label"] for o in q["options"]], ["Tất cả", "a", "b", "c"])
+        self.assertEqual([o["label"] for o in q["options"]], ["All", "a", "b", "c"])
         self.assertEqual(q["options"][0]["description"], "9 PR")
         self.assertEqual(q["options"][1]["description"], "3 PR")
-        self.assertIn("gõ tên vào ô trống: d (1), e (1)", q["question"])
+        self.assertIn("type the name: d (1), e (1)", q["question"])
 
     def test_rereview_count_in_description(self):
         labelled = assign_labels([row(1, repo="o/a", status=model.REREVIEW), row(2, repo="o/a")])
-        self.assertEqual(project_question(labelled)["options"][1]["description"], "2 PR · 1 cần re-review")
+        self.assertEqual(project_question(labelled)["options"][1]["description"], "2 PR · 1 Re-review")
 
     def test_few_repos_no_hint(self):
         q = project_question(self.labelled(["o/a", "o/b"]))
-        self.assertEqual([o["label"] for o in q["options"]], ["Tất cả", "a", "b"])
-        self.assertEqual(q["question"], "Chọn project")
+        self.assertEqual([o["label"] for o in q["options"]], ["All", "a", "b"])
+        self.assertEqual(q["question"], "Choose a project")

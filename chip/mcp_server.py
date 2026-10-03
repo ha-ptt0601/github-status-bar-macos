@@ -81,7 +81,7 @@ def handle(msg: dict, inbox: dict) -> Optional[dict]:
             if wanted and r["label"] == wanted[0]:
                 text = preview_text(r) + f"\n\nReview: /my-review-skill {r['url']}"
                 return ok({"contents": [{"uri": uri, "mimeType": "text/plain", "text": text}]})
-        return err(-32002, f"không có PR {uri} trong danh sách chờ review")
+        return err(-32002, f"PR {uri} is not in the review inbox")
     return err(-32601, f"method not found: {method}")
 
 

@@ -15,10 +15,10 @@ def parse_selection(text: str, count: int, labels: Sequence[str] = ()) -> List[i
     skip = "".join(SKIP.split()).lower()
     cleaned = "".join(text.split()).lower()
     if not cleaned:
-        raise SelectionError("chưa chọn PR nào")
+        raise SelectionError("no PR selected")
     if cleaned == "all":
         if count == 0:
-            raise SelectionError("danh sách trống")
+            raise SelectionError("the list is empty")
         return list(range(1, count + 1))
 
     picked = set()
@@ -27,21 +27,21 @@ def parse_selection(text: str, count: int, labels: Sequence[str] = ()) -> List[i
             continue
         if "#" in token:
             if token not in by_label:
-                raise SelectionError(f"'{token}' không có trong danh sách")
+                raise SelectionError(f"'{token}' is not in the list")
             values = [by_label[token]]
         elif "-" in token:
             lo, _, hi = token.partition("-")
             if not (lo.isdigit() and hi.isdigit()) or int(lo) > int(hi):
-                raise SelectionError(f"'{token}' không hợp lệ")
+                raise SelectionError(f"'{token}' is not valid")
             values = range(int(lo), int(hi) + 1)
         elif token.isdigit():
             values = [int(token)]
         else:
-            raise SelectionError(f"'{token}' không hợp lệ")
+            raise SelectionError(f"'{token}' is not valid")
         for value in values:
             if not 1 <= value <= count:
-                raise SelectionError(f"'{token}' ngoài khoảng 1-{count}")
+                raise SelectionError(f"'{token}' is outside 1-{count}")
             picked.add(value)
     if not picked:
-        raise SelectionError("chưa chọn PR nào")
+        raise SelectionError("no PR selected")
     return sorted(picked)

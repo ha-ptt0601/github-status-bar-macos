@@ -89,5 +89,5 @@ class ScanResolveTest(unittest.TestCase):
 
     def test_clone_target_taken_by_other_repo(self):
         make_repo(self.root / ".chip-repos" / "api", "git@github.com:other/api.git")
-        with self.assertRaisesRegex(repos.CloneError, "không phải acme/api"):
+        with self.assertRaisesRegex(repos.CloneError, "is not acme/api"):
             repos.clone("acme/api", self.root, self.cache, runner=None)

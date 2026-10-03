@@ -4,13 +4,13 @@ from __future__ import annotations
 from chip import model
 
 STATUS_LABEL = {
-    model.REREVIEW: "cần re-review",
-    model.NEW: "mới",
-    model.WAITING: "chờ author",
-    model.COMMENTED: "đã comment",
-    model.APPROVED: "đã approve",
+    model.REREVIEW: "Re-review",
+    model.NEW: "New",
+    model.WAITING: "Waiting on author",
+    model.COMMENTED: "Commented",
+    model.APPROVED: "approved",
 }
-HEADER = ["#", "Repo", "PR", "Title", "Author", "Chờ", "Trạng thái", "Decision", "Size", "CI", "Merge", "Base", "Jira"]
+HEADER = ["#", "Repo", "PR", "Title", "Author", "Waiting", "Status", "Decision", "Size", "CI", "Merge", "Base", "Jira"]
 TITLE_WIDTH = 50
 
 
@@ -48,5 +48,5 @@ def render_table(inbox: dict) -> str:
     hidden = inbox["hidden"]
     if hidden["approved"] or hidden["draft"]:
         lines.append("")
-        lines.append(f"Ẩn: {hidden['approved']} đã approve, {hidden['draft']} draft — `chip list --all` để xem hết.")
+        lines.append(f"Hidden: {hidden['approved']} approved, {hidden['draft']} drafts — `chip list --all` shows all.")
     return "\n".join(lines)

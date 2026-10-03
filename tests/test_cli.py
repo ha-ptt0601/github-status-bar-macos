@@ -103,7 +103,7 @@ class MenuCliTest(CliCase):
         self.run_cli(["menu"], runner=fake_runner)
         code, _, err = self.run_cli(["menu", "--page", "5"])
         self.assertEqual(code, 2)
-        self.assertIn("trang 5", err)
+        self.assertIn("page 5", err)
 
     def test_menu_inbox_zero(self):
         empty = lambda s, a: {"viewer": {"login": "me"},
@@ -136,7 +136,7 @@ class FilterCliTest(CliCase):
         code, out, _ = self.run_cli(["menu", "--q", "newsletter"], runner=self.runner)
         page = json.loads(out)
         self.assertEqual((code, page["total"], page["filter"]), (0, 1, "q=newsletter"))
-        self.assertEqual(self.labels(page), ["api#1", "Không chọn"])
+        self.assertEqual(self.labels(page), ["api#1", "None"])
 
     def test_repo_filter_from_cache(self):
         self.run_cli(["menu"], runner=self.runner)
@@ -159,13 +159,13 @@ class FilterCliTest(CliCase):
         self.run_cli(["menu"], runner=self.runner)
         code, out, _ = self.run_cli(["repos"])
         options = json.loads(out)["questions"][0]["options"]
-        self.assertEqual((code, [o["label"] for o in options]), (0, ["Tất cả", "api", "shopbox-api"]))
+        self.assertEqual((code, [o["label"] for o in options]), (0, ["All", "api", "shopbox-api"]))
 
     def test_repos_refresh_fetches_first(self):
         code, out, _ = self.run_cli(["repos", "--refresh"], runner=self.runner)
         data = json.loads(out)
         self.assertEqual((code, data["total"], data["hidden"]), (0, 2, {"approved": 0, "draft": 0}))
-        self.assertEqual(data["questions"][0]["options"][0]["label"], "Tất cả")
+        self.assertEqual(data["questions"][0]["options"][0]["label"], "All")
 
 
 class PreviewCliTest(CliCase):

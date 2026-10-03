@@ -47,11 +47,11 @@ def run_gh_graphql(search: str, after: Optional[str]) -> dict:
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     except FileNotFoundError:
-        raise FetchError("không tìm thấy lệnh gh")
+        raise FetchError("gh command not found")
     except subprocess.TimeoutExpired:
-        raise FetchError("gh api graphql chạy quá 60s")
+        raise FetchError("gh api graphql took longer than 60s")
     if proc.returncode != 0:
-        raise FetchError(proc.stderr.strip() or f"gh thoát với mã {proc.returncode}")
+        raise FetchError(proc.stderr.strip() or f"gh exited with code {proc.returncode}")
     data = json.loads(proc.stdout)
     if data.get("errors"):
         raise FetchError("; ".join(e.get("message", "") for e in data["errors"]))

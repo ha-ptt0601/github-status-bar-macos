@@ -10,12 +10,12 @@ from chip.render import STATUS_LABEL
 PER_PAGE = 12
 ONE_SCREEN = 16  # 4 questions x 4 options: fits without a nav question
 PER_QUESTION = 4
-REVIEW_NOW = "Review các PR đã chọn"
-NEXT_PAGE = "Xem trang tiếp"
-FILTER_REPO = "Đổi project"
-SEARCH = "Tìm kiếm"
-SKIP = "Không chọn"
-ALL_REPOS = "Tất cả"
+REVIEW_NOW = "Review selected PRs"
+NEXT_PAGE = "Next page"
+FILTER_REPO = "Change project"
+SEARCH = "Search"
+SKIP = "None"
+ALL_REPOS = "All"
 
 
 def _repo_names(rows: List[dict]) -> dict:
@@ -53,7 +53,7 @@ def _repo_description(rs: List[dict]) -> str:
 
 
 def project_question(rows: List[dict]) -> dict:
-    """One single-select question: `Tất cả` + the 3 busiest repos; the rest are typed via Other."""
+    """One single-select question: `All` + the 3 busiest repos; the rest are typed via Other."""
     names = _repo_names(rows)
     counts = Counter(r["repo"] for r in rows)
     ordered = sorted(counts, key=lambda f: (-counts[f], names[f]))
@@ -61,9 +61,9 @@ def project_question(rows: List[dict]) -> dict:
     options = [{"label": ALL_REPOS, "description": _repo_description(rows)}]
     for full in top:
         options.append({"label": names[full], "description": _repo_description([r for r in rows if r["repo"] == full])})
-    question = "Chọn project"
+    question = "Choose a project"
     if rest:
-        question += " — repo khác gõ tên vào ô trống: " + ", ".join(f"{names[f]} ({counts[f]})" for f in rest)
+        question += " — other repos, type the name: " + ", ".join(f"{names[f]} ({counts[f]})" for f in rest)
     return {"question": question, "header": "Project", "multiSelect": False, "options": options}
 
 
@@ -91,7 +91,7 @@ def build_page(rows: List[dict], page: int, filter_text: str = "") -> dict:
     per_page = ONE_SCREEN if single else PER_PAGE
     pages = max(1, -(-len(rows) // per_page))
     if not 1 <= page <= pages:
-        raise ValueError(f"trang {page} ngoài khoảng 1-{pages}")
+        raise ValueError(f"page {page} is outside 1-{pages}")
     start = (page - 1) * per_page
     questions = []
     offset = start
@@ -100,27 +100,27 @@ def build_page(rows: List[dict], page: int, filter_text: str = "") -> dict:
         offset = last
         options = [{"label": r["label"], "description": _description(r)} for r in chunk]
         if len(options) == 1:
-            options.append({"label": SKIP, "description": "Không review PR nào"})
+            options.append({"label": SKIP, "description": "Review none"})
         questions.append({
-            "question": f"Chọn PR để review ({first}–{last} / {len(rows)})"
-            + (" — Space tick, Tab nhóm kế; ô trống: gõ từ khoá / tên project" if first == start + 1 else ""),
+            "question": f"Pick PRs to review ({first}–{last} / {len(rows)})"
+            + (" — Space to tick, Tab for the next group; type keywords or a project in the empty field" if first == start + 1 else ""),
             "header": f"PR {first}-{last}",
             "multiSelect": True,
             "options": options,
         })
     if single:
         return {"page": page, "pages": pages, "total": len(rows), "filter": filter_text, "questions": questions}
-    nav = [{"label": REVIEW_NOW, "description": "Dừng chọn, review các PR đã tick"}]
+    nav = [{"label": REVIEW_NOW, "description": "Stop picking and review the ticked PRs"}]
     if page < pages:
         nxt_first, nxt_last = page * PER_PAGE + 1, min(len(rows), (page + 1) * PER_PAGE)
-        nav.append({"label": NEXT_PAGE, "description": f"PR {nxt_first}–{nxt_last}; lựa chọn ở trang này được giữ"})
+        nav.append({"label": NEXT_PAGE, "description": f"PR {nxt_first}–{nxt_last}; picks on this page are kept"})
     nav += [
-        {"label": FILTER_REPO, "description": "Chọn lại project"},
-        {"label": SEARCH, "description": "Theo title, author, Jira, repo — hoặc gõ từ khoá vào Other"},
+        {"label": FILTER_REPO, "description": "Pick another project"},
+        {"label": SEARCH, "description": "By title, author, Jira, repo — or type keywords in Other"},
     ]
     questions.append({
-        "question": f"Tiếp theo? (đang lọc: {filter_text})" if filter_text else "Tiếp theo?",
-        "header": f"Trang {page}/{pages}",
+        "question": f"Next? (filter: {filter_text})" if filter_text else "Next?",
+        "header": f"Page {page}/{pages}",
         "multiSelect": False,
         "options": nav,
     })

@@ -37,15 +37,15 @@ class RepoLinesTest(unittest.TestCase):
     def test_all_line_first_then_busiest_repo(self):
         lines = plain(tui.repo_lines(INBOX, picked={2}))
         self.assertTrue(lines[0].startswith("*\t"))
-        self.assertIn("Tất cả", lines[0])
+        self.assertIn("All", lines[0])
         self.assertIn("3 PR", lines[0])
         self.assertIn("☑ 1", lines[0])
         key, text = lines[1].split("\t", 1)
         self.assertEqual(key, "acme/shopbox-api")
         self.assertIn("shopbox-api", text)
         self.assertIn("2 PR", text)
-        self.assertIn("1 cần re-review", text)
-        self.assertIn("mới nhất 1h", text)
+        self.assertIn("1 Re-review", text)
+        self.assertIn("newest 1h", text)
         self.assertEqual(lines[2].split("\t", 1)[0], "acme/api")
         self.assertIn("☑ 1", lines[2])
 
@@ -63,7 +63,7 @@ class PrLinesTest(unittest.TestCase):
         index, text = lines[0].split("\t", 1)
         self.assertEqual(index, "2")
         self.assertTrue(text.startswith("☑ #102"))
-        for part in ("feat: thing 2", "alice", "2d", "mới", "MYS-1", "conflict"):
+        for part in ("feat: thing 2", "alice", "2d", "New", "MYS-1", "conflict"):
             self.assertIn(part, text)
 
     def test_unpicked_and_all_repos_use_labels(self):
@@ -157,7 +157,7 @@ class RunUiTest(unittest.TestCase):
         self.run_ui([("repos", 0, "*\tx\n", []), ("prs", 0, "1\tx\n", [])], answers=["n"],
                     resolve=lambda slug: None)
         self.assertEqual(self.claude_calls, [])
-        self.assertTrue(any("Bỏ qua" in p for p in self.printed))
+        self.assertTrue(any("Skipped" in p for p in self.printed))
 
     def test_inbox_zero(self):
         code = tui.run_ui({"rows": [], "hidden": {"approved": 0, "draft": 0}}, self.state,

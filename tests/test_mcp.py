@@ -54,7 +54,7 @@ class HandleTest(unittest.TestCase):
             "pr://api/275-fix-orders-only-require-a-customer",
         ])
         self.assertEqual(resources[1]["name"], "api#275 fix(orders): only require a customer!")
-        self.assertIn("cần re-review", resources[1]["description"])
+        self.assertIn("Re-review", resources[1]["description"])
         self.assertEqual(resources[0]["mimeType"], "text/plain")
 
     def test_read(self):

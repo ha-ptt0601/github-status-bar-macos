@@ -20,9 +20,9 @@ class RenderTableTest(unittest.TestCase):
         out = render_table({"rows": [row()], "hidden": {"approved": 0, "draft": 0}})
         lines = out.splitlines()
         self.assertTrue(lines[0].startswith("| # | Repo | PR | Title |"))
-        self.assertIn("| 1 | shopbox-api | #274 | fix: a \\| b | alice | 6h | cần re-review |", lines[2])
+        self.assertIn("| 1 | shopbox-api | #274 | fix: a \\| b | alice | 6h | Re-review |", lines[2])
         self.assertIn("| ok | dev | - |", lines[2])
-        self.assertNotIn("Ẩn:", out)
+        self.assertNotIn("Hidden:", out)
 
     def test_stacked_conflict_jira(self):
         out = render_table({"rows": [row(stacked=True, base="feature/a", conflict=True, jira="MYS-1")],
@@ -36,4 +36,4 @@ class RenderTableTest(unittest.TestCase):
     def test_inbox_zero_with_hidden_footer(self):
         out = render_table({"rows": [], "hidden": {"approved": 2, "draft": 1}})
         self.assertIn("Inbox zero 🎉", out)
-        self.assertIn("Ẩn: 2 đã approve, 1 draft", out)
+        self.assertIn("Hidden: 2 approved, 1 drafts", out)

@@ -14,7 +14,7 @@ from typing import Optional
 from chip import fetch, mcp_server, menu, model, render, repos, tui
 from chip.selection import SelectionError, parse_selection
 
-AUTH_HINT = "Có vẻ gh chưa đăng nhập — chạy `! gh auth login` rồi thử lại."
+AUTH_HINT = "gh does not seem to be logged in — run `! gh auth login` and try again."
 PICK_FIELDS = ("index", "label", "repo", "number", "title", "url")
 CACHE_TTL_SECONDS = 180
 
@@ -59,7 +59,7 @@ def _refresh(show_all: bool, runner, force: bool = False) -> Optional[dict]:
 def _cached_inbox() -> Optional[dict]:
     last = cache_dir() / "last.json"
     if not last.exists():
-        _error("chưa có danh sách — chạy `chip menu` trước.")
+        _error("no list yet — run `chip menu` first.")
         return None
     return json.loads(last.read_text())
 
@@ -108,14 +108,14 @@ def cmd_preview(args) -> int:
         return 2
     rows = inbox["rows"]
     if not 1 <= args.index <= len(rows):
-        _error(f"không có PR số {args.index}")
+        _error(f"no PR number {args.index}")
         return 2
     print(tui.preview_text(rows[args.index - 1]))
     return 0
 
 
 def cmd_ui(runner) -> int:
-    print("Đang tải PR từ GitHub…", file=sys.stderr)
+    print("Loading PRs from GitHub…", file=sys.stderr)
     inbox = _refresh(False, runner)
     if inbox is None:
         return 1
@@ -142,13 +142,13 @@ def cmd_open() -> int:
     term = os.environ.get("TERM_PROGRAM", "")
     script = OPEN_SCRIPTS.get(term)
     if script is None:
-        _error(f"chưa hỗ trợ tự mở terminal {term or '(không rõ)'} — mở terminal và gõ `chip`.")
+        _error(f"cannot open terminal {term or '(unknown)'} — open a terminal and run `chip`.")
         return 2
     proc = subprocess.run(["osascript", "-e", script.format(cmd=tui.BIN)], capture_output=True, text=True)
     if proc.returncode != 0:
-        _error(proc.stderr.strip() or "osascript thất bại")
+        _error(proc.stderr.strip() or "osascript failed")
         return 1
-    print(f"Đã mở chip trong cửa sổ {term} mới.")
+    print(f"Opened chip in a new {term} window.")
     return 0
 
 
@@ -230,7 +230,7 @@ def cmd_repo(args) -> int:
     else:
         path = repos.resolve(args.slug, work_root(), cache)
         if path is None:
-            _error(f"không tìm thấy clone local của {args.slug} trong {work_root()}")
+            _error(f"no local clone of {args.slug} under {work_root()}")
             return 2
     print(path)
     return 0
@@ -239,29 +239,29 @@ def cmd_repo(args) -> int:
 def main(argv=None, runner=None) -> int:
     parser = argparse.ArgumentParser(prog="chip", description="PR review inbox")
     sub = parser.add_subparsers(dest="cmd")
-    p_list = sub.add_parser("list", help="bảng PR đang chờ bạn review")
-    p_list.add_argument("--all", action="store_true", help="hiện cả PR đã approve và draft")
-    p_menu = sub.add_parser("menu", help="trang câu hỏi AskUserQuestion (JSON); không có --page thì tải lại")
-    p_menu.add_argument("--page", type=int, help="trang N từ danh sách đã tải, không gọi GitHub")
-    p_menu.add_argument("--all", action="store_true", help="hiện cả PR đã approve và draft")
-    p_menu.add_argument("--cached", action="store_true", help="dùng danh sách đã tải, không gọi GitHub")
-    p_menu.add_argument("--repo", help="chỉ repo này (tên ngắn hoặc owner/repo), nhiều repo cách nhau dấu phẩy")
-    p_menu.add_argument("--q", help="từ khoá: title, author, Jira, repo, base (mọi từ phải khớp)")
-    p_repos = sub.add_parser("repos", help="câu hỏi AskUserQuestion chọn project (JSON)")
-    p_repos.add_argument("--refresh", action="store_true", help="tải lại PR từ GitHub trước")
-    p_repos.add_argument("--all", action="store_true", help="hiện cả PR đã approve và draft")
-    p_repos.add_argument("--force", action="store_true", help="bỏ qua dữ liệu tải trong 3 phút gần đây")
+    p_list = sub.add_parser("list", help="table of PRs waiting for your review")
+    p_list.add_argument("--all", action="store_true", help="include approved PRs and drafts")
+    p_menu = sub.add_parser("menu", help="AskUserQuestion page (JSON); fetches unless --page/--cached")
+    p_menu.add_argument("--page", type=int, help="page N of the last fetch, no GitHub call")
+    p_menu.add_argument("--all", action="store_true", help="include approved PRs and drafts")
+    p_menu.add_argument("--cached", action="store_true", help="use the last fetch, no GitHub call")
+    p_menu.add_argument("--repo", help="only these repos (short or owner/repo), comma-separated")
+    p_menu.add_argument("--q", help="keywords: title, author, Jira, repo, base (all words must match)")
+    p_repos = sub.add_parser("repos", help="AskUserQuestion project question (JSON)")
+    p_repos.add_argument("--refresh", action="store_true", help="refetch from GitHub first")
+    p_repos.add_argument("--all", action="store_true", help="include approved PRs and drafts")
+    p_repos.add_argument("--force", action="store_true", help="ignore a fetch from the last 3 minutes")
     for name in ("_toggle", "_prs", "_repo-preview"):
         sub.add_parser(name).add_argument("arg")
-    sub.add_parser("mcp", help="MCP server (stdio): mỗi PR là một resource cho @-mention")
-    sub.add_parser("open", help="mở `chip` (ô tìm PR) trong cửa sổ terminal mới")
-    p_preview = sub.add_parser("preview", help="chi tiết PR số N từ danh sách gần nhất (khung preview của fzf)")
+    sub.add_parser("mcp", help="MCP server (stdio): each PR is a resource for @-mentions")
+    sub.add_parser("open", help="open the `chip` picker in a new terminal window")
+    p_preview = sub.add_parser("preview", help="details of PR number N (fzf preview)")
     p_preview.add_argument("index", type=int)
-    p_pick = sub.add_parser("pick", help="chọn PR từ danh sách gần nhất: repo#N | 1,3 | 2-4 | all")
+    p_pick = sub.add_parser("pick", help="pick PRs from the last list: repo#N | 1,3 | 2-4 | all")
     p_pick.add_argument("selection")
-    p_repo = sub.add_parser("repo", help="đường dẫn clone local của owner/repo")
+    p_repo = sub.add_parser("repo", help="local clone path of owner/repo")
     p_repo.add_argument("slug")
-    p_repo.add_argument("--clone", action="store_true", help="clone vào ~/work/.chip-repos nếu chưa có")
+    p_repo.add_argument("--clone", action="store_true", help="clone into <work_root>/.chip-repos if missing")
     args = parser.parse_args(argv)
 
     if args.cmd is None:

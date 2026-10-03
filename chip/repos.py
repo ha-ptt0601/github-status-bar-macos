@@ -90,9 +90,9 @@ def clone(slug: str, work_root, cache, runner=subprocess.run) -> str:
         target.parent.mkdir(parents=True, exist_ok=True)
         proc = runner(["gh", "repo", "clone", slug, str(target)], capture_output=True, text=True)
         if proc.returncode != 0:
-            raise CloneError(proc.stderr.strip() or f"gh repo clone {slug} thất bại")
+            raise CloneError(proc.stderr.strip() or f"gh repo clone {slug} failed")
     if origin_of(target) != slug:
-        raise CloneError(f"{target} đã tồn tại nhưng không phải {slug}")
+        raise CloneError(f"{target} exists but is not {slug}")
     known = _load(cache)
     known[slug] = str(target)
     _save(cache, known)

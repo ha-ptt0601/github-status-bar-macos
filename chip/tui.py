@@ -69,7 +69,7 @@ def repo_lines(inbox: dict, picked: Set[int]) -> List[str]:
         n = sum(1 for r in rs if r["index"] in picked)
         return f"  {_c('32', f'☑ {n}')}" if n else ""
 
-    lines = [f"{ALL}\t{'Tất cả'.ljust(NAME_WIDTH)} {len(rows)} PR{ticks(rows)}"]
+    lines = [f"{ALL}\t{'All'.ljust(NAME_WIDTH)} {len(rows)} PR{ticks(rows)}"]
     for full in sorted(counts, key=lambda f: (-counts[f], _short(f))):
         rs = [r for r in rows if r["repo"] == full]
         parts = [f"{counts[full]} PR"]
@@ -77,7 +77,7 @@ def repo_lines(inbox: dict, picked: Set[int]) -> List[str]:
         if rereview:
             parts.append(_c(STATUS_COLOR[model.REREVIEW], f"{rereview} {STATUS_LABEL[model.REREVIEW]}"))
         newest = max(rs, key=lambda r: r.get("created_at", ""))
-        parts.append(_c("90", f"mới nhất {newest['wait']}"))
+        parts.append(_c("90", f"newest {newest['wait']}"))
         lines.append(f"{full}\t{_short(full).ljust(NAME_WIDTH)} {' · '.join(parts)}{ticks(rs)}")
     return lines
 
@@ -112,9 +112,9 @@ def pr_lines(inbox: dict, repo: str, picked: Set[int]) -> List[str]:
 def preview_text(r: dict) -> str:
     base = r["base"] + (" (stacked)" if r["stacked"] else "")
     fields = [
-        ("Trạng thái", STATUS_LABEL[r["status"]]),
+        ("Status", STATUS_LABEL[r["status"]]),
         ("Author", r["author"]),
-        ("Chờ", r["wait"]),
+        ("Waiting", r["wait"]),
         ("Decision", r["decision"]),
         ("Size", r["size"]),
         ("CI", r["ci"]),
@@ -138,9 +138,9 @@ def run_fzf(kind: str, lines: List[str], header: str, repo: Optional[str] = None
         f"--header={header}", "--header-first", f"--preview-window={PREVIEW_WINDOW}",
     ]
     if kind == "repos":
-        cmd += ["--border-label= chip · chọn project ", f"--preview={CMD} _repo-preview {{1}}"]
+        cmd += ["--border-label= chip · choose a project ", f"--preview={CMD} _repo-preview {{1}}"]
     else:
-        label = "tất cả project" if repo == ALL else _short(repo)
+        label = "all projects" if repo == ALL else _short(repo)
         cmd += [
             f"--border-label= chip · {label} ", f"--preview={CMD} preview {{1}}",
             # Tab ticks via our own state file, then reloads so the ☐/☑ in the line updates;
@@ -171,9 +171,9 @@ def run_ui(
         return 0
     hidden = inbox["hidden"]
     save_picked(state_path, set())
-    repos_header = (f"{len(rows)} PR · ẩn {hidden['approved']} đã approve, {hidden['draft']} draft"
-                    "   Enter mở project · Esc thoát")
-    prs_header = "Tab tick ☐/☑ · Enter review các PR đã tick · Esc quay lại project"
+    repos_header = (f"{len(rows)} PRs · hidden: {hidden['approved']} approved, {hidden['draft']} draft"
+                    "   Enter opens a project · Esc quits")
+    prs_header = "Tab ticks ☐/☑ · Enter reviews ticked PRs · Esc goes back to projects"
     while True:
         result = fzf("repos", repo_lines(inbox, load_picked(state_path)), repos_header)
         if result.returncode != 0:
@@ -190,17 +190,17 @@ def run_ui(
         out(f"[{n}/{len(picked)}] {r['label']} {r['title']}")
         path = resolve(r["repo"])
         if path is None:
-            if ask(f"Chưa có clone local của {r['repo']}. Clone vào ~/work/.chip-repos/? [y/N] ").strip().lower() != "y":
-                out(f"Bỏ qua {r['label']}.")
+            if ask(f"No local clone of {r['repo']}. Clone into <work_root>/.chip-repos/? [y/N] ").strip().lower() != "y":
+                out(f"Skipped {r['label']}.")
                 continue
             try:
                 path = clone(r["repo"])
             except Exception as exc:  # CloneError or gh failure: tell and move on
-                out(f"Clone thất bại: {exc}. Bỏ qua {r['label']}.")
+                out(f"Clone failed: {exc}. Skipped {r['label']}.")
                 continue
         claude(REVIEW_PROMPT.format(url=r["url"]), path)
         if n < len(picked):
             nxt = picked[n]
-            if ask(f"Tiếp {nxt['label']}? [Y/n] ").strip().lower() == "n":
+            if ask(f"Continue with {nxt['label']}? [Y/n] ").strip().lower() == "n":
                 break
     return 0

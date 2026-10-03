@@ -48,7 +48,7 @@ class LabelSelectionTest(unittest.TestCase):
         self.assertEqual(parse_selection("3,shopbox-api#274", 3, self.LABELS), [1, 3])
 
     def test_skip_option_ignored(self):
-        self.assertEqual(parse_selection("Không chọn, api#2069", 3, self.LABELS), [2])
+        self.assertEqual(parse_selection("None, api#2069", 3, self.LABELS), [2])
 
     def test_unknown_label(self):
         with self.assertRaisesRegex(SelectionError, "'nope#1'"):
