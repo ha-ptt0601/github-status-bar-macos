@@ -30,7 +30,7 @@ Every piece reuses the existing inbox code (`fetch`, `model`, `menu.assign_label
 
 ## Menu layout (English, airy)
 
-All menu and notification text is **English**. Every PR row carries project, number, title, status and author. Details and actions live one level down, so the top level stays calm. Status uses coloured SF Symbols (`sfimage=` / `sfcolor=`) instead of emoji. Section headers are small and grey.
+All menu and notification text is **English**. Every PR row carries project, number, title, status and author. Details and actions live one level down, so the top level stays calm. Status uses coloured SF Symbols (`sfimage=` tinted with `sfconfig=` palette mode; SwiftBar 2.1.1 ignores `sfcolor`) instead of emoji. Section headers are small and grey.
 
 ```
 [GitHub mark] 7                                   ← 7 = re-review + new (≤ 30 days); hidden when 0
