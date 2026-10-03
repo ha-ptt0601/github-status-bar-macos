@@ -5,7 +5,7 @@ Status: approved (design)
 
 ## Goal
 
-A GitHub icon in the macOS menu bar lists the PRs waiting for the user's review. The user clicks **▶ Chạy review** on a PR to run `/my-review-skill` on it in a background Claude Code session, and clicks **👁 Xem chi tiết** to watch or continue that session. macOS notifications report new PRs, PRs that need a re-review, finished reviews, and reviews waiting on the user.
+A GitHub icon in the macOS menu bar lists the PRs waiting for the user's review, grouped by project (English UI). The user clicks **Run \"<skill>\"** on a PR to run a review skill on it in a background Claude Code session, and clicks **View session** to watch or continue that session. macOS notifications report new PRs, PRs that need a re-review, finished reviews, reviews waiting on the user, and new chip versions.
 
 ## Non-goals
 
@@ -22,73 +22,102 @@ A GitHub icon in the macOS menu bar lists the PRs waiting for the user's review.
 | `chip swiftbar` (`chip/swiftbar.py`) | Prints the SwiftBar menu text: icon line, header, PR sections, chip review runs, and the Refresh item. It also sends the notifications (see below). |
 | `chip run <label> [--skill N]` (`chip/runs.py`) | Starts a background review for one PR with the chosen skill and records it. |
 | `chip/config.py` | Loads and validates `~/.config/chip/config.json` (skills, work root, permissions), with defaults. |
-| `chip attach <label>` / `chip stop <label>` / `chip forget <label>` | Opens `claude attach <id>` in a new Terminal window / runs `claude stop <id>` / runs `claude rm <id>` and drops the record. |
+| `chip attach <key>` / `chip stop <key>` / `chip forget <key>` (key = `<label>|<skill>`) / `chip update` / `chip copy <label>` | Opens `claude attach <id>` in a new Terminal window / runs `claude stop <id>` / runs `claude rm <id>` and drops the record. |
 | `~/.cache/chip/runs.json` | `{"<label>|<skill name>": {id, url, repo, skill, started_at}}` for each review chip started. |
 | `~/.cache/chip/notify.json` | Snapshot from the previous refresh, used to diff for notifications. |
 
 Every piece reuses the existing inbox code (`fetch`, `model`, `menu.assign_labels`, the 3-minute cache) and `repos.resolve/clone`.
 
-## Menu layout
+## Menu layout (English, airy)
+
+All menu and notification text is **English**. Every PR row carries project, number, title, status and author. Details and actions live one level down, so the top level stays calm. Status uses coloured SF Symbols (`sfimage=` / `sfcolor=`) instead of emoji. Section headers are small and grey.
 
 ```
-<GitHub template icon> N                       ← N = re-review + new PRs (hidden when 0)
----
-Cập nhật 12:05 · 44 PR · ẩn 11 đã approve
-↻ Refresh                                       ← chip swiftbar refresh, force fetch
----
-Cần re-review (6)
-api#2094  ABC-997 fix: Brevo leftovers…  9d
---▶ Chạy review                                 ← chip run api#2094 (terminal=false refresh=true)
---🔗 Mở trên GitHub                             ← href=<url>
---alice · +236/-48 5f · dev · ABC-997     ← disabled info line
-Mới (20) … · Chờ author / đã comment … · Cũ > 30 ngày …
----
-Review của chip
-⏳ api#2069 newsletter…  đang chạy 3m
---👁 Xem chi tiết  --⏹ Dừng
-🟡 shopbox-api#261 …  cần bạn
---👁 Xem chi tiết
-✅ mailer-api#61 …  xong 11:40
---👁 Xem chi tiết  --🗑 Xoá
+[GitHub mark] 7                                   ← 7 = re-review + new (≤ 30 days); hidden when 0
+──────────────────────────────────────────────
+⬆︎ Update available: v0.4.0 — Update now          ← only when a newer release exists (orange)
+Pull requests · 44 open · updated 12:05           ← grey, disabled
+↻ Refresh now
+──────────────────────────────────────────────
+API · 9 PRs                                       ← project header (small, grey)
+  ⟳ #2094  ABC-997 fix: Brevo leftovers, Sessi…   alice     ⟳ orange = Re-review
+  ✦ #2069  update(newsletter): migrate from reti…   alice     ✦ green  = New
+  ⌛ #2079  ABC-997 feat(mcp): OAuth 2.1 agent…    alice     ⌛ grey   = Waiting on author / Commented
+SHOPBOX-API · 6 PRs
+  ✦ #274   fix(orders): only require a customer…  alice
+  …
+Older than 30 days · 22 PRs  ▸                    ← one submenu, grouped by project inside
+──────────────────────────────────────────────
+Reviews by chip
+  ◐ api#2069 · Full review · running 3m       ▸   View session · Stop
+  ⚠︎ shopbox-api#261 · Full review · needs you  ▸   View session · Stop
+  ✓ mailer-api#61 · Full review · done 11:40 ▸   View session · Remove
+──────────────────────────────────────────────
+Show approved & drafts (11)  ▸
+Settings  ▸                                       Open config · Reinstall · Check for updates · About chip v0.3.0
 ```
 
-- The PR sections use the same groups and order as the inbox (re-review, new ≤ 30 days, waiting author / commented, older than 30 days). Empty sections are omitted.
-- A PR that already has a run shows its run icon in front of its label, and its ▶ item reads "Chạy lại review".
-- Titles are cut to 50 characters. Characters that SwiftBar treats specially (`|`, a leading `-`) are escaped.
-- The icon is the GitHub mark as a base64 PNG `templateImage`, so macOS tints it for light and dark menu bars.
-- If the fetch fails, the title becomes `!` next to the icon, the first menu line shows the error, and ↻ Refresh is still offered.
+Submenu of a PR row:
 
-## Running a review (`chip run <label>`)
+```
+shopbox-api#274                                     ← disabled header
+fix(orders): only require a customer when the order matches a shopbox box   ← full title, wrapped at 60 chars
+Re-review · by alice · opened 9 days ago
++57 −7 · 2 files · base dev · MYS-303 · conflict  ← only the parts that apply
+──────────────
+▶ Run "Full review"                                ← one item per configured skill
+▶ Run "Quick review"
+◐ View running review                              ← only when a run exists for this PR
+──────────────
+Open on GitHub
+Copy link
+```
 
-1. Look up the row by label in the cached inbox. If it is missing, refresh once, then look again. If it is still missing, notify the user and exit 1.
-2. Resolve the local clone. If there is none, clone into `~/work/.chip-repos/<repo>` without asking, since clicking ▶ is the consent.
-3. From that directory, run (values from the config):
-   `claude --bg --name "chip · <label> · <skill>" --permission-mode <permission_mode> --disallowedTools <disallowed_tools…> "<skill prompt, filled>"`
-4. Parse the session id that `--bg` prints, save `{id, url, repo, skill, started_at}` under `<label>|<skill name>` in `runs.json`, and notify "Đang review <label>".
+- **Grouping.** Projects are ordered by their number of actionable PRs (re-review + new), then by name. Inside a project the inbox order applies (re-review, new, waiting, commented). PRs older than 30 days, other than re-reviews, go into the single "Older than 30 days" submenu, grouped by project.
+- **Row text.** `#<number>  <title cut to 44>   <author>`, with a monospaced font (`font=Menlo size=12`) so number, title and author line up. Headers use `size=11 color=#8E8E93`.
+- **Status symbols** (one dict, English labels): Re-review `arrow.triangle.2.circlepath` orange; New `sparkle` green; Waiting on author `hourglass` grey; Commented `text.bubble` grey; Approved `checkmark.seal` grey (only in "Show approved & drafts"). Runs: running `circle.lefthalf.filled` blue; needs you `exclamationmark.triangle.fill` yellow; done `checkmark.circle.fill` green; gone `xmark.circle` grey.
+- **Buttons.** Run per skill, View running review, Open on GitHub, Copy link (via `pbcopy`); on runs View session / Stop / Remove; global Refresh now, Update now, Show approved & drafts, and Settings (Open config, Reinstall, Check for updates, About).
+- **Escaping.** `|` in text is replaced with `¦`, and a leading `-` is prefixed with a zero-width space, so SwiftBar parameters never break.
+- **Icon.** The GitHub mark as a base64 PNG `templateImage` (tinted by macOS for light and dark menu bars). On a fetch error, the title shows `!` and the first line shows the error.
+
+## Running a review (`chip run <label> [--skill N]`)
+
+1. Look up the row by label in the cached inbox. If it is missing, refresh once and look again. If it is still missing, notify the user and exit 1.
+2. Resolve the local clone. If there is none, clone into `<work_root>/.chip-repos/<repo>` without asking, since clicking Run is the consent.
+3. From that directory run the following. **The prompt must come first**: `--disallowedTools` takes a variadic list and swallows a trailing prompt, and `--bg` then waits idle. The tool list is passed comma-joined.
+   `claude "<skill prompt, filled>" --bg --name "chip · <label> · <skill>" --permission-mode <permission_mode> --disallowedTools "<Edit,Write,NotebookEdit>"`
+4. Parse the short id from the first stdout line, which looks like `backgrounded · b19aff59 · <name>`. Save `{id, url, repo, skill, started_at}` under `<label>|<skill>` in `runs.json`, and notify "Reviewing <label> (<skill>)".
 
 ## Run status
 
-`claude agents --json --all` lists the sessions. A record matches by id, falling back to the name `chip · <label> · <skill name>`.
+`claude agents --json --all` returns `{id, sessionId, name, kind, status, state, cwd, startedAt, pid}` for each session (verified on v2.1.280). A run matches by `id`. The **`state`** field drives the display:
 
-| Agent status | Shown as |
+| `state` | Shown as |
 |---|---|
-| `busy` | ⏳ đang chạy `<elapsed>` |
-| `idle` | ✅ xong `<HH:MM>` |
-| a status meaning the session waits for permission or input | 🟡 cần bạn |
-| not listed (removed or crashed) | ⚪ không còn session; only 🗑 Xoá is offered |
+| `working` | running `<elapsed>` |
+| `blocked` | needs you (waiting for input or permission) |
+| `done` | done `<HH:MM>` |
+| any other value | shown as the raw state, in grey |
+| not listed | gone; only Remove is offered |
 
-The exact status strings are checked against `claude agents --json` output during implementation, and the mapping lives in one dict.
-
-## Notifications
+## Notifications (English)
 
 On each `chip swiftbar` run, the current state is diffed against `notify.json`, then the snapshot is written:
 
-- **PR mới:** a label with status `new` that was not in the previous snapshot.
-- **Cần re-review:** a label whose status became `re-review`.
-- **Review xong:** a run that changed from `busy` to `idle`.
-- **Review cần bạn:** a run that entered the waiting status.
+- **New PR:** "New review request: api#2069 — update(newsletter)… by alice", for a label with status `new` not seen before.
+- **Re-review:** "Needs re-review: api#2094 — …", for a label whose status became `re-review`.
+- **Review done:** "Review finished: api#2069 (Full review)", for a run whose state became `done`.
+- **Needs you:** "Review needs you: api#2069 (Full review)", for a run whose state became `blocked`.
+- **Update:** "chip v0.4.0 is available", once per new version.
 
-The first run, when there is no snapshot yet, only writes the snapshot, so the user does not get 40 notifications. At most 3 notifications go out per refresh, plus a "+N PR khác" summary. Notifications use `osascript -e 'display notification … with title "chip"'`.
+The first run, with no snapshot yet, is silent. At most 3 notifications go out per refresh, plus "+N more". Notifications use `osascript -e 'display notification … with title "chip"'`.
+
+## Version updates (in-app)
+
+- **Version source.** `chip/__init__.py` holds `__version__ = "X.Y.Z"`. Releases are GitHub releases tagged `vX.Y.Z` on `ha-ptt0601/chip`, created by `scripts/release.sh X.Y.Z`. The script bumps the version, commits, tags, pushes and runs `gh release create`.
+- **Check.** `chip swiftbar` checks the latest release with `gh api repos/ha-ptt0601/chip/releases/latest`, at most once every 6 hours (cached in `~/.cache/chip/update.json`), or immediately via Settings → Check for updates. `gh` uses each user's own auth, so the private repo works for anyone invited.
+- **Show.** When the latest version is newer than the local one: an orange "⬆︎ Update available: vX — Update now" line at the top of the menu, plus one notification per version.
+- **Update now** (`chip update`) runs `git -C <repo> pull --ff-only`, then `chip install` (idempotent), then refreshes the menu. If the working tree is dirty or the pull is not a fast-forward, it stops and opens the repo in Terminal with the git message, without changing anything.
 
 ## Pluggable review skills (`~/.config/chip/config.json`)
 
