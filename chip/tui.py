@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable, List, Optional, Set
 
-from chip import model
+from chip import config, model
 from chip.render import STATUS_LABEL
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -25,7 +25,6 @@ ALL = "*"
 NAME_WIDTH = 28
 BIN = Path(__file__).resolve().parents[1] / "bin" / "chip"
 CMD = f"{shlex.quote(sys.executable)} {shlex.quote(str(BIN))}"
-REVIEW_PROMPT = "/my-review-skill {url}"
 # Preview on the right, or below when the window is narrower than 110 columns.
 PREVIEW_WINDOW = "right,45%,wrap,border-rounded,<110(down,45%,wrap,border-rounded)"
 
@@ -198,7 +197,7 @@ def run_ui(
             except Exception as exc:  # CloneError or gh failure: tell and move on
                 out(f"Clone failed: {exc}. Skipped {r['label']}.")
                 continue
-        claude(REVIEW_PROMPT.format(url=r["url"]), path)
+        claude(config.fill_prompt(config.load()["skills"][0], r), path)
         if n < len(picked):
             nxt = picked[n]
             if ask(f"Continue with {nxt['label']}? [Y/n] ").strip().lower() == "n":
