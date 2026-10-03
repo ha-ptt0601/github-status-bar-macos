@@ -125,3 +125,21 @@ def build_inbox(nodes: List[dict], viewer: str, now: datetime, show_all: bool = 
     for index, row in enumerate(rows, 1):
         row["index"] = index
     return {"viewer": viewer, "rows": rows, "hidden": hidden}
+
+
+def visible_view(inbox_all: dict, show_all: bool = False) -> dict:
+    """A copy of an all-rows inbox with drafts and approved PRs hidden (unless show_all), re-indexed."""
+    hidden = {"approved": 0, "draft": 0}
+    rows = []
+    for row in inbox_all["rows"]:
+        if not show_all and row["draft"]:
+            hidden["draft"] += 1
+        elif not show_all and row["status"] == APPROVED:
+            hidden["approved"] += 1
+        else:
+            rows.append(dict(row))
+    for index, row in enumerate(rows, 1):
+        row["index"] = index
+    view = dict(inbox_all)
+    view.update(rows=rows, hidden=hidden)
+    return view
