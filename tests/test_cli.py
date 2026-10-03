@@ -263,3 +263,40 @@ class MentionPickTest(CliCase):
         self.run_cli(["menu"], runner=fake_runner)
         code, out, _ = self.run_cli(["pick", "review @chip:pr://api/274-feat-thing please"])
         self.assertEqual((code, json.loads(out)[0]["label"]), (0, "api#274"))
+
+
+class ConfigCliTest(CliCase):
+    def setUp(self):
+        super().setUp()
+        self.cfg_old = os.environ["CHIP_CONFIG"]
+        os.environ["CHIP_CONFIG"] = str(Path(self.tmp.name) / "config.json")
+
+    def tearDown(self):
+        os.environ["CHIP_CONFIG"] = self.cfg_old
+        super().tearDown()
+
+    def test_check_ok_then_bad(self):
+        code, out, _ = self.run_cli(["config", "check"])
+        self.assertEqual(code, 0)
+        self.assertIn("Full review", out)
+        Path(os.environ["CHIP_CONFIG"]).write_text(json.dumps({"skills": [{"name": "A", "prompt": "/a {pr}"}]}))
+        code, _, err = self.run_cli(["config", "check"])
+        self.assertEqual(code, 1)
+        self.assertIn("unknown placeholder", err)
+
+    def test_init_and_path(self):
+        code, out, _ = self.run_cli(["config", "init"])
+        self.assertEqual(code, 0)
+        self.assertTrue(Path(os.environ["CHIP_CONFIG"]).exists())
+        _, out, _ = self.run_cli(["config", "path"])
+        self.assertEqual(out.strip(), os.environ["CHIP_CONFIG"])
+
+    def test_prompt_for_label(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, out, _ = self.run_cli(["prompt", "api#274"])
+        self.assertEqual((code, out.strip()), (0, "/my-review-skill https://github.com/acme/api/pull/1"))
+
+    def test_prompt_unknown(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, _, _ = self.run_cli(["prompt", "nope#1"])
+        self.assertEqual(code, 2)

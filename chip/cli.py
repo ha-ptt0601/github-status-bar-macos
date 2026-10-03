@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import fetch, mcp_server, menu, model, render, repos, store, tui
+from chip import config, fetch, mcp_server, menu, model, render, repos, store, tui
 from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "gh does not seem to be logged in — run `! gh auth login` and try again."
@@ -222,6 +222,53 @@ def cmd_repo(args) -> int:
     return 0
 
 
+def _find_row(label: str) -> Optional[dict]:
+    """Row (approved/drafts included) by label from the cached inbox."""
+    inbox = store.cached_all() or {}
+    return next((r for r in inbox.get("rows", []) if r.get("label") == label), None)
+
+
+def _skill(cfg: dict, number: int) -> Optional[dict]:
+    skills = cfg["skills"]
+    if not 1 <= number <= len(skills):
+        _error(f"no skill {number} (config has {len(skills)})")
+        return None
+    return skills[number - 1]
+
+
+def cmd_config(args) -> int:
+    path = config.config_path()
+    if args.action == "path":
+        print(path)
+        return 0
+    if args.action in ("init", "open"):
+        created = config.init(path)
+        if args.action == "init":
+            print(f"{'created' if created else 'exists'} {path}")
+            return 0
+        subprocess.run(["open", "-e", str(path)])
+        return 0
+    cfg = config.load(path)
+    if cfg["errors"]:
+        for message in cfg["errors"]:
+            _error(message)
+        return 1
+    print(json.dumps({k: v for k, v in cfg.items() if k != "errors"}, ensure_ascii=False, indent=1))
+    return 0
+
+
+def cmd_prompt(args) -> int:
+    row = _find_row(args.label)
+    if row is None:
+        _error(f"PR {args.label} is not in the list")
+        return 2
+    skill = _skill(config.load(), args.skill)
+    if skill is None:
+        return 2
+    print(config.fill_prompt(skill, row))
+    return 0
+
+
 def main(argv=None, runner=None) -> int:
     parser = argparse.ArgumentParser(prog="chip", description="PR review inbox")
     sub = parser.add_subparsers(dest="cmd")
@@ -248,6 +295,11 @@ def main(argv=None, runner=None) -> int:
     p_repo = sub.add_parser("repo", help="local clone path of owner/repo")
     p_repo.add_argument("slug")
     p_repo.add_argument("--clone", action="store_true", help="clone into <work_root>/.chip-repos if missing")
+    p_config = sub.add_parser("config", help="config file: init | check | path | open")
+    p_config.add_argument("action", choices=["init", "check", "path", "open"])
+    p_prompt = sub.add_parser("prompt", help="review prompt for a PR label from the configured skill")
+    p_prompt.add_argument("label")
+    p_prompt.add_argument("--skill", type=int, default=1)
     args = parser.parse_args(argv)
 
     if args.cmd is None:
@@ -260,6 +312,10 @@ def main(argv=None, runner=None) -> int:
         return cmd_open()
     if args.cmd == "preview":
         return cmd_preview(args)
+    if args.cmd == "config":
+        return cmd_config(args)
+    if args.cmd == "prompt":
+        return cmd_prompt(args)
     if args.cmd == "list":
         return cmd_list(args, runner or fetch.run_gh_graphql)
     if args.cmd == "menu":
