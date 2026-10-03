@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from chip import model, updates
+from chip import __version__, config, fetch, model, notify, runs, store, updates
 
 GREY = "#8E8E93"
 PAGE = 12
@@ -222,3 +222,26 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     lines.append(item("Open chip on GitHub", 1, href=f"https://github.com/{updates.REPO}", sfimage="link"))
     lines.append(item(f"About chip v{version}", 1, disabled="true"))
     return lines
+
+
+def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
+               now: Optional[float] = None) -> str:
+    """One refresh: inbox (3-min cache), run states, release check, notifications, menu text."""
+    now = time.time() if now is None else now
+    cfg = config.load()
+    inbox_all, error = store.load_all(fetch_runner or fetch.run_gh_graphql, force)
+    runs_path = store.cache_dir() / "runs.json"
+    records = runs.load(runs_path)
+    agents = runs.fetch_agents(runner) if records else {}
+    if runs.observe(records, agents, now):
+        runs.save(runs_path, records)
+    views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}
+    latest = updates.latest_release(store.cache_dir() / "update.json", runner, now)
+    newer = latest if latest and updates.is_newer(latest, __version__) else None
+    if inbox_all is not None:
+        visible = model.visible_view(inbox_all)["rows"]
+        notify_path = store.cache_dir() / "notify.json"
+        current = notify.snapshot(visible, views, newer)
+        notify.send(notify.diff(notify.load(notify_path), current, visible, records), runner)
+        notify.save(notify_path, current)
+    return "\n".join(render(inbox_all, records, views, cfg, plugin, __version__, newer, error, now))

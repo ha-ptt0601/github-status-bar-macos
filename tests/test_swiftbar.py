@@ -1,7 +1,12 @@
+import os
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
-from chip import model, swiftbar
+from chip import fetch, model, swiftbar
 from chip.menu import assign_labels
+from tests.factory import make_node
 
 PLUGIN = "/p/chip.3m.sh"
 CFG = {"skills": [{"name": "Full review", "prompt": "x"}, {"name": "Quick", "prompt": "y"}], "errors": []}
@@ -113,3 +118,41 @@ class RenderTest(unittest.TestCase):
         self.assertFalse(any(l.startswith("Pull requests ·") for l in lines))
         self.assertTrue(any(l.startswith("Refresh now") for l in lines))
         self.assertIn("--About chip v0.1.0 | disabled=true", lines)
+
+
+class BuildMenuTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old = os.environ.get("CHIP_CACHE_DIR")
+        os.environ["CHIP_CACHE_DIR"] = self.tmp.name
+        self.nodes = [make_node(id="a", number=1)]
+        self.calls = []
+
+    def tearDown(self):
+        if self.old is None:
+            os.environ.pop("CHIP_CACHE_DIR", None)
+        else:
+            os.environ["CHIP_CACHE_DIR"] = self.old
+        self.tmp.cleanup()
+
+    def fetch_runner(self, search, after):
+        nodes = self.nodes if search == fetch.SEARCHES[0] else []
+        return {"viewer": {"login": "me"}, "search": {"pageInfo": {"hasNextPage": False, "endCursor": None},
+                                                       "nodes": nodes}}
+
+    def runner(self, cmd, **kw):
+        self.calls.append(cmd)
+        if cmd[:2] == ["gh", "api"]:
+            return subprocess.CompletedProcess(cmd, 1, "", "Not Found")
+        return subprocess.CompletedProcess(cmd, 0, "[]", "")
+
+    def test_first_cycle_silent_then_notifies_new_pr(self):
+        out = swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner, now=1000)
+        self.assertTrue(out.startswith("1 | templateImage="))
+        self.assertFalse(any(c[0] == "osascript" for c in self.calls))
+        self.assertTrue(Path(self.tmp.name, "notify.json").exists())
+        self.nodes.append(make_node(id="b", number=2, url="https://github.com/acme/api/pull/2"))
+        swiftbar.build_menu(PLUGIN, force=True, fetch_runner=self.fetch_runner, runner=self.runner, now=2000)
+        notes = [c for c in self.calls if c[0] == "osascript"]
+        self.assertEqual(len(notes), 1)
+        self.assertIn("New review request: api#2", notes[0][2])
