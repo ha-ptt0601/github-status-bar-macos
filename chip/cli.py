@@ -330,6 +330,13 @@ def cmd_copy(args) -> int:
     return 0
 
 
+def cmd_swiftbar(args, runner) -> int:
+    from chip import swiftbar
+    plugin = os.environ.get("CHIP_PLUGIN") or str(tui.BIN)
+    print(swiftbar.build_menu(plugin, force=args.force, fetch_runner=runner))
+    return 0
+
+
 def main(argv=None, runner=None) -> int:
     parser = argparse.ArgumentParser(prog="chip", description="PR review inbox")
     sub = parser.add_subparsers(dest="cmd")
@@ -367,6 +374,8 @@ def main(argv=None, runner=None) -> int:
     for name in ("attach", "stop", "forget"):
         sub.add_parser(name, help=f"{name} a chip review by session id").add_argument("id")
     sub.add_parser("copy", help="copy a PR link").add_argument("label")
+    p_swiftbar = sub.add_parser("swiftbar", help="print the SwiftBar menu (used by the menu bar plugin)")
+    p_swiftbar.add_argument("--force", action="store_true", help="refetch from GitHub now")
     args = parser.parse_args(argv)
 
     if args.cmd is None:
@@ -379,6 +388,8 @@ def main(argv=None, runner=None) -> int:
         return cmd_open()
     if args.cmd == "preview":
         return cmd_preview(args)
+    if args.cmd == "swiftbar":
+        return cmd_swiftbar(args, runner or fetch.run_gh_graphql)
     if args.cmd == "run":
         return cmd_run(args, runner or fetch.run_gh_graphql)
     if args.cmd == "attach":
