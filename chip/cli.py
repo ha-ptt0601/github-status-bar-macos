@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -11,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import config, fetch, mcp_server, menu, model, notify, render, repos, runs, store, terminal, tui
+from chip import config, fetch, installer, mcp_server, menu, model, notify, render, repos, runs, store, terminal, tui, updates
 from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "gh does not seem to be logged in — run `! gh auth login` and try again."
@@ -337,6 +338,23 @@ def cmd_swiftbar(args, runner) -> int:
     return 0
 
 
+def cmd_update(args) -> int:
+    if args.check:
+        latest = updates.latest_release(cache_dir() / "update.json", now=time.time(), force=True)
+        print(latest or "no release found")
+        return 0
+    repo = installer.REPO_DIR
+    ok, message = updates.update_repo(str(repo))
+    if not ok:
+        command = f"cd {shlex.quote(str(repo))} && git status && echo {shlex.quote('chip update stopped: ' + message)}"
+        terminal.open_command(command, terminal.pick_app(config.load()["terminal"]))
+        notify.send([f"chip update stopped: {message}"])
+        return 1
+    installer.install(repo)
+    notify.send([f"chip updated to v{updates.read_version(repo)}"])
+    return 0
+
+
 def main(argv=None, runner=None) -> int:
     parser = argparse.ArgumentParser(prog="chip", description="PR review inbox")
     sub = parser.add_subparsers(dest="cmd")
@@ -376,6 +394,10 @@ def main(argv=None, runner=None) -> int:
     sub.add_parser("copy", help="copy a PR link").add_argument("label")
     p_swiftbar = sub.add_parser("swiftbar", help="print the SwiftBar menu (used by the menu bar plugin)")
     p_swiftbar.add_argument("--force", action="store_true", help="refetch from GitHub now")
+    sub.add_parser("install", help="link chip, install the /chip skill, MCP server and menu bar plugin")
+    sub.add_parser("uninstall", help="remove what `chip install` added")
+    p_update = sub.add_parser("update", help="pull the latest chip and reinstall")
+    p_update.add_argument("--check", action="store_true", help="only check GitHub for a newer release")
     args = parser.parse_args(argv)
 
     if args.cmd is None:
@@ -388,6 +410,12 @@ def main(argv=None, runner=None) -> int:
         return cmd_open()
     if args.cmd == "preview":
         return cmd_preview(args)
+    if args.cmd == "install":
+        return installer.install()
+    if args.cmd == "uninstall":
+        return installer.uninstall()
+    if args.cmd == "update":
+        return cmd_update(args)
     if args.cmd == "swiftbar":
         return cmd_swiftbar(args, runner or fetch.run_gh_graphql)
     if args.cmd == "run":
