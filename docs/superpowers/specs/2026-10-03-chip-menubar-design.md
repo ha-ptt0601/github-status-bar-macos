@@ -23,7 +23,7 @@ A GitHub icon in the macOS menu bar lists the PRs waiting for the user's review.
 | `chip run <label> [--skill N]` (`chip/runs.py`) | Starts a background review for one PR with the chosen skill and records it. |
 | `chip/config.py` | Loads and validates `~/.config/chip/config.json` (skills, work root, permissions), with defaults. |
 | `chip attach <label>` / `chip stop <label>` / `chip forget <label>` | Opens `claude attach <id>` in a new Terminal window / runs `claude stop <id>` / runs `claude rm <id>` and drops the record. |
-| `~/.cache/chip/runs.json` | `{label: {id, url, repo, started_at}}` for each review chip started. |
+| `~/.cache/chip/runs.json` | `{"<label>|<skill name>": {id, url, repo, skill, started_at}}` for each review chip started. |
 | `~/.cache/chip/notify.json` | Snapshot from the previous refresh, used to diff for notifications. |
 
 Every piece reuses the existing inbox code (`fetch`, `model`, `menu.assign_labels`, the 3-minute cache) and `repos.resolve/clone`.
@@ -64,11 +64,11 @@ Review của chip
 2. Resolve the local clone. If there is none, clone into `~/work/.chip-repos/<repo>` without asking, since clicking ▶ is the consent.
 3. From that directory, run (values from the config):
    `claude --bg --name "chip · <label> · <skill>" --permission-mode <permission_mode> --disallowedTools <disallowed_tools…> "<skill prompt, filled>"`
-4. Parse the session id that `--bg` prints, save `{id, url, repo, started_at}` under the label in `runs.json`, and notify "Đang review <label>".
+4. Parse the session id that `--bg` prints, save `{id, url, repo, skill, started_at}` under `<label>|<skill name>` in `runs.json`, and notify "Đang review <label>".
 
 ## Run status
 
-`claude agents --json --all` lists the sessions. A record matches by id, falling back to the name `chip · <label>`.
+`claude agents --json --all` lists the sessions. A record matches by id, falling back to the name `chip · <label> · <skill name>`.
 
 | Agent status | Shown as |
 |---|---|
