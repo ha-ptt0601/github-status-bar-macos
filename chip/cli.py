@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import config, fetch, mcp_server, menu, model, render, repos, store, tui
+from chip import config, fetch, mcp_server, menu, model, render, repos, store, terminal, tui
 from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "gh does not seem to be logged in — run `! gh auth login` and try again."
@@ -114,27 +114,14 @@ def cmd_ui(runner) -> int:
     )
 
 
-OPEN_SCRIPTS = {
-    "Apple_Terminal": (
-        'tell application "Terminal"\n activate\n do script "{cmd}"\n'
-        ' set bounds of front window to {{80, 60, 1580, 960}}\nend tell'
-    ),
-    "iTerm.app": 'tell application "iTerm"\n activate\n create window with default profile command "{cmd}"\nend tell',
-}
-
-
 def cmd_open() -> int:
     """Open the fzf picker in a new terminal window (skills cannot draw a TUI inside Claude Code)."""
-    term = os.environ.get("TERM_PROGRAM", "")
-    script = OPEN_SCRIPTS.get(term)
-    if script is None:
-        _error(f"cannot open terminal {term or '(unknown)'} — open a terminal and run `chip`.")
-        return 2
-    proc = subprocess.run(["osascript", "-e", script.format(cmd=tui.BIN)], capture_output=True, text=True)
-    if proc.returncode != 0:
-        _error(proc.stderr.strip() or "osascript failed")
+    app = terminal.pick_app(config.load()["terminal"])
+    ok, message = terminal.open_command(str(tui.BIN), app)
+    if not ok:
+        _error(message or "osascript failed")
         return 1
-    print(f"Opened chip in a new {term} window.")
+    print(f"Opened chip in a new {app} window.")
     return 0
 
 
