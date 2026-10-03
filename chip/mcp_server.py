@@ -11,6 +11,7 @@ import sys
 import threading
 from typing import Callable, List, Optional
 
+from chip import config
 from chip.render import STATUS_LABEL
 from chip.tui import preview_text
 
@@ -61,8 +62,7 @@ def handle(msg: dict, inbox: dict) -> Optional[dict]:
             "protocolVersion": params.get("protocolVersion", DEFAULT_PROTOCOL),
             "capabilities": {"resources": {"listChanged": True}},
             "serverInfo": {"name": "chip", "version": "1.0.0"},
-            "instructions": "PRs waiting for the user's review. Mention them with @chip:pr://… "
-                            "and review with /chip or /my-review-skill <url>.",
+            "instructions": "PRs waiting for the user's review. Mention them with @chip:pr://… and review with /chip.",
         })
     if method == "ping":
         return ok({})
@@ -79,7 +79,8 @@ def handle(msg: dict, inbox: dict) -> Optional[dict]:
         wanted = labels_in(uri)
         for r in inbox["rows"]:
             if wanted and r["label"] == wanted[0]:
-                text = preview_text(r) + f"\n\nReview: /my-review-skill {r['url']}"
+                prompt = config.fill_prompt(config.load()["skills"][0], r)
+                text = preview_text(r) + f"\n\nReview: {prompt}"
                 return ok({"contents": [{"uri": uri, "mimeType": "text/plain", "text": text}]})
         return err(-32002, f"PR {uri} is not in the review inbox")
     return err(-32601, f"method not found: {method}")
