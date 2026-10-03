@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import config, fetch, mcp_server, menu, model, render, repos, store, terminal, tui
+from chip import config, fetch, mcp_server, menu, model, notify, render, repos, runs, store, terminal, tui
 from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "gh does not seem to be logged in — run `! gh auth login` and try again."
@@ -256,6 +256,80 @@ def cmd_prompt(args) -> int:
     return 0
 
 
+def _runs_path() -> Path:
+    return cache_dir() / "runs.json"
+
+
+def cmd_run(args, runner) -> int:
+    cfg = config.load()
+    skill = _skill(cfg, args.skill)
+    if skill is None:
+        return 2
+    row = _find_row(args.label)
+    if row is None and _refresh(True, runner, force=True) is not None:
+        row = _find_row(args.label)
+    if row is None:
+        notify.send([f"{args.label} is no longer waiting for your review"])
+        _error(f"PR {args.label} is not in the list")
+        return 1
+    cache = cache_dir() / "repos.json"
+    try:
+        path = repos.resolve(row["repo"], work_root(), cache) or repos.clone(row["repo"], work_root(), cache)
+        record = runs.start(row, skill, cfg, path, _runs_path())
+    except (repos.CloneError, runs.RunError) as exc:
+        notify.send([f"Could not start review for {args.label}: {exc}"])
+        _error(str(exc))
+        return 1
+    notify.send([f"Reviewing {row['label']} ({skill['name']})"])
+    print(f"started {record['id']} for {row['label']} ({skill['name']})")
+    return 0
+
+
+def _known_run(run_id: str) -> bool:
+    if runs.find_by_id(runs.load(_runs_path()), run_id) is None:
+        _error(f"no chip run {run_id}")
+        return False
+    return True
+
+
+def cmd_attach(args) -> int:
+    if not _known_run(args.id):
+        return 2
+    ok, message = terminal.open_command(f"claude attach {args.id}", terminal.pick_app(config.load()["terminal"]))
+    if not ok:
+        _error(message or "osascript failed")
+        return 1
+    return 0
+
+
+def cmd_stop(args) -> int:
+    if not _known_run(args.id):
+        return 2
+    subprocess.run(["claude", "stop", args.id], capture_output=True, text=True)
+    return 0
+
+
+def cmd_forget(args) -> int:
+    records = runs.load(_runs_path())
+    found = runs.find_by_id(records, args.id)
+    if found is None:
+        _error(f"no chip run {args.id}")
+        return 2
+    subprocess.run(["claude", "rm", args.id], capture_output=True, text=True)
+    del records[found[0]]
+    runs.save(_runs_path(), records)
+    return 0
+
+
+def cmd_copy(args) -> int:
+    row = _find_row(args.label)
+    if row is None:
+        _error(f"PR {args.label} is not in the list")
+        return 2
+    subprocess.run(["pbcopy"], input=row["url"], text=True)
+    return 0
+
+
 def main(argv=None, runner=None) -> int:
     parser = argparse.ArgumentParser(prog="chip", description="PR review inbox")
     sub = parser.add_subparsers(dest="cmd")
@@ -287,6 +361,12 @@ def main(argv=None, runner=None) -> int:
     p_prompt = sub.add_parser("prompt", help="review prompt for a PR label from the configured skill")
     p_prompt.add_argument("label")
     p_prompt.add_argument("--skill", type=int, default=1)
+    p_run = sub.add_parser("run", help="start a background review for a PR label")
+    p_run.add_argument("label")
+    p_run.add_argument("--skill", type=int, default=1)
+    for name in ("attach", "stop", "forget"):
+        sub.add_parser(name, help=f"{name} a chip review by session id").add_argument("id")
+    sub.add_parser("copy", help="copy a PR link").add_argument("label")
     args = parser.parse_args(argv)
 
     if args.cmd is None:
@@ -299,6 +379,16 @@ def main(argv=None, runner=None) -> int:
         return cmd_open()
     if args.cmd == "preview":
         return cmd_preview(args)
+    if args.cmd == "run":
+        return cmd_run(args, runner or fetch.run_gh_graphql)
+    if args.cmd == "attach":
+        return cmd_attach(args)
+    if args.cmd == "stop":
+        return cmd_stop(args)
+    if args.cmd == "forget":
+        return cmd_forget(args)
+    if args.cmd == "copy":
+        return cmd_copy(args)
     if args.cmd == "config":
         return cmd_config(args)
     if args.cmd == "prompt":

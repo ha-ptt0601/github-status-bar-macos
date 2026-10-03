@@ -1,12 +1,13 @@
 import io
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-from chip import cli, fetch
+from chip import cli, fetch, runs
 from tests.factory import make_node
 
 
@@ -299,4 +300,64 @@ class ConfigCliTest(CliCase):
     def test_prompt_unknown(self):
         self.run_cli(["menu"], runner=fake_runner)
         code, _, _ = self.run_cli(["prompt", "nope#1"])
+        self.assertEqual(code, 2)
+
+
+class RunCliTest(CliCase):
+    def setUp(self):
+        super().setUp()
+        self.calls = []
+        self.orig_run, self.orig_resolve = cli.subprocess.run, cli.repos.resolve
+        cli.subprocess.run = self.fake
+        cli.repos.resolve = lambda slug, root, cache: "/src/" + slug
+
+    def tearDown(self):
+        cli.subprocess.run, cli.repos.resolve = self.orig_run, self.orig_resolve
+        super().tearDown()
+
+    def fake(self, cmd, **kw):
+        self.calls.append(cmd)
+        out = "backgrounded · ab12cd34 · x\n" if cmd[:1] == ["claude"] and "--bg" in cmd else ""
+        return subprocess.CompletedProcess(cmd, 0, out, "")
+
+    def runs_path(self):
+        return Path(os.environ["CHIP_CACHE_DIR"]) / "runs.json"
+
+    def start(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        return self.run_cli(["run", "api#274"])
+
+    def test_run_starts_background_review_and_notifies(self):
+        code, out, _ = self.start()
+        self.assertEqual(code, 0)
+        bg = next(c for c in self.calls if "--bg" in c)
+        self.assertEqual(bg[1], "/my-review-skill https://github.com/acme/api/pull/1")
+        self.assertTrue(any(c[0] == "osascript" for c in self.calls))
+        self.assertIn("ab12cd34", out)
+        self.assertIn("api#274::Full review", runs.load(self.runs_path()))
+
+    def test_run_unknown_label(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, _, _ = self.run_cli(["run", "nope#1"], runner=fake_runner)
+        self.assertEqual(code, 1)
+
+    def test_run_bad_skill_number(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, _, _ = self.run_cli(["run", "api#274", "--skill", "5"])
+        self.assertEqual(code, 2)
+
+    def test_stop_forget_attach_copy(self):
+        self.start()
+        self.run_cli(["stop", "ab12cd34"])
+        self.assertIn(["claude", "stop", "ab12cd34"], self.calls)
+        self.run_cli(["attach", "ab12cd34"])
+        self.assertTrue(any(c[0] == "osascript" and "claude attach ab12cd34" in c[2] for c in self.calls))
+        self.run_cli(["copy", "api#274"])
+        self.assertIn(["pbcopy"], self.calls)
+        self.run_cli(["forget", "ab12cd34"])
+        self.assertIn(["claude", "rm", "ab12cd34"], self.calls)
+        self.assertEqual(runs.load(self.runs_path()), {})
+
+    def test_unknown_run_id(self):
+        code, _, _ = self.run_cli(["stop", "zzzz"])
         self.assertEqual(code, 2)
