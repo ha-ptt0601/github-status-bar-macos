@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -360,6 +361,39 @@ def cmd_nudge(args) -> int:
     return 0
 
 
+SEARCH_DIALOG = (
+    'display dialog "Search pull requests: title, number, project, author, reviewer or Jira key" '
+    'default answer "{q}" with title "chip" buttons {{"Clear", "Cancel", "Search"}} '
+    'default button "Search" cancel button "Cancel"'
+)
+DIALOG_RE = re.compile(r"button returned:(\w+), text returned:(.*)")
+
+
+def cmd_search(args) -> int:
+    """Ask for search text in a native dialog (menus have no text field) and save it for the menu."""
+    if args.clear:
+        store.save_query("")
+        return 0
+    current = store.load_query().replace("\\", "\\\\").replace('"', '\\"')
+    proc = subprocess.run(["osascript", "-e", SEARCH_DIALOG.format(q=current)], capture_output=True, text=True)
+    match = DIALOG_RE.search(proc.stdout or "")
+    if proc.returncode != 0 or not match:  # Cancel
+        return 0
+    store.save_query("" if match.group(1) == "Clear" else match.group(2))
+    return 0
+
+
+def cmd_project(args) -> int:
+    if args.action == "all":
+        config.show_all_projects()
+    elif args.name:
+        config.toggle_project(args.name)
+    else:
+        _error("usage: chip project toggle <name> | chip project all")
+        return 2
+    return 0
+
+
 def cmd_copy(args) -> int:
     row = _find_row(args.label)
     if row is None:
@@ -430,6 +464,11 @@ def main(argv=None, runner=None) -> int:
     p_run.add_argument("label")
     p_run.add_argument("--skill", type=int, default=1)
     p_run.add_argument("--address", action="store_true", help="run an address-review skill on your own PR")
+    p_search = sub.add_parser("search", help="search the menu (native dialog); --clear removes the search")
+    p_search.add_argument("--clear", action="store_true")
+    p_project = sub.add_parser("project", help="hide/show a project in the menu: toggle NAME | all")
+    p_project.add_argument("action", choices=["toggle", "all"])
+    p_project.add_argument("name", nargs="?")
     sub.add_parser("nudge", help="re-request review from reviewers who have not approved").add_argument("label")
     for name in ("attach", "stop", "forget"):
         sub.add_parser(name, help=f"{name} a chip review by session id").add_argument("id")
@@ -468,6 +507,10 @@ def main(argv=None, runner=None) -> int:
         return cmd_stop(args)
     if args.cmd == "forget":
         return cmd_forget(args)
+    if args.cmd == "search":
+        return cmd_search(args)
+    if args.cmd == "project":
+        return cmd_project(args)
     if args.cmd == "nudge":
         return cmd_nudge(args)
     if args.cmd == "copy":

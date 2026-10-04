@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-from chip import cli, fetch, runs
+from chip import cli, config, fetch, runs, store
 from tests.factory import make_node
 
 
@@ -435,3 +435,49 @@ class MinePrCliTest(RunCliBase):
         self.run_cli(["menu"], runner=self.mine_runner)
         code, _, _ = self.run_cli(["nudge", "api#1"])
         self.assertEqual(code, 2)
+
+
+class SearchProjectCliTest(RunCliBase):
+    def setUp(self):
+        super().setUp()
+        self.cfg_old = os.environ["CHIP_CONFIG"]
+        os.environ["CHIP_CONFIG"] = str(Path(self.tmp.name) / "config.json")
+        self.dialog = "button returned:Search, text returned:omni send"
+
+    def tearDown(self):
+        os.environ["CHIP_CONFIG"] = self.cfg_old
+        super().tearDown()
+
+    def fake(self, cmd, **kw):
+        self.calls.append(cmd)
+        if cmd[:2] == ["osascript", "-e"] and "display dialog" in cmd[2]:
+            if self.dialog is None:
+                return subprocess.CompletedProcess(cmd, 1, "", "User canceled. (-128)")
+            return subprocess.CompletedProcess(cmd, 0, self.dialog + "\n", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    def test_search_dialog_saves_query(self):
+        code, _, _ = self.run_cli(["search"])
+        self.assertEqual(code, 0)
+        self.assertEqual(store.load_query(), "omni send")
+        self.assertIn('default answer ""', next(c[2] for c in self.calls if "display dialog" in c[2]))
+
+    def test_cancel_keeps_query_and_clear_button_clears(self):
+        store.save_query("old")
+        self.dialog = None
+        self.run_cli(["search"])
+        self.assertEqual(store.load_query(), "old")
+        self.dialog = "button returned:Clear, text returned:old"
+        self.run_cli(["search"])
+        self.assertEqual(store.load_query(), "")
+
+    def test_search_clear_flag(self):
+        store.save_query("x")
+        self.run_cli(["search", "--clear"])
+        self.assertEqual(store.load_query(), "")
+
+    def test_project_toggle_and_all(self):
+        self.run_cli(["project", "toggle", "loyalty-partners"])
+        self.assertEqual(config.load()["hidden_projects"], ["loyalty-partners"])
+        self.run_cli(["project", "all"])
+        self.assertEqual(config.load()["hidden_projects"], [])

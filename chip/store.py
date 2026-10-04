@@ -56,3 +56,16 @@ def load_all(runner, force: bool = False) -> Tuple[Optional[dict], Optional[str]
     cache_dir().mkdir(parents=True, exist_ok=True)
     _last().write_text(json.dumps(inbox, ensure_ascii=False, indent=1))
     return inbox, None
+
+
+def load_query() -> str:
+    """The menu's current search text ("" when none)."""
+    try:
+        return json.loads((cache_dir() / "filter.json").read_text()).get("q", "")
+    except (OSError, ValueError):
+        return ""
+
+
+def save_query(query: str) -> None:
+    cache_dir().mkdir(parents=True, exist_ok=True)
+    (cache_dir() / "filter.json").write_text(json.dumps({"q": query.strip()}, ensure_ascii=False))
