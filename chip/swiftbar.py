@@ -434,7 +434,7 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     if inbox_all is not None:
         visible = model.visible_view(inbox_all)["rows"]
         notify_path = store.cache_dir() / "notify.json"
-        current = notify.snapshot(visible, views, newer)
+        current = notify.snapshot(visible, views, newer, inbox_all.get("mine", []))
         notify.send(notify.diff(notify.load(notify_path), current, visible, records), runner)
         notify.save(notify_path, current)
     return "\n".join(render(inbox_all, records, views, cfg, plugin, __version__, newer, error, now))
