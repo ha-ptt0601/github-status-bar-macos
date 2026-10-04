@@ -360,6 +360,25 @@ class MineSectionTest(unittest.TestCase):
         self.assertTrue(own[0].startswith("1 🔵2 | templateImage="))
 
 
+class RecentNotificationsTest(unittest.TestCase):
+    def test_section_links_prs_and_sessions(self):
+        history = [{"text": "Review finished: api#1 (Full review)", "run": "ab", "at": 0},
+                   {"text": "New review request: api#2 — t", "href": "https://x/2", "at": 0}]
+        lines = render([row(1)], history=history)
+        start = lines.index(swiftbar.item("Recent notifications", 0, sfimage="bell"))
+        self.assertIn("param1=attach param2=ab", lines[start + 1])
+        self.assertIn("href=https://x/2", lines[start + 2])
+        self.assertIn("param1=notifications param2=--clear", lines[start + 4])
+
+    def test_no_history_no_section(self):
+        self.assertFalse(any("Recent notifications" in line for line in render([row(1)])))
+
+    def test_deliver_lines_sit_in_the_title_block(self):
+        lines = render([row(1)], deliver=[{"text": "chip v9 is available", "href": "https://r"}])
+        self.assertEqual(lines[2], "---")
+        self.assertEqual(lines[1], 'chip v9 is available | notify=true href=https://r')
+
+
 class BuildMenuTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -396,6 +415,26 @@ class BuildMenuTest(unittest.TestCase):
         notes = [c for c in self.calls if c[0] == "osascript"]
         self.assertEqual(len(notes), 1)
         self.assertIn("New review request: api#2", notes[0][2])
+
+    def test_events_are_remembered_and_queued_for_githubbar(self):
+        env = {"GITHUBBAR_NOTIFY": "1"}
+        swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner, now=1000, env=env)
+        self.nodes.append(make_node(id="b", number=2, url="https://github.com/acme/api/pull/2"))
+        out = swiftbar.build_menu(PLUGIN, force=True, fetch_runner=self.fetch_runner, runner=self.runner,
+                                  now=2000, env=env)
+        self.assertFalse(any(c[0] == "osascript" for c in self.calls))
+        self.assertNotIn("notify=true", out.split("\n---\n")[0])  # queued, not delivered yet
+        self.assertIn("Recent notifications", out)
+        self.assertIn("href=https://github.com/acme/api/pull/2", out)
+        delivered = swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner,
+                                        now=2010, env=env, deliver=True)
+        title_block = delivered.split("\n---\n")[0].splitlines()
+        self.assertEqual(len(title_block), 2)
+        self.assertIn("New review request: api#2", title_block[1])
+        self.assertIn("notify=true", title_block[1])
+        again = swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner,
+                                    now=2020, env=env, deliver=True)
+        self.assertEqual(len(again.split("\n---\n")[0].splitlines()), 1)  # the outbox was drained
 
     def test_round_resolves_when_commits_land_after_it(self):
         Path(self.tmp.name, "runs.json").write_text(json.dumps({"api#1::Full review": {

@@ -8,6 +8,7 @@ import textwrap
 import time
 from datetime import datetime
 from pathlib import Path
+import os
 from typing import Dict, List, Optional
 
 from chip import __version__, config, fetch, model, notify, runs, store, updates
@@ -382,6 +383,28 @@ def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, m
     return lines
 
 
+def event_params(plugin: str, event: dict) -> dict:
+    """What clicking a notification does: open the review session, or open the PR/release page."""
+    if event.get("run"):
+        return action(plugin, "attach", event["run"], refresh=False)
+    return {"href": event["href"]} if event.get("href") else {}
+
+
+def _when(at: float, now: float) -> str:
+    stamp = datetime.fromtimestamp(at)
+    return stamp.strftime("%H:%M" if stamp.date() == datetime.fromtimestamp(now).date() else "%b %d")
+
+
+def recent_lines(plugin: str, history: List[dict], now: float) -> List[str]:
+    if not history:
+        return []
+    lines = [item("Recent notifications", 0, sfimage="bell")]
+    for event in history:
+        lines.append(item(f"{_when(event.get('at', now), now)}  {event['text']}", 1, **event_params(plugin, event)))
+    lines += [separator(1), item("Clear", 1, sfimage="trash", **action(plugin, "notifications", "--clear"))]
+    return lines
+
+
 def _settings(plugin: str, style: str, version: str) -> List[str]:
     lines = [item("Settings", 0, sfimage="gearshape"), item("Status style", 1, sfimage="paintpalette")]
     for value, label in STYLES:
@@ -399,8 +422,11 @@ def _settings(plugin: str, style: str, version: str) -> List[str]:
 
 def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str, dict], cfg: dict,
            plugin: str, version: str, newer: Optional[str] = None, error: Optional[str] = None,
-           now: Optional[float] = None, view: str = "review", query: str = "") -> List[str]:
-    """One menu: `review` (PRs waiting for the user's review) or `mine` (the user's own PRs)."""
+           now: Optional[float] = None, view: str = "review", query: str = "",
+           history: Optional[List[dict]] = None, deliver: Optional[List[dict]] = None) -> List[str]:
+    """One menu: `review` (PRs waiting for the user's review) or `mine` (the user's own PRs).
+
+    `deliver` events become extra title-block lines (`notify=true`) that GitHubBar posts natively."""
     now = time.time() if now is None else now
     hidden_projects = set(cfg.get("hidden_projects", []))
     style = cfg.get("status_style", "dots")
@@ -414,7 +440,9 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     active = [v["kind"] for v in views.values()]
     badges = ([str(count)] if count else []) + ([f"🔴{changes}"] if changes else []) + [
         f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
-    lines = [item("!" if error else " ".join(badges), 0, templateImage=icon_b64()), "---"]
+    lines = [item("!" if error else " ".join(badges), 0, templateImage=icon_b64())]
+    lines += [item(event["text"], 0, notify="true", **event_params(plugin, event)) for event in deliver or []]
+    lines.append("---")
 
     all_rows = (inbox_all or {}).get("mine" if mine_view else "rows", [])
     records = {k: rec for k, rec in records.items() if (rec.get("kind") == "address") == mine_view}
@@ -471,13 +499,18 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     if hidden:
         lines.append(item(f"Show approved & drafts ({len(hidden)})", 0, sfimage="eye.slash"))
         lines.extend(pr_pages(hidden, 1, ctx))
+    lines.extend(recent_lines(plugin, history or [], now))
     lines.extend(_settings(plugin, style, version))
     return lines
 
 
 def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
-               now: Optional[float] = None, view: str = "review") -> str:
-    """One refresh: inbox (3-min cache), run states, release check, notifications, menu text."""
+               now: Optional[float] = None, view: str = "review", deliver: bool = False,
+               env: Optional[Dict[str, str]] = None) -> str:
+    """One refresh: inbox (3-min cache), run states, release check, notifications, menu text.
+
+    Under GitHubBar (GITHUBBAR_NOTIFY=1) notifications are queued; `deliver` drains them into the menu."""
+    env = os.environ if env is None else env
     now = time.time() if now is None else now
     cfg = config.load()
     inbox_all, error = store.load_all(fetch_runner or fetch.run_gh_graphql, force)
@@ -492,11 +525,20 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}
     latest = updates.latest_release(store.cache_dir() / "update.json", runner, now)
     newer = latest if latest and updates.is_newer(latest, __version__) else None
+    history_path, outbox_path = store.cache_dir() / "history.json", store.cache_dir() / "outbox.json"
     if inbox_all is not None:
         visible = model.visible_view(inbox_all)["rows"]
         notify_path = store.cache_dir() / "notify.json"
         current = notify.snapshot(visible, views, newer, inbox_all.get("mine", []))
-        notify.send(notify.diff(notify.load(notify_path), current, visible, records), runner)
+        found = notify.events(notify.load(notify_path), current, visible, records)
+        if found:
+            notify.remember(history_path, found, now)
+            if env.get("GITHUBBAR_NOTIFY"):
+                notify.queue(outbox_path, found)
+            else:
+                notify.send([event["text"] for event in found], runner)
         notify.save(notify_path, current)
+    pending = notify.cap(notify.drain(outbox_path)) if deliver else []
     return "\n".join(render(inbox_all, records, views, cfg, plugin, __version__, newer, error, now,
-                            view=view, query=store.load_query()))
+                            view=view, query=store.load_query(), history=notify.load_list(history_path),
+                            deliver=pending))
