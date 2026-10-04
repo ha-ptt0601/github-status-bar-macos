@@ -14,9 +14,8 @@ REPO_DIR = Path(__file__).resolve().parents[1]
 MARKER = "installed by chip"
 SWIFTBAR_DOMAIN = "com.ameba.SwiftBar"
 PLUGIN_NAME = "chip.1m.sh"  # menu refresh every minute; GitHub is still fetched at most every 3 minutes
-MINE_PLUGIN_NAME = "chip-mine.1m.sh"  # second menu bar icon: the user's own PRs
-PLUGINS = ((PLUGIN_NAME, ""), (MINE_PLUGIN_NAME, " --view mine"))
-LEGACY_PLUGIN_NAMES = ("chip.3m.sh",)
+PLUGINS = ((PLUGIN_NAME, ""),)
+LEGACY_PLUGIN_NAMES = ("chip.3m.sh", "chip-mine.1m.sh")  # chip-mine: the short-lived second icon
 SWIFTBAR_APP = Path("/Applications/SwiftBar.app")
 REQUIRED = (("gh", "brew install gh"), ("claude", "see https://claude.com/claude-code"),
             ("git", "xcode-select --install"))
@@ -117,7 +116,7 @@ def _install_plugin(chip_bin: Path, runner, which, out, swiftbar_app: Path, home
         out(f"note  SwiftBar plugin folder moved to {plugin_dir} (was SwiftBar's own data folder)")
     stale = [plugin_dir / name for name in LEGACY_PLUGIN_NAMES]
     if moved_from:
-        stale += [moved_from / name for name in (PLUGIN_NAME, MINE_PLUGIN_NAME) + LEGACY_PLUGIN_NAMES]
+        stale += [moved_from / name for name in (PLUGIN_NAME,) + LEGACY_PLUGIN_NAMES]
     for old in stale:
         if old.is_file() and MARKER in old.read_text():
             old.unlink()
@@ -195,7 +194,7 @@ def uninstall(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None, o
         runner(["claude", "mcp", "remove", "chip", "--scope", "user"], capture_output=True, text=True)
         out("rm    MCP server chip")
     folders = {_read_plugin_dir(runner), home / ".swiftbar", _swiftbar_data_dir(home)}
-    for plugin in (folder / name for folder in folders if folder for name in (PLUGIN_NAME, MINE_PLUGIN_NAME) + LEGACY_PLUGIN_NAMES):
+    for plugin in (folder / name for folder in folders if folder for name in (PLUGIN_NAME,) + LEGACY_PLUGIN_NAMES):
         if plugin.is_file() and MARKER in plugin.read_text():
             plugin.unlink()
             out(f"rm    {plugin}")

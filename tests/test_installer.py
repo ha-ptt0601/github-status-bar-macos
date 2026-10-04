@@ -149,12 +149,10 @@ class InstallTest(unittest.TestCase):
         self.assertIn(["defaults", "write", "com.ameba.SwiftBar", "PluginDirectory", str(new_dir)], self.calls)
         self.assertIn(["killall", "SwiftBar"], self.calls)
 
-    def test_second_plugin_for_my_prs(self):
+    def test_one_plugin_and_old_mine_plugin_removed(self):
+        self.plugin_dir.mkdir()
+        old = self.plugin_dir / "chip-mine.1m.sh"
+        old.write_text(f"#!/bin/bash\n# {installer.MARKER}\n")
         self.install()
-        mine = (self.plugin_dir / installer.MINE_PLUGIN_NAME).read_text()
-        self.assertEqual(installer.MINE_PLUGIN_NAME, "chip-mine.1m.sh")
-        self.assertIn(f'exec "{self.chip_bin}" swiftbar --view mine', mine)
-        self.assertIn(installer.MARKER, mine)
-        self.mcp_registered = f"chip:\n  Command: {self.chip_bin}\n"
-        installer.uninstall(self.repo, self.home, runner=self.runner, out=self.out.append)
-        self.assertFalse((self.plugin_dir / installer.MINE_PLUGIN_NAME).exists())
+        self.assertFalse(old.exists())
+        self.assertEqual(sorted(p.name for p in self.plugin_dir.iterdir()), [installer.PLUGIN_NAME])
