@@ -96,7 +96,9 @@ def clone(slug: str, clone_root, cache, runner=subprocess.run) -> str:
     target = Path(clone_root) / slug.split("/")[1]
     if not target.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
-        proc = runner(["gh", "repo", "clone", slug, str(target)], capture_output=True, text=True)
+        # Partial clone: history without file contents, which git fetches on demand. Much faster for big repos.
+        proc = runner(["gh", "repo", "clone", slug, str(target), "--", "--filter=blob:none"],
+                      capture_output=True, text=True)
         if proc.returncode != 0:
             raise CloneError(proc.stderr.strip() or f"gh repo clone {slug} failed")
     if origin_of(target) != slug:

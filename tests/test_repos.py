@@ -72,12 +72,13 @@ class ScanResolveTest(unittest.TestCase):
 
         def runner(cmd, **kwargs):
             calls.append(cmd)
-            make_repo(Path(cmd[-1]), "https://github.com/acme/loyalty-api.git")
+            make_repo(Path(cmd[4]), "https://github.com/acme/loyalty-api.git")
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
         path = repos.clone("acme/loyalty-api", self.root / "clones", self.cache, runner=runner)
         self.assertEqual(path, str(self.root / "clones" / "loyalty-api"))
         self.assertEqual(calls[0][:4], ["gh", "repo", "clone", "acme/loyalty-api"])
+        self.assertEqual(calls[0][-2:], ["--", "--filter=blob:none"])
         self.assertEqual(json.loads(self.cache.read_text())["acme/loyalty-api"], path)
 
     def test_clone_failure(self):
