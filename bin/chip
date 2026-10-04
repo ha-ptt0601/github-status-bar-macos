@@ -4,6 +4,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
+# Started from a login item or a GUI app, PATH can be just /usr/bin:/bin:/usr/sbin:/sbin: add the usual
+# install folders so gh, git and claude are found.
+_path = os.environ.get("PATH", "").split(os.pathsep)
+os.environ["PATH"] = os.pathsep.join(_path + [d for d in ("/opt/homebrew/bin", "/usr/local/bin",
+                                                          os.path.expanduser("~/.local/bin")) if d not in _path])
+
 from chip.cli import main  # noqa: E402
 
 sys.exit(main())
