@@ -107,7 +107,7 @@ class InboxTest(unittest.TestCase):
 
     def test_hides_approved_and_drafts(self):
         inbox = model.build_inbox(self.nodes(), "me", NOW)
-        self.assertEqual([r["number"] for r in inbox["rows"]], [4, 2, 1, 3])
+        self.assertEqual([r["number"] for r in inbox["rows"]], [4, 1, 2, 3])
         self.assertEqual([r["index"] for r in inbox["rows"]], [1, 2, 3, 4])
         self.assertEqual(inbox["hidden"], {"approved": 1, "draft": 1})
         self.assertEqual(inbox["viewer"], "me")
@@ -132,8 +132,23 @@ class StaleOrderTest(unittest.TestCase):
                       latestReviews=reviews(review("me", "COMMENTED", MINE_AT))),
         ]
         inbox = model.build_inbox(nodes, "me", NOW)
-        self.assertEqual([r["number"] for r in inbox["rows"]], [5, 2, 4, 1, 3])
+        self.assertEqual([r["number"] for r in inbox["rows"]], [5, 2, 4, 3, 1])
         self.assertEqual([r["stale"] for r in inbox["rows"]], [True, False, False, True, True])
+
+
+class ActivityOrderTest(unittest.TestCase):
+    def test_a_request_opened_today_comes_before_older_rereviews(self):
+        nodes = [
+            make_node(id="old-rereview", number=1, createdAt="2026-09-14T00:00:00Z",
+                      commits=commits_at("2026-09-29T09:00:00Z"),
+                      latestReviews=reviews(review("me", "COMMENTED", MINE_AT))),
+            make_node(id="today", number=2, createdAt="2026-09-30T00:30:00Z",
+                      commits=commits_at("2026-09-28T00:00:00Z")),
+            make_node(id="waiting", number=3, createdAt="2026-09-30T01:00:00Z",
+                      latestReviews=reviews(review("me", "CHANGES_REQUESTED", "2026-09-30T02:00:00Z"))),
+        ]
+        rows = model.build_inbox(nodes, "me", NOW)["rows"]
+        self.assertEqual([r["number"] for r in rows], [2, 1, 3])  # to-do by last change, then waiting on author
 
 
 class ReviewTimesTest(unittest.TestCase):

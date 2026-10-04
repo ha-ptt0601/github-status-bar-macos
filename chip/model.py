@@ -130,11 +130,19 @@ def build_row(node: dict, viewer: str, now: datetime) -> dict:
 
 
 def _group(row: dict) -> int:
-    """Re-review always first; other PRs older than STALE_DAYS sink below the fresh ones."""
+    """PRs waiting on the user (re-review, or a new request younger than STALE_DAYS) first, together;
+    then the ones waiting on the author; other PRs older than STALE_DAYS sink below the fresh ones."""
+    if needs_review(row):
+        return 0
     group = STATUS_GROUP[row["status"]]
     if row["stale"] and group in (STATUS_GROUP[NEW], STATUS_GROUP[WAITING]):
         return STALE_GROUP
     return group
+
+
+def last_activity(row: dict) -> str:
+    """When the PR last changed for the reviewer: opened, or new commits pushed (ISO time, sorts as text)."""
+    return max(row.get("created_at") or "", row.get("last_commit_at") or "")
 
 
 def build_inbox(nodes: List[dict], viewer: str, now: datetime, show_all: bool = False) -> dict:
@@ -147,7 +155,8 @@ def build_inbox(nodes: List[dict], viewer: str, now: datetime, show_all: bool = 
             hidden["approved"] += 1
         else:
             rows.append(row)
-    rows.sort(key=lambda r: (_group(r), r["created_at"]))
+    rows.sort(key=lambda r: (last_activity(r), r["created_at"]), reverse=True)  # newest change first per group
+    rows.sort(key=_group)
     for index, row in enumerate(rows, 1):
         row["index"] = index
     return {"viewer": viewer, "rows": rows, "hidden": hidden}
