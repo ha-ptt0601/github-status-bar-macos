@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     private var menuIsOpen = false
     private var pending: ParsedMenu?
     private var refreshing = false
+    private var reopenWith: ParsedMenu?
     private let queue = DispatchQueue(label: "githubbar.chip")
 
     /// `CHIP_PLUGIN` comes from the bundle's LSEnvironment (written by `chip install`).
@@ -102,8 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     }
 
     /// A `keep=` row was clicked: update its checkmarks at once, run its command, then refresh.
-    /// `keep=refresh` rows sit on the top level, so the open menu is refilled; rows inside a submenu
-    /// (projects, status style) only queue the new menu for when it closes, so the submenu stays put.
+    /// `keep=refresh` and `keep=radio` (status style) refill the open menu at once; project toggles are
+    /// already applied in place, so the rest of their changes (counts) wait until the menu closes.
     func keepOpen(_ view: KeepOpenView) {
         let kind = view.entry.params["keep"] ?? ""
         let siblings = view.enclosingMenuItem?.menu?.items.compactMap { $0.view as? KeepOpenView } ?? []
@@ -132,6 +133,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             _ = Self.run(bash, args)
             if kind == "refresh" {
                 self.refillOpenMenu()
+            } else if kind == "radio" {
+                // A new status style redraws every row. The click came from an open submenu, and replacing
+                // items under an open submenu is unsafe, so close the menu, swap it and open it again.
+                self.refillOpenMenu(reopen: true)
             } else {
                 let parsed = MenuParser.parse(Self.run(self.chip, Self.render))
                 parsed.notifications.forEach(Self.post)
@@ -142,16 +147,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     /// Off the main thread: render the menu, then refill the (open) menu on the main thread. Uses
     /// performSelector with the event-tracking mode, which runs while a menu is open.
-    private func refillOpenMenu() {
+    private func refillOpenMenu(reopen: Bool = false) {
         let parsed = MenuParser.parse(Self.run(chip, Self.render))
         parsed.notifications.forEach(Self.post)
-        performSelector(onMainThread: #selector(refillNow(_:)), with: ParsedBox(parsed), waitUntilDone: false,
+        performSelector(onMainThread: #selector(refillNow(_:)), with: ParsedBox(parsed, reopen: reopen), waitUntilDone: false,
                         modes: [RunLoop.Mode.common.rawValue, RunLoop.Mode.eventTracking.rawValue])
     }
 
     /// Shows the new menu, refilling it in place when it is open; a finished "Refresh now" row then
     /// says "✓ Up to date" for two seconds.
     @objc private func refillNow(_ box: ParsedBox) {
+        if box.reopen && menuIsOpen, let menu = statusItem.menu {
+            reopenWith = box.menu
+            menu.cancelTrackingWithoutAnimation()
+            return
+        }
         pending = nil
         let wasRefreshing = refreshing
         refreshing = false
@@ -178,6 +188,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     func menuDidClose(_ menu: NSMenu) {
         menuIsOpen = false
+        if let parsed = reopenWith {
+            reopenWith = nil
+            pending = nil
+            apply(parsed)
+            DispatchQueue.main.async { self.statusItem.button?.performClick(nil) }
+            return
+        }
         if let menu = pending {
             pending = nil
             apply(menu)
@@ -262,7 +279,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 /// Carries a ParsedMenu through performSelector (which takes an object).
 final class ParsedBox: NSObject {
     let menu: ParsedMenu
-    init(_ menu: ParsedMenu) { self.menu = menu }
+    let reopen: Bool
+    init(_ menu: ParsedMenu, reopen: Bool = false) {
+        self.menu = menu
+        self.reopen = reopen
+    }
 }
 
 let app = NSApplication.shared
