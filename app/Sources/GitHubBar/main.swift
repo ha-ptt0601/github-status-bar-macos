@@ -230,6 +230,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 item.image = nil
             }
         }
+        insertNewRunRows(menu, parsed)
+    }
+
+    /// A review started for the first time on a PR has no row yet: insert it (and the section header and
+    /// separator if the section is new) at the place the new menu has it. Only inserts, never removes, so an
+    /// open submenu is left alone.
+    private func insertNewRunRows(_ menu: NSMenu, _ parsed: ParsedMenu) {
+        let existing = Set(menu.items.compactMap { ($0.representedObject as? MenuEntry).flatMap { Self.runKey($0.text) } })
+        var pane = ""
+        var lastHeader: MenuEntry?
+        var added = false
+        for entry in parsed.items {
+            if entry.text.isEmpty, let name = entry.params["pane"] { pane = name; continue }
+            if entry.text == "Reviews by GitHubBar" { lastHeader = entry; continue }
+            guard let key = Self.runKey(entry.text), !existing.contains(key) else { continue }
+            let paneItems = menu.items.filter { MenuBuilder.meta[$0]?.pane == pane }
+            let header = paneItems.first { $0.title == "Reviews by GitHubBar" }
+            let item = MenuBuilder.item(entry, target: self, action: #selector(runEntry(_:)))
+            MenuBuilder.meta[item] = MenuBuilder.ItemMeta(pane: pane)
+            if let header, var index = menu.items.firstIndex(of: header) {
+                // After the header and the review rows that follow it.
+                index += 1
+                while index < menu.items.count, (menu.items[index].representedObject as? MenuEntry)
+                        .flatMap({ Self.runKey($0.text) }) != nil { index += 1 }
+                menu.insertItem(item, at: index)
+            } else if let anchor = paneItems.first(where: { candidate in
+                        ["Show approved", "Recent notifications", "Settings"].contains { candidate.title.hasPrefix($0) } }),
+                      var index = menu.items.firstIndex(of: anchor), let headerEntry = lastHeader {
+                // A new section: separator, header, row, just above the separator before the anchor.
+                if index > 0, menu.items[index - 1].isSeparatorItem { index -= 1 }
+                let separator = NSMenuItem.separator()
+                let headerItem = MenuBuilder.item(headerEntry, target: self, action: #selector(runEntry(_:)))
+                for (offset, new) in [separator, headerItem, item].enumerated() {
+                    MenuBuilder.meta[new] = MenuBuilder.ItemMeta(pane: pane)
+                    menu.insertItem(new, at: index + offset)
+                }
+            }
+            added = true
+        }
+        if added { MenuBuilder.updateVisibility(menu) }
     }
 
     private func setTitle(_ title: MenuEntry) {
