@@ -129,15 +129,15 @@ A chip review of a PR is a **round**. The record for `<label>::<skill>` keeps th
 - **Merged or closed PRs** drop out of every list on the next fetch, because all searches use `is:open`. Any round whose PR is missing from a *successful* fetch is resolved as `PR merged or closed`, so it leaves "Reviews by chip". A failed fetch never resolves anything.
 - **Remove** deletes the record and its session (history included).
 
-## Two menu bar icons, search and project filter
+## Tabs, search and project filter
 
-- **Two icons, one per view.** The GitHub icon (`chip.1m.sh`, `chip swiftbar`) is for **Review requests**, with the review count and badges for its runs. The branch icon (`chip-mine.1m.sh`, `chip swiftbar --view mine`, SF Symbol `arrow.triangle.branch`) is for **My pull requests**, with 🔴 for changes requested and badges for its address runs. Each menu lists only its own runs. Only the review icon sends notifications, which cover both views, so none arrive twice.
-- **Search…** opens a native `display dialog`, because menus have no text field. Its buttons are Clear, Cancel and Search. The query is saved in `~/.cache/chip/filter.json`. Both menus show only matching rows (all words; label, repo, title, author, Jira, reviewers) and a `"q" · N matches — Clear search` line. Counts in the titles ignore the search.
-- **Projects ›** lists the view's projects with ✓ on the shown ones. Clicking one toggles it in `hidden_projects` in the config (`chip project toggle <name>`), and **Show all** clears the list (`chip project all`).
+- **One icon, two tabs.** The top of the menu has two checkable items, `Review requests · N` (the default tab) and `My pull requests · M · 🔴K`. Clicking the other one runs `chip view <tab>`, which is saved in `~/.cache/chip/view.json`, and refreshes. The menu closes on click, so the user reopens it to see the other tab. The icon title combines the review count, 🔴 (the user's PRs with changes requested) and run badges. Each tab lists only its own runs (review runs or address runs). There is one plugin, `chip.1m.sh`, and it sends all notifications.
+- **Search…** opens a native `display dialog`, because menus have no text field. Its buttons are Clear, Cancel and Search. The query is saved in `~/.cache/chip/filter.json`. Both tabs show only matching rows (all words; label, repo, title, author, Jira, reviewers) and a `"q" · N matches — Clear search` line. Counts in the title and tabs ignore the search.
+- **Projects ›** lists the tab's projects with ✓ on the shown ones. Clicking one toggles it in `hidden_projects` in the config (`chip project toggle <name>`), and **Show all** clears the list (`chip project all`).
 
 ## My pull requests (PRs the user authored)
 
-A second menu bar icon shows **My pull requests** (see "Two menu bar icons"). It lists every open PR by the user, grouped by project (5 per project, then `N more in X ›`).
+The **My pull requests** tab (see "Tabs") lists the user's own PRs. It lists every open PR by the user, grouped by project (5 per project, then `N more in X ›`).
 
 - **Data.** A third search, `is:pr is:open author:@me`, runs in parallel with the two review searches and adds `reviewThreads(first:100){totalCount nodes{isResolved}}` to the query. The cached inbox gains `mine` rows with:
   - `mine_status`;

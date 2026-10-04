@@ -3,7 +3,7 @@
 chip lists the GitHub pull requests waiting for **your** review and runs your review skill on the ones you pick.
 
 - **Menu bar** (SwiftBar): GitHub icon with a count, PRs grouped by project, a `Run "<skill>"` button per PR, live status of background reviews (View / Stop / Remove), and notifications for new PRs, re-reviews, finished reviews and new chip versions.
-- **Two icons**: the GitHub icon lists PRs waiting for your review; the branch icon lists your own PRs (status, reviewers, unresolved threads, an "Address review" skill that only drafts fixes and replies, and Re-request review). Both have **Search…** and a **Projects** filter.
+- **Two tabs in one menu**: *Review requests* (default) lists PRs waiting for your review; *My pull requests* lists your own PRs (status, reviewers, unresolved threads, an "Address review" skill that only drafts fixes and replies, and Re-request review). Both have **Search…** and a **Projects** filter.
 - **Prompt bar**: type `/chip @` in Claude Code and pick PRs from the `@` autocomplete.
 - **In chat**: `/chip menu` (pick from menus). **In a shell**: `chip` (fzf picker, Tab to tick).
 
