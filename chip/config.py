@@ -11,9 +11,15 @@ PLACEHOLDERS = {"url", "repo", "number", "label", "title"}
 TERMINALS = ("Terminal", "iTerm")
 STATUS_STYLES = ("dots", "emoji", "symbols")
 SETTABLE = {"status_style": STATUS_STYLES, "terminal": TERMINALS}
+ADDRESS_PROMPT = (
+    "Help me address the review feedback on my pull request {url}. Use gh to read every unresolved review thread "
+    "and review comment. For each one: quote it, propose the exact code change as a diff, and draft a short reply "
+    "I can post. Do not edit files, commit, push, or post anything to GitHub."
+)
 DEFAULT = {
     "work_root": "~/work",
     "skills": [{"name": "Full review", "prompt": "/my-review-skill {url}"}],
+    "address_skills": [{"name": "Address review", "prompt": ADDRESS_PROMPT}],
     "permission_mode": "auto",
     "disallowed_tools": ["Edit", "Write", "NotebookEdit"],
     "terminal": "Terminal",
@@ -29,30 +35,35 @@ def _fields(prompt: str) -> set:
     return {field for _, field, _, _ in string.Formatter().parse(prompt) if field is not None}
 
 
+def _validate_skills(key: str, skills) -> List[str]:
+    if not isinstance(skills, list) or not skills:
+        return [f"{key} must be a non-empty list"]
+    errors = []
+    for i, skill in enumerate(skills, 1):
+        ok = isinstance(skill, dict) and all(
+            isinstance(skill.get(k), str) and skill[k].strip() for k in ("name", "prompt"))
+        if not ok:
+            errors.append(f"{key}[{i}] needs a non-empty name and prompt")
+            continue
+        try:
+            unknown = _fields(skill["prompt"]) - PLACEHOLDERS
+        except ValueError as exc:
+            errors.append(f"{key}[{i}] prompt: {exc}")
+            continue
+        if unknown:
+            errors.append(f"{key}[{i}] unknown placeholder(s): {', '.join(sorted(unknown))}")
+    names = [s.get("name") for s in skills if isinstance(s, dict)]
+    if len(names) != len(set(names)):
+        errors.append(f"{key} names must be unique")
+    return errors
+
+
 def validate(data) -> List[str]:
     if not isinstance(data, dict):
         return ["config must be a JSON object"]
     errors = []
-    skills = data.get("skills", DEFAULT["skills"])
-    if not isinstance(skills, list) or not skills:
-        errors.append("skills must be a non-empty list")
-    else:
-        for i, skill in enumerate(skills, 1):
-            ok = isinstance(skill, dict) and all(
-                isinstance(skill.get(k), str) and skill[k].strip() for k in ("name", "prompt"))
-            if not ok:
-                errors.append(f"skills[{i}] needs a non-empty name and prompt")
-                continue
-            try:
-                unknown = _fields(skill["prompt"]) - PLACEHOLDERS
-            except ValueError as exc:
-                errors.append(f"skills[{i}] prompt: {exc}")
-                continue
-            if unknown:
-                errors.append(f"skills[{i}] unknown placeholder(s): {', '.join(sorted(unknown))}")
-        names = [s.get("name") for s in skills if isinstance(s, dict)]
-        if len(names) != len(set(names)):
-            errors.append("skill names must be unique")
+    for key in ("skills", "address_skills"):
+        errors += _validate_skills(key, data.get(key, DEFAULT[key]))
     for key in ("work_root", "permission_mode"):
         if not isinstance(data.get(key, DEFAULT[key]), str):
             errors.append(f"{key} must be a string")

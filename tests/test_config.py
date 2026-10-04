@@ -100,3 +100,28 @@ class StatusStyleTest(unittest.TestCase):
         self.assertTrue(config.set_value("status_style", "stars", self.path))
         self.assertTrue(config.set_value("skills", "x", self.path))
         self.assertFalse(self.path.exists())
+
+
+class AddressSkillsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "config.json"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_default_address_skill_only_proposes(self):
+        skill = config.load(self.path)["address_skills"][0]
+        self.assertEqual(skill["name"], "Address review")
+        self.assertIn("{url}", skill["prompt"])
+        self.assertIn("Do not edit files, commit, push, or post anything", skill["prompt"])
+
+    def test_address_skills_validated_like_skills(self):
+        self.path.write_text(json.dumps({"address_skills": [{"name": "A", "prompt": "/a {nope}"}]}))
+        self.assertIn("address_skills[1] unknown placeholder", config.load(self.path)["errors"][0])
+        self.path.write_text(json.dumps({"address_skills": []}))
+        self.assertIn("address_skills must be a non-empty list", config.load(self.path)["errors"][0])
+
+    def test_custom_address_skill(self):
+        self.path.write_text(json.dumps({"address_skills": [{"name": "Fix plan", "prompt": "/my-fix {url}"}]}))
+        self.assertEqual(config.load(self.path)["address_skills"], [{"name": "Fix plan", "prompt": "/my-fix {url}"}])
