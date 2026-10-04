@@ -487,13 +487,16 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     review_shown = _filter((inbox_all or {}).get("rows", []), hidden_projects)  # counts ignore the search
     mine_shown = _filter((inbox_all or {}).get("mine", []), hidden_projects)
     review_open = [r for r in review_shown if not r["draft"] and r["status"] != model.APPROVED]
-    count = sum(1 for r in review_open if r["status"] == model.REREVIEW
-                or (r["status"] == model.NEW and not r.get("stale")))
-    changes = sum(1 for r in mine_shown if r["mine_status"] == model.CHANGES)
+    # "To do" counts: PRs waiting on the user (model.needs_review / model.MINE_ACTION); tabs show "to do / all".
+    count = sum(1 for r in review_open if model.needs_review(r))
+    mine_todo = sum(1 for r in mine_shown if r["mine_status"] in model.MINE_ACTION)
     active = [v["kind"] for v in views.values()]
-    badges = ([str(count)] if count else []) + ([f"🔴{changes}"] if changes else []) + [
-        f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
-    lines = [item("!" if error else " ".join(badges), 0, templateImage=icon_b64())]
+    todo = ([str(count)] if count else []) + ([f"⚠{mine_todo}"] if mine_todo else [])
+    running = [f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
+    tip = (f"{plural(count, 'PR')} to review · {mine_todo} of your PRs need you"
+           if not error else f"Could not refresh: {error[:120]}")
+    title = " ".join(filter(None, [" · ".join(todo)] + running))  # e.g. "19 · ⚠8 🔵1"
+    lines = [item("!" if error else title, 0, templateImage=icon_b64(), tooltip=tip)]
     lines += [item(event["text"], 0, notify="true", **event_params(plugin, event)) for event in deliver or []]
     lines.append("---")
 
@@ -523,8 +526,8 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         hidden = [r for r in rows if r["draft"] or r["status"] == model.APPROVED]
     if inbox_all is not None:
         # Tabs: GitHubBar shows `tab=` items as one segmented control that switches without closing the menu.
-        mine_text = f"My pull requests · {len(mine_shown)}" + (f" · 🔴{changes}" if changes else "")
-        for name, text in (("review", f"Review requests · {len(review_open)}"), ("mine", mine_text)):
+        for name, text in (("review", f"Review requests · {count} / {len(review_open)}"),
+                           ("mine", f"My pull requests · {mine_todo} / {len(mine_shown)}")):
             checked = {"checked": "true"} if name == view else {}
             lines.append(item(text, 0, tab=name, **checked, **action(plugin, "view", name)))
         updated = datetime.fromtimestamp(inbox_all.get("fetched_at", now)).strftime("%H:%M")

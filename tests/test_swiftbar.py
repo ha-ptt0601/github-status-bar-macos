@@ -283,18 +283,26 @@ class MineSectionTest(unittest.TestCase):
     def test_one_icon_with_tabs(self):
         mine = [self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})]
         review = self.render(mine, view="review")
-        self.assertTrue(review[0].startswith("1 🔴1 | templateImage="))
-        self.assertIn("Review requests · 1 | tab=review checked=true bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertTrue(review[0].startswith("1 · ⚠1 | templateImage="))
+        self.assertIn("tooltip=\"1 PR to review · 1 of your PRs need you\"", review[0])
+        self.assertIn("Review requests · 1 / 1 | tab=review checked=true bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=review refresh=true", review)
-        self.assertIn("My pull requests · 1 · 🔴1 | tab=mine bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertIn("My pull requests · 1 / 1 | tab=mine bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=mine refresh=true", review)
         self.assertFalse(any(l.startswith("🔴 #2119") for l in review))
         own = self.render(mine)
-        self.assertTrue(own[0].startswith("1 🔴1 | templateImage="))
-        self.assertIn("My pull requests · 1 · 🔴1 | tab=mine checked=true bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertTrue(own[0].startswith("1 · ⚠1 | templateImage="))
+        self.assertIn("My pull requests · 1 / 1 | tab=mine checked=true bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=mine refresh=true", own)
         self.assertTrue(any(l.startswith("🔴 #2119") for l in own))
         self.assertFalse(any(l.startswith("🟢 #2001") for l in own))
+
+    def test_todo_counts_only_prs_waiting_on_the_user(self):
+        mine = [self.mine(1, model.CONFLICT), self.mine(2, model.READY), self.mine(3, model.AWAITING),
+                self.mine(4, model.DRAFT), self.mine(5, model.THREADS, unresolved=2)]
+        lines = self.render(mine, view="mine")
+        self.assertIn("My pull requests · 3 / 5", lines[2] + lines[3])
+        self.assertTrue(lines[0].startswith("1 · ⚠3 | "))
 
     def test_rows_show_status_and_reviewers(self):
         lines = self.render([
@@ -359,7 +367,7 @@ class MineSectionTest(unittest.TestCase):
         self.assertTrue(any(l.startswith("🔵 api#2001") for l in review))
         self.assertFalse(any(l.startswith("🔵 api#2119") for l in review))
         self.assertTrue(any(l.startswith("🔵 api#2119") for l in own))
-        self.assertTrue(own[0].startswith("1 🔵2 | templateImage="))
+        self.assertTrue(own[0].startswith("1 · ⚠1 🔵2 | templateImage="))
 
 
 class RecentNotificationsTest(unittest.TestCase):

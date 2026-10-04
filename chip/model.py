@@ -20,6 +20,13 @@ READY = "ready"
 AWAITING = "awaiting-review"
 DRAFT = "draft"
 MINE_ORDER = [CHANGES, CI_FAILED, CONFLICT, THREADS, READY, AWAITING, DRAFT]
+# The user's own PRs that wait on the user: fix, rebase, answer threads, or merge.
+MINE_ACTION = {CHANGES, CI_FAILED, CONFLICT, THREADS, READY}
+
+
+def needs_review(row: dict) -> bool:
+    """A PR to review that waits on the user: a re-review, or a new request younger than STALE_DAYS."""
+    return row["status"] == REREVIEW or (row["status"] == NEW and not row.get("stale"))
 
 STATUS_GROUP = {REREVIEW: 0, NEW: 1, WAITING: 2, COMMENTED: 2, APPROVED: 4}
 STALE_GROUP = 3

@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             button.image = MenuBuilder.image(parsed.title, height: 18)
             button.imagePosition = .imageLeft
             button.title = parsed.title.text.isEmpty ? "" : " " + parsed.title.text
+            button.toolTip = parsed.title.params["tooltip"]
         }
         menu.removeAllItems()
         MenuBuilder.hiddenProjects = []
