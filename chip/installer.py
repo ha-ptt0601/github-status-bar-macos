@@ -6,14 +6,13 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Optional
+from typing import Callable, Iterable, Mapping, Optional, Tuple
 
 from chip import config
 
 REPO_DIR = Path(__file__).resolve().parents[1]
 MARKER = "installed by chip"
 SWIFTBAR_DOMAIN = "com.ameba.SwiftBar"
-DEFAULT_PLUGIN_DIR = Path.home() / "Library" / "Application Support" / "SwiftBar" / "Plugins"
 PLUGIN_NAME = "chip.1m.sh"  # menu refresh every minute; GitHub is still fetched at most every 3 minutes
 LEGACY_PLUGIN_NAMES = ("chip.3m.sh",)
 SWIFTBAR_APP = Path("/Applications/SwiftBar.app")
@@ -42,13 +41,26 @@ def render_skill(template: str, chip_bin: Path) -> str:
     return template.replace("{{CHIP}}", str(chip_bin)) + f"\n<!-- {MARKER} -->\n"
 
 
-def swiftbar_plugin_dir(runner) -> Path:
+def _swiftbar_data_dir(home: Path) -> Path:
+    """Where SwiftBar keeps per-plugin data folders; never use it as the plugin folder."""
+    return home / "Library" / "Application Support" / "SwiftBar" / "Plugins"
+
+
+def _read_plugin_dir(runner) -> Optional[Path]:
     proc = runner(["defaults", "read", SWIFTBAR_DOMAIN, "PluginDirectory"], capture_output=True, text=True)
     if proc.returncode == 0 and proc.stdout.strip():
         return Path(os.path.expanduser(proc.stdout.strip()))
-    runner(["defaults", "write", SWIFTBAR_DOMAIN, "PluginDirectory", str(DEFAULT_PLUGIN_DIR)],
-           capture_output=True, text=True)
-    return DEFAULT_PLUGIN_DIR
+    return None
+
+
+def swiftbar_plugin_dir(runner, home: Path) -> Tuple[Path, Optional[Path]]:
+    """(plugin folder to use, previous folder if we moved off SwiftBar's own data folder)."""
+    current = _read_plugin_dir(runner)
+    if current is not None and current != _swiftbar_data_dir(home):
+        return current, None
+    target = home / ".swiftbar"
+    runner(["defaults", "write", SWIFTBAR_DOMAIN, "PluginDirectory", str(target)], capture_output=True, text=True)
+    return target, current
 
 
 def _link(dst: Path, target: Path, out) -> None:
@@ -96,14 +108,18 @@ def _install_mcp(chip_bin: Path, runner, out) -> None:
     out("mcp   chip (user scope)")
 
 
-def _install_plugin(chip_bin: Path, runner, which, out, swiftbar_app: Path) -> None:
-    plugin_dir = swiftbar_plugin_dir(runner)
+def _install_plugin(chip_bin: Path, runner, which, out, swiftbar_app: Path, home: Path) -> None:
+    plugin_dir, moved_from = swiftbar_plugin_dir(runner, home)
     plugin_dir.mkdir(parents=True, exist_ok=True)
-    for legacy_name in LEGACY_PLUGIN_NAMES:
-        legacy = plugin_dir / legacy_name
-        if legacy.exists() and MARKER in legacy.read_text():
-            legacy.unlink()
-            out(f"rm    {legacy} (replaced by {PLUGIN_NAME})")
+    if moved_from:
+        out(f"note  SwiftBar plugin folder moved to {plugin_dir} (was SwiftBar's own data folder)")
+    stale = [plugin_dir / name for name in LEGACY_PLUGIN_NAMES]
+    if moved_from:
+        stale += [moved_from / name for name in (PLUGIN_NAME,) + LEGACY_PLUGIN_NAMES]
+    for old in stale:
+        if old.is_file() and MARKER in old.read_text():
+            old.unlink()
+            out(f"rm    {old} (replaced by {plugin_dir / PLUGIN_NAME})")
     plugin = plugin_dir / PLUGIN_NAME
     if plugin.exists() and MARKER not in plugin.read_text():
         out(f"skip  {plugin} was not installed by chip")
@@ -113,6 +129,8 @@ def _install_plugin(chip_bin: Path, runner, which, out, swiftbar_app: Path) -> N
     plugin.chmod(0o755)
     out(f"menu  {plugin}")
     if swiftbar_app.exists():
+        if moved_from is not None:  # SwiftBar reads PluginDirectory at launch
+            runner(["killall", "SwiftBar"], capture_output=True, text=True)
         runner(["open", "-a", "SwiftBar"], capture_output=True, text=True)
     else:
         out("note  SwiftBar is not installed: brew install swiftbar")
@@ -149,7 +167,7 @@ def install(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None,
         out(f"note  add {link.parent} to PATH to use `chip` in a shell")
     _install_skill(Path(repo), home, chip_bin, out)
     _install_mcp(chip_bin, runner, out)
-    _install_plugin(chip_bin, runner, which, out, swiftbar_app)
+    _install_plugin(chip_bin, runner, which, out, swiftbar_app, home)
     if config.init(config_file):
         out(f"conf  {config_file or config.config_path()}")
     out("done  chip is installed")
@@ -173,9 +191,10 @@ def uninstall(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None, o
     if got.returncode == 0 and str(chip_bin) in got.stdout:
         runner(["claude", "mcp", "remove", "chip", "--scope", "user"], capture_output=True, text=True)
         out("rm    MCP server chip")
-    plugin = swiftbar_plugin_dir(runner) / PLUGIN_NAME
-    if plugin.exists() and MARKER in plugin.read_text():
-        plugin.unlink()
-        out(f"rm    {plugin}")
+    folders = {_read_plugin_dir(runner), home / ".swiftbar", _swiftbar_data_dir(home)}
+    for plugin in (folder / name for folder in folders if folder for name in (PLUGIN_NAME,) + LEGACY_PLUGIN_NAMES):
+        if plugin.is_file() and MARKER in plugin.read_text():
+            plugin.unlink()
+            out(f"rm    {plugin}")
     out("done  config and cache are kept (~/.config/chip, ~/.cache/chip)")
     return 0

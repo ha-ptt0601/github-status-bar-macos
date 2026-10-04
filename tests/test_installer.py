@@ -22,6 +22,7 @@ class InstallTest(unittest.TestCase):
         self.calls, self.out = [], []
         self.mcp_registered = ""
         self.tools = {"gh", "claude", "git", "python3", "fzf"}
+        self.defaults_dir = self.plugin_dir
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -33,7 +34,9 @@ class InstallTest(unittest.TestCase):
     def runner(self, cmd, **kw):
         self.calls.append(cmd)
         if cmd[:3] == ["defaults", "read", "com.ameba.SwiftBar"]:
-            return subprocess.CompletedProcess(cmd, 0, f"{self.plugin_dir}\n", "")
+            if self.defaults_dir is None:
+                return subprocess.CompletedProcess(cmd, 1, "", "does not exist")
+            return subprocess.CompletedProcess(cmd, 0, f"{self.defaults_dir}\n", "")
         if cmd[:3] == ["claude", "mcp", "get"]:
             code = 0 if self.mcp_registered else 1
             return subprocess.CompletedProcess(cmd, code, self.mcp_registered, "")
@@ -125,3 +128,23 @@ class InstallTest(unittest.TestCase):
         legacy.write_text("#!/bin/sh\necho mine\n")
         self.install()
         self.assertTrue(legacy.exists())
+
+    def test_unset_plugin_dir_uses_dot_swiftbar(self):
+        self.defaults_dir = None
+        self.install()
+        expected = self.home / ".swiftbar"
+        self.assertTrue((expected / installer.PLUGIN_NAME).exists())
+        self.assertIn(["defaults", "write", "com.ameba.SwiftBar", "PluginDirectory", str(expected)], self.calls)
+
+    def test_moves_off_swiftbar_data_folder(self):
+        data_dir = self.home / "Library" / "Application Support" / "SwiftBar" / "Plugins"
+        data_dir.mkdir(parents=True)
+        (data_dir / "chip.3m.sh").write_text(f"#!/bin/bash\n# {installer.MARKER}\n")
+        self.defaults_dir = data_dir
+        self.app.mkdir()
+        self.install()
+        new_dir = self.home / ".swiftbar"
+        self.assertTrue((new_dir / installer.PLUGIN_NAME).exists())
+        self.assertFalse((data_dir / "chip.3m.sh").exists())
+        self.assertIn(["defaults", "write", "com.ameba.SwiftBar", "PluginDirectory", str(new_dir)], self.calls)
+        self.assertIn(["killall", "SwiftBar"], self.calls)
