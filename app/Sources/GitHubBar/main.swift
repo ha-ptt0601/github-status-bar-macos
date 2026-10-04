@@ -74,6 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         menu.removeAllItems()
         MenuBuilder.hiddenProjects = []
         MenuBuilder.meta = [:]
+        build(into: menu, parsed)
+    }
+
+    /// The menu's items for `parsed` (tabs, lists, settings) plus Open at Login and Quit.
+    private func build(into menu: NSMenu, _ parsed: ParsedMenu) {
         MenuBuilder.fill(menu, parsed.items, target: self, action: #selector(runEntry(_:)),
                          tabAction: #selector(switchTab(_:)))
         menu.addItem(NSMenuItem.separator())
@@ -166,120 +171,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         }
     }
 
-    /// After a Run inside a PR submenu: show the new state of that PR's row (🔵 Reviewing) and the menu
-    /// bar badge at once, by changing the row's title and image only; nothing is added or removed, so the
-    /// open submenu is untouched. The rest of the new menu is applied when the menu closes.
+    /// After an action inside a submenu: rebuild the whole menu from the new state, except the one
+    /// top-level item whose submenu is open (removing that item while its submenu is open is unsafe).
+    /// That item only gets its new title and icon; its submenu is refreshed when the menu closes
+    /// (`pending`). Everything else (PR rows, the review list, counts, other tabs) shows the new state now.
     private func updateInPlace(_ parsed: ParsedMenu, from view: KeepOpenView) {
         setTitle(parsed.title)
-        guard let menu = statusItem.menu, let submenu = view.enclosingMenuItem?.menu else { return }
-        openSubmenu = submenu
-        defer { openSubmenu = nil }
-        updateRunRows(menu, parsed)
-        // The PR the click was about: a PR submenu starts with its label ("api#2123"); a review row's
-        // text starts with it ("api#2123 · Full review · …").
-        var label = submenu.items.first?.title ?? ""
-        if label.range(of: #"^[\w.-]+#\d+$"#, options: .regularExpression) == nil {
-            let parent = Self.allItems(menu).first { $0.submenu === submenu }
-            label = (parent?.representedObject as? MenuEntry).flatMap { Self.runKey($0.text) }?
-                .components(separatedBy: " · ").first ?? ""
+        guard let menu = statusItem.menu, let open = view.enclosingMenuItem?.menu,
+              let keep = menu.items.first(where: { $0.submenu === open || ($0.submenu.map { Self.contains($0, open) } ?? false) })
+        else { return }
+        let keepIndex = menu.items.firstIndex(of: keep) ?? 0
+        let keepKey = Self.identity(keep)
+        let fresh = NSMenu()
+        let savedMeta = MenuBuilder.meta[keep]
+        MenuBuilder.hiddenProjects = []
+        MenuBuilder.meta = [:]
+        build(into: fresh, parsed)
+        let counterpart = fresh.items.first { Self.identity($0) == keepKey }
+        for item in menu.items where item !== keep { menu.removeItem(item) }
+        // Rebuild around `keep`: new items go before it until its counterpart (or its old position, if it
+        // has none) is reached, then after it, in the new menu's order.
+        var insertAt = 0
+        var placed = false
+        for (index, item) in fresh.items.enumerated() {
+            fresh.removeItem(item)  // an item can belong to one menu only
+            if !placed && (item === counterpart || (counterpart == nil && index == keepIndex)) {
+                placed = true
+                insertAt = (menu.items.firstIndex(of: keep) ?? 0) + 1
+                if item === counterpart {
+                    keep.attributedTitle = item.attributedTitle
+                    keep.image = item.image
+                    keep.toolTip = item.toolTip
+                    keep.representedObject = item.representedObject
+                    MenuBuilder.meta[keep] = MenuBuilder.meta[item] ?? savedMeta
+                    continue
+                }
+            }
+            menu.insertItem(item, at: min(insertAt, menu.items.count))
+            insertAt += 1
         }
-        guard !label.isEmpty, let fresh = Self.prEntry(label, in: parsed.items) else { return }
-        for item in Self.allItems(menu) where item.submenu?.items.first?.title == label {
-            refresh(item, with: fresh)
+        if counterpart == nil { MenuBuilder.meta[keep] = savedMeta }
+        if counterpart == nil, keepKey.contains("|run|") {
+            // A removed review: grey it out until the menu closes.
+            let text = Self.runKey(keep.title).map { $0 + "removed" } ?? keep.title
+            keep.attributedTitle = NSAttributedString(string: text, attributes: [
+                .font: NSFont.menuFont(ofSize: 0), .foregroundColor: NSColor.secondaryLabelColor])
         }
+        MenuBuilder.updateVisibility(menu)
     }
 
-    /// The submenu the user clicked in; it is never replaced while open.
-    private var openSubmenu: NSMenu?
-
-    private func refresh(_ item: NSMenuItem, with fresh: MenuEntry) {
-        item.attributedTitle = MenuBuilder.attributedText(fresh)
-        item.image = MenuBuilder.image(fresh, height: 16)
-        item.toolTip = fresh.params["tooltip"]
-        item.representedObject = fresh
-        // Its submenu too (e.g. "View running review" → "Run …"), unless it is the open one.
-        if !fresh.children.isEmpty, let old = item.submenu, old !== openSubmenu,
-           Self.allItems(old).allSatisfy({ $0.submenu !== openSubmenu }) {
-            item.submenu = MenuBuilder.menu(fresh.children, target: self, action: #selector(runEntry(_:)))
-        }
+    /// Whether `menu` is `target` or contains it in a nested submenu.
+    static func contains(_ menu: NSMenu, _ target: NSMenu) -> Bool {
+        menu === target || menu.items.contains { $0.submenu.map { contains($0, target) } ?? false }
     }
 
-    /// Every item of a menu and its submenus.
-    static func allItems(_ menu: NSMenu) -> [NSMenuItem] {
-        menu.items.flatMap { [$0] + ($0.submenu.map(allItems) ?? []) }
-    }
-
-    /// The PR row entry whose submenu starts with `label`.
-    static func prEntry(_ label: String, in entries: [MenuEntry]) -> MenuEntry? {
-        for entry in entries {
-            if entry.children.first?.text == label { return entry }
-            if let found = prEntry(label, in: entry.children) { return found }
+    /// What identifies a top-level item across rebuilds: its tab, plus the PR label its submenu starts
+    /// with, or the review key of a "Reviews by GitHubBar" row, or else its text.
+    static func identity(_ item: NSMenuItem) -> String {
+        let pane = MenuBuilder.meta[item]?.pane ?? ""
+        if let first = item.submenu?.items.first?.title,
+           first.range(of: #"^[\w.-]+#\d+$"#, options: .regularExpression) != nil {
+            return pane + "|pr|" + first + "|" + (MenuBuilder.meta[item]?.searchOnly == true ? "s" : "")
         }
-        return nil
+        if let entry = item.representedObject as? MenuEntry, let key = runKey(entry.text) { return pane + "|run|" + key }
+        return pane + "|text|" + item.title
     }
 
     /// "api#2123 · Full review · " from a "Reviews by GitHubBar" row text.
     static func runKey(_ text: String) -> String? {
         guard let match = text.range(of: #"[\w.-]+#\d+ · [^·]+ · "#, options: .regularExpression) else { return nil }
         return String(text[match])
-    }
-
-    /// "Reviews by GitHubBar" rows get their new state; a removed review is greyed out (it disappears when
-    /// the menu closes; removing an item under an open submenu is unsafe).
-    private func updateRunRows(_ menu: NSMenu, _ parsed: ParsedMenu) {
-        var fresh: [String: MenuEntry] = [:]
-        for entry in parsed.items { if let k = Self.runKey(entry.text) { fresh[k] = entry } }
-        for item in menu.items {
-            guard let old = item.representedObject as? MenuEntry, let k = Self.runKey(old.text) else { continue }
-            if let new = fresh[k] {
-                refresh(item, with: new)
-            } else {
-                let gone = k.trimmingCharacters(in: .whitespaces) + " removed"
-                item.attributedTitle = NSAttributedString(string: gone, attributes: [
-                    .font: NSFont.menuFont(ofSize: 0), .foregroundColor: NSColor.secondaryLabelColor])
-                item.image = nil
-            }
-        }
-        insertNewRunRows(menu, parsed)
-    }
-
-    /// A review started for the first time on a PR has no row yet: insert it (and the section header and
-    /// separator if the section is new) at the place the new menu has it. Only inserts, never removes, so an
-    /// open submenu is left alone.
-    private func insertNewRunRows(_ menu: NSMenu, _ parsed: ParsedMenu) {
-        let existing = Set(menu.items.compactMap { ($0.representedObject as? MenuEntry).flatMap { Self.runKey($0.text) } })
-        var pane = ""
-        var lastHeader: MenuEntry?
-        var added = false
-        for entry in parsed.items {
-            if entry.text.isEmpty, let name = entry.params["pane"] { pane = name; continue }
-            if entry.text == "Reviews by GitHubBar" { lastHeader = entry; continue }
-            guard let key = Self.runKey(entry.text), !existing.contains(key) else { continue }
-            let paneItems = menu.items.filter { MenuBuilder.meta[$0]?.pane == pane }
-            let header = paneItems.first { $0.title == "Reviews by GitHubBar" }
-            let item = MenuBuilder.item(entry, target: self, action: #selector(runEntry(_:)))
-            MenuBuilder.meta[item] = MenuBuilder.ItemMeta(pane: pane)
-            if let header, var index = menu.items.firstIndex(of: header) {
-                // After the header and the review rows that follow it.
-                index += 1
-                while index < menu.items.count, (menu.items[index].representedObject as? MenuEntry)
-                        .flatMap({ Self.runKey($0.text) }) != nil { index += 1 }
-                menu.insertItem(item, at: index)
-            } else if let anchor = paneItems.first(where: { candidate in
-                        ["Show approved", "Recent notifications", "Settings"].contains { candidate.title.hasPrefix($0) } }),
-                      var index = menu.items.firstIndex(of: anchor), let headerEntry = lastHeader {
-                // A new section: separator, header, row, just above the separator before the anchor.
-                if index > 0, menu.items[index - 1].isSeparatorItem { index -= 1 }
-                let separator = NSMenuItem.separator()
-                let headerItem = MenuBuilder.item(headerEntry, target: self, action: #selector(runEntry(_:)))
-                for (offset, new) in [separator, headerItem, item].enumerated() {
-                    MenuBuilder.meta[new] = MenuBuilder.ItemMeta(pane: pane)
-                    menu.insertItem(new, at: index + offset)
-                }
-            }
-            added = true
-        }
-        if added { MenuBuilder.updateVisibility(menu) }
     }
 
     private func setTitle(_ title: MenuEntry) {
