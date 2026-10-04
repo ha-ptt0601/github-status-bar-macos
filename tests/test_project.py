@@ -73,7 +73,7 @@ class WorktreeTest(unittest.TestCase):
 
     def test_first_checkout_adds_a_worktree_then_updates_it(self):
         path = project.checkout("/src/api", ROW, self.root, self.runner)
-        self.assertEqual(path, str(self.root / ".chip-worktrees" / "api-2079"))
+        self.assertEqual(path, str(self.root / "api-2079"))
         self.assertEqual(self.calls[0], ["git", "-C", "/src/api", "fetch", "--quiet", "origin",
                                          "+refs/pull/2079/head:refs/chip/pr-2079",
                                          "+refs/heads/dev:refs/remotes/origin/dev"])

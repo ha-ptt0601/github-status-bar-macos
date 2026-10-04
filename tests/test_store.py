@@ -97,3 +97,33 @@ class VisibleViewTest(unittest.TestCase):
     def test_does_not_mutate_input(self):
         model.visible_view(self.inbox)
         self.assertEqual(len(self.inbox["rows"]), 3)
+
+
+class FoldersTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self.tmp.name)
+        self.saved = {k: os.environ.pop(k, None) for k in ("CHIP_WORK_ROOT", "CHIP_CLONE_ROOT", "CHIP_CONFIG",
+                                                             "CHIP_CACHE_DIR")}
+        os.environ["CHIP_CONFIG"] = str(self.home / "config.json")
+        os.environ["CHIP_CACHE_DIR"] = str(self.home / "cache")
+
+    def tearDown(self):
+        for key, value in self.saved.items():
+            os.environ.pop(key, None)
+            if value is not None:
+                os.environ[key] = value
+        self.tmp.cleanup()
+
+    def test_detects_existing_code_folders_only(self):
+        for name in ("code", "Documents/GitHub"):
+            (self.home / name).mkdir(parents=True)
+        self.assertEqual(store.detected_roots(self.home), [self.home / "code", self.home / "Documents/GitHub"])
+
+    def test_configured_roots_win_and_clone_root_defaults_to_cache(self):
+        (self.home / "config.json").write_text(json.dumps({"work_roots": [str(self.home / "mine")]}))
+        self.assertEqual(store.work_roots(), [self.home / "mine"])
+        self.assertEqual(store.clone_root(), self.home / "cache" / "repos")
+        self.assertEqual(store.worktree_root(), self.home / "cache" / "worktrees")
+        (self.home / "config.json").write_text(json.dumps({"clone_root": str(self.home / "clones")}))
+        self.assertEqual(store.clone_root(), self.home / "clones")

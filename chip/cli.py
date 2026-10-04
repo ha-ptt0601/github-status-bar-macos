@@ -26,8 +26,12 @@ def cache_dir() -> Path:
     return store.cache_dir()
 
 
-def work_root() -> Path:
-    return store.work_root()
+def find_clone(slug: str) -> Optional[str]:
+    return repos.resolve(slug, store.work_roots(), cache_dir() / "repos.json", store.clone_root())
+
+
+def clone_repo(slug: str) -> str:
+    return repos.clone(slug, store.clone_root(), cache_dir() / "repos.json")
 
 
 def _error(message: str) -> None:
@@ -108,12 +112,11 @@ def cmd_ui(runner) -> int:
     inbox = _refresh(False, runner)
     if inbox is None:
         return 1
-    cache = cache_dir() / "repos.json"
     return tui.run_ui(
         inbox,
         cache_dir() / "picked.json",
-        resolve=lambda slug: repos.resolve(slug, work_root(), cache),
-        clone=lambda slug: repos.clone(slug, work_root(), cache),
+        resolve=find_clone,
+        clone=clone_repo,
     )
 
 
@@ -196,17 +199,16 @@ def cmd_pick(args) -> int:
 
 
 def cmd_repo(args) -> int:
-    cache = cache_dir() / "repos.json"
     if args.clone:
         try:
-            path = repos.clone(args.slug, work_root(), cache)
+            path = clone_repo(args.slug)
         except repos.CloneError as exc:
             _error(str(exc))
             return 1
     else:
-        path = repos.resolve(args.slug, work_root(), cache)
+        path = find_clone(args.slug)
         if path is None:
-            _error(f"no local clone of {args.slug} under {work_root()}")
+            _error(f"no local clone of {args.slug} under {', '.join(map(str, store.work_roots())) or 'any code folder'}")
             return 2
     print(path)
     return 0
@@ -285,9 +287,8 @@ def cmd_run(args, runner) -> int:
         notify.send([f"{args.label} is no longer waiting for your review"])
         _error(f"PR {args.label} is not in the list")
         return 1
-    cache = cache_dir() / "repos.json"
     try:
-        path = repos.resolve(row["repo"], work_root(), cache) or repos.clone(row["repo"], work_root(), cache)
+        path = find_clone(row["repo"]) or clone_repo(row["repo"])
         extra = {}
         if args.project:
             skill, path, extra = _project_run(row, path)
@@ -306,7 +307,7 @@ def _project_run(row: dict, clone: str):
     name = project.find_review_skill(clone)
     if name is None:
         return config.DEFAULT_SKILL, clone, {"auto": True}
-    worktree = project.checkout(clone, row, work_root())
+    worktree = project.checkout(clone, row, store.worktree_root())
     skill = {"name": project.skill_label(name), "prompt": project.prompt_template(name)}
     return skill, worktree, {"auto": True, "clone": clone, "worktree": worktree}
 
@@ -470,7 +471,7 @@ def main(argv=None, runner=None) -> int:
     p_pick.add_argument("selection")
     p_repo = sub.add_parser("repo", help="local clone path of owner/repo")
     p_repo.add_argument("slug")
-    p_repo.add_argument("--clone", action="store_true", help="clone into <work_root>/.chip-repos if missing")
+    p_repo.add_argument("--clone", action="store_true", help="clone into the clone folder (~/.cache/chip/repos) if missing")
     p_config = sub.add_parser("config", help="config file: init | check | path | open | set KEY VALUE")
     p_config.add_argument("action", choices=["init", "check", "path", "open", "set"])
     p_config.add_argument("key", nargs="?")

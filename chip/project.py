@@ -1,7 +1,7 @@
 """A repository's own review skill, and the per-PR git worktree it runs in.
 
 Project review skills (e.g. `.claude/skills/review`) review the *checked-out branch*, so chip checks the
-PR out in its own worktree under `work_root/.chip-worktrees/` instead of touching the user's clone.
+PR out in its own worktree under ~/.cache/chip/worktrees/ instead of touching the user's clone.
 """
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from typing import Dict, Iterable, Optional
 
 from chip import repos
 
-WORKTREE_DIR = ".chip-worktrees"
 PROMPT = (
     "/{skill} {{url}}\n\n"
     "This directory is a git worktree with pull request #{{number}} checked out at HEAD. Its base branch is "
@@ -56,8 +55,8 @@ def prompt_template(skill: str) -> str:
     return PROMPT.format(skill=skill)
 
 
-def worktree_path(row: dict, work_root) -> Path:
-    return Path(work_root) / WORKTREE_DIR / f"{row['repo'].split('/')[-1]}-{row['number']}"
+def worktree_path(row: dict, root) -> Path:
+    return Path(root) / f"{row['repo'].split('/')[-1]}-{row['number']}"
 
 
 def _git(args, runner, cwd=None) -> subprocess.CompletedProcess:
@@ -67,13 +66,13 @@ def _git(args, runner, cwd=None) -> subprocess.CompletedProcess:
     return proc
 
 
-def checkout(clone, row: dict, work_root, runner=None) -> str:
+def checkout(clone, row: dict, root, runner=None) -> str:
     """Fetch the PR head and its base, then (re)check the PR out, detached, in its own worktree."""
     runner = runner or subprocess.run
     ref = f"refs/chip/pr-{row['number']}"
     _git(["-C", str(clone), "fetch", "--quiet", "origin", f"+refs/pull/{row['number']}/head:{ref}",
           f"+refs/heads/{row['base']}:refs/remotes/origin/{row['base']}"], runner)
-    target = worktree_path(row, work_root)
+    target = worktree_path(row, root)
     if (target / ".git").exists():
         _git(["-C", str(target), "checkout", "--quiet", "--detach", "--force", ref], runner)
     else:

@@ -189,7 +189,7 @@ def run_ui(
         out(f"[{n}/{len(picked)}] {r['label']} {r['title']}")
         path = resolve(r["repo"])
         if path is None:
-            if ask(f"No local clone of {r['repo']}. Clone into <work_root>/.chip-repos/? [y/N] ").strip().lower() != "y":
+            if ask(f"No local clone of {r['repo']}. Clone into ~/.cache/chip/repos? [y/N] ").strip().lower() != "y":
                 out(f"Skipped {r['label']}.")
                 continue
             try:

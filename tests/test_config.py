@@ -24,7 +24,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.review_skills(cfg), [config.DEFAULT_SKILL])
         self.assertNotIn("me", json.dumps(config.DEFAULT))  # no personal skill in the shared default
         self.assertEqual(cfg["errors"], [])
-        self.assertEqual(cfg["work_root"], os.path.expanduser("~/work"))
+        self.assertEqual((cfg["work_roots"], cfg["clone_root"]), ([], ""))  # detected / ~/.cache/chip/repos
         self.assertEqual(cfg["permission_mode"], "auto")
         self.assertEqual(cfg["disallowed_tools"], ["Edit", "Write", "NotebookEdit"])
         self.assertEqual(cfg["terminal"], "Terminal")
@@ -34,8 +34,16 @@ class ConfigTest(unittest.TestCase):
                     "work_root": "~/src"})
         cfg = config.load(self.path)
         self.assertEqual([s["name"] for s in cfg["skills"]], ["A", "B"])
-        self.assertEqual(cfg["work_root"], os.path.expanduser("~/src"))
+        self.assertEqual(cfg["work_roots"], [os.path.expanduser("~/src")])  # the old single key still works
         self.assertEqual(cfg["permission_mode"], "auto")
+
+    def test_work_roots_list_and_clone_root(self):
+        self.write({"work_roots": ["~/code", "~/Projects"], "work_root": "~/code", "clone_root": "~/clones"})
+        cfg = config.load(self.path)
+        self.assertEqual(cfg["work_roots"], [os.path.expanduser("~/code"), os.path.expanduser("~/Projects")])
+        self.assertEqual(cfg["clone_root"], os.path.expanduser("~/clones"))
+        self.write({"work_roots": "~/code"})
+        self.assertIn("work_roots", config.load(self.path)["errors"][0])
 
     def test_bad_json_falls_back_to_defaults(self):
         self.write("{nope")

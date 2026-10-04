@@ -75,8 +75,8 @@ class ScanResolveTest(unittest.TestCase):
             make_repo(Path(cmd[-1]), "https://github.com/acme/loyalty-api.git")
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
-        path = repos.clone("acme/loyalty-api", self.root, self.cache, runner=runner)
-        self.assertEqual(path, str(self.root / ".chip-repos" / "loyalty-api"))
+        path = repos.clone("acme/loyalty-api", self.root / "clones", self.cache, runner=runner)
+        self.assertEqual(path, str(self.root / "clones" / "loyalty-api"))
         self.assertEqual(calls[0][:4], ["gh", "repo", "clone", "acme/loyalty-api"])
         self.assertEqual(json.loads(self.cache.read_text())["acme/loyalty-api"], path)
 
@@ -88,6 +88,17 @@ class ScanResolveTest(unittest.TestCase):
             repos.clone("acme/loyalty-api", self.root, self.cache, runner=runner)
 
     def test_clone_target_taken_by_other_repo(self):
-        make_repo(self.root / ".chip-repos" / "api", "git@github.com:other/api.git")
+        make_repo(self.root / "clones" / "api", "git@github.com:other/api.git")
         with self.assertRaisesRegex(repos.CloneError, "is not acme/api"):
-            repos.clone("acme/api", self.root, self.cache, runner=None)
+            repos.clone("acme/api", self.root / "clones", self.cache, runner=None)
+
+    def test_resolve_searches_several_roots_and_the_clone_root(self):
+        other = self.root.parent / "Projects"
+        make_repo(other / "b2b-api", "git@github.com:acme/b2b-api.git")
+        clones = self.root.parent / "clones"
+        make_repo(clones / "loyalty-api", "git@github.com:acme/loyalty-api.git")
+        self.assertEqual(repos.resolve("acme/b2b-api", [self.root, other], self.cache), str(other / "b2b-api"))
+        self.assertEqual(repos.resolve("acme/loyalty-api", [self.root, other], self.cache, clones),
+                         str(clones / "loyalty-api"))
+        remembered = json.loads(self.cache.read_text())
+        self.assertEqual(remembered["acme/b2b-api"], str(other / "b2b-api"))

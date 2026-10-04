@@ -162,6 +162,19 @@ def _install_app(repo: Path, home: Path, chip_bin: Path, runner, which, out) -> 
     return True
 
 
+def _report_folders(config_file, out) -> None:
+    """Say where chip will look for clones, and where it clones the rest."""
+    from chip import store
+    cfg = config.load(config_file)
+    roots = cfg["work_roots"] or [str(p) for p in store.detected_roots()]
+    source = "work_roots" if cfg["work_roots"] else "detected"
+    if roots:
+        out(f"repos looks for your clones in {', '.join(roots)} ({source}); set work_roots in the config to change")
+    else:
+        out("repos no code folder found; set work_roots in the config to use your own clones")
+    out(f"repos clones the others into {cfg['clone_root'] or store.cache_dir() / 'repos'}")
+
+
 def install(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None,
             which: Optional[Callable[[str], Optional[str]]] = None, out=print,
             env: Optional[Mapping[str, str]] = None, config_file: Optional[Path] = None) -> int:
@@ -197,6 +210,7 @@ def install(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None,
     app_ok = _install_app(repo, home, chip_bin, runner, which, out)
     if config.init(config_file):
         out(f"conf  {config_file or config.config_path()}")
+    _report_folders(config_file, out)
     out("done  chip is installed" if app_ok else "done  chip is installed, but GitHubBar is not")
     return 0 if app_ok else 1
 

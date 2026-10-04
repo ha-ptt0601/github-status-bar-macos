@@ -67,7 +67,7 @@ For item i of n:
 
 1. Print `[i/n] <label> <title>`.
 2. Run `{{CHIP}} repo <repo>` to get the local path.
-   - On exit 2, ask with AskUserQuestion "No local clone of <repo>. Clone into <work_root>/.chip-repos/?" (Clone / Skip this PR). On Clone, run `{{CHIP}} repo <repo> --clone`. If the user chooses Skip or the clone fails, tell the user and skip to the next PR.
+   - On exit 2, ask with AskUserQuestion "No local clone of <repo>. Clone it into ~/.cache/chip/repos?" (Clone / Skip this PR). On Clone, run `{{CHIP}} repo <repo> --clone`. If the user chooses Skip or the clone fails, tell the user and skip to the next PR.
 3. Run `{{CHIP}} prompt <label>` to get the review prompt from the user's config (the first skill). If it starts with `/<name> `, invoke the skill `<name>` with the rest as args, followed by ` — local clone: <path>. The shell cwd resets between commands, so run every git/gh command as \`cd <path> && …\`.` Otherwise, follow the prompt text as the instruction, working in `<path>`.
 4. After the review report, if there is a next PR, ask with AskUserQuestion "Continue with <label>?" (Continue / Stop) and stop on Stop.
 

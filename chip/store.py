@@ -6,7 +6,7 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from chip import fetch, menu, model
 
@@ -17,11 +17,38 @@ def cache_dir() -> Path:
     return Path(os.environ.get("CHIP_CACHE_DIR") or Path.home() / ".cache" / "chip")
 
 
-def work_root() -> Path:
+# Searched when `work_roots` is not configured.
+COMMON_ROOTS = ("work", "code", "Projects", "projects", "Developer", "src", "repos", "git", "dev",
+                "Documents/GitHub", "Documents/Projects", "Documents/code")
+
+
+def detected_roots(home: Optional[Path] = None) -> List[Path]:
+    """The usual code folders that exist under the home folder."""
+    home = home or Path.home()
+    found = [home / name for name in COMMON_ROOTS if (home / name).is_dir()]
+    return list({str(p.resolve()).lower(): p for p in found}.values())  # case-insensitive disks
+
+
+def work_roots() -> List[Path]:
+    """Folders searched for the user's own clones: `work_roots` from the config, else the detected ones."""
     if os.environ.get("CHIP_WORK_ROOT"):
-        return Path(os.environ["CHIP_WORK_ROOT"])
+        return [Path(os.environ["CHIP_WORK_ROOT"])]
     from chip import config  # imported lazily: config imports nothing from store, but keep store light
-    return Path(config.load()["work_root"])
+    configured = [Path(root) for root in config.load()["work_roots"]]
+    return configured or detected_roots()
+
+
+def clone_root() -> Path:
+    """Where chip clones repos it cannot find among the user's clones."""
+    if os.environ.get("CHIP_CLONE_ROOT"):
+        return Path(os.environ["CHIP_CLONE_ROOT"])
+    from chip import config
+    return Path(config.load()["clone_root"] or cache_dir() / "repos")
+
+
+def worktree_root() -> Path:
+    """Where PR worktrees for project review skills live."""
+    return cache_dir() / "worktrees"
 
 
 def _last() -> Path:

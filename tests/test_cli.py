@@ -309,7 +309,7 @@ class RunCliBase(CliCase):
         self.calls = []
         self.orig_run, self.orig_resolve = cli.subprocess.run, cli.repos.resolve
         cli.subprocess.run = self.fake
-        cli.repos.resolve = lambda slug, root, cache: "/src/" + slug
+        cli.repos.resolve = lambda slug, roots, cache, clone_root=None: "/src/" + slug
 
     def tearDown(self):
         cli.subprocess.run, cli.repos.resolve = self.orig_run, self.orig_resolve
@@ -344,7 +344,7 @@ class RunCliTest(RunCliBase):
             clone = Path(tmp) / "api"
             (clone / ".claude" / "skills" / "review").mkdir(parents=True)
             (clone / ".claude" / "skills" / "review" / "SKILL.md").write_text("x")
-            cli.repos.resolve = lambda slug, root, cache: str(clone)
+            cli.repos.resolve = lambda slug, roots, cache, clone_root=None: str(clone)
             os.environ["CHIP_WORK_ROOT"] = tmp
             try:
                 self.run_cli(["menu"], runner=fake_runner)
@@ -352,7 +352,7 @@ class RunCliTest(RunCliBase):
             finally:
                 os.environ.pop("CHIP_WORK_ROOT")
             self.assertEqual(code, 0)
-            worktree = str(Path(tmp) / ".chip-worktrees" / "api-274")
+            worktree = str(Path(os.environ["CHIP_CACHE_DIR"]) / "worktrees" / "api-274")
             self.assertTrue(any(c[:5] == ["git", "-C", str(clone), "worktree", "add"] for c in self.calls))
             bg = next(c for c in self.calls if "--bg" in c)
             self.assertTrue(bg[1].startswith("/review https://github.com/acme/api/pull/1\n"))

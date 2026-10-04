@@ -6,11 +6,11 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 REMOTE_RE = re.compile(r"github\.com[:/]+([^/\s]+)/([^/\s]+?)(?:\.git)?/?$")
 SKIP_DIRS = {"node_modules", "vendor"}
-CLONE_DIR = ".chip-repos"
+CLONE_DIR = ".chip-repos"  # where chip cloned before v0.1.2 (<work_root>/.chip-repos); still recognised
 
 
 class CloneError(RuntimeError):
@@ -63,29 +63,37 @@ def _save(cache, data: Dict[str, str]) -> None:
     cache.write_text(json.dumps(data, indent=1, sort_keys=True))
 
 
-def _clone_target(slug: str, work_root) -> Path:
-    return Path(work_root) / CLONE_DIR / slug.split("/")[1]
+def _roots(roots) -> List[Path]:
+    return [Path(roots)] if isinstance(roots, (str, Path)) else [Path(r) for r in roots]
 
 
-def resolve(slug: str, work_root, cache) -> Optional[str]:
+def resolve(slug: str, roots, cache, clone_root=None) -> Optional[str]:
+    """The local clone of owner/repo: remembered in `cache`, else found under `roots` (a folder or a list)
+    or in `clone_root` (chip's own clones; older versions used <root>/.chip-repos). Found clones are remembered."""
     slug = slug.lower()
     known = _load(cache)
     cached = known.get(slug)
     if cached and Path(cached).is_dir() and origin_of(cached) == slug:
         return cached
-    found = scan(work_root)
-    target = _clone_target(slug, work_root)
-    if target.is_dir() and origin_of(target) == slug:
-        found.setdefault(slug, str(target))
+    found: Dict[str, str] = {}
+    for root in _roots(roots):
+        for name, path in scan(root).items():
+            found.setdefault(name, path)
+    name = slug.split("/")[1]
+    targets = ([Path(clone_root) / name] if clone_root else []) + [r / CLONE_DIR / name for r in _roots(roots)]
+    for target in targets:
+        if slug not in found and target.is_dir() and origin_of(target) == slug:
+            found[slug] = str(target)
     known.pop(slug, None)
     known.update(found)
     _save(cache, known)
     return found.get(slug)
 
 
-def clone(slug: str, work_root, cache, runner=subprocess.run) -> str:
+def clone(slug: str, clone_root, cache, runner=subprocess.run) -> str:
+    """Clone owner/repo into `clone_root`/<repo> (with the user's gh credentials) and remember it."""
     slug = slug.lower()
-    target = _clone_target(slug, work_root)
+    target = Path(clone_root) / slug.split("/")[1]
     if not target.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
         proc = runner(["gh", "repo", "clone", slug, str(target)], capture_output=True, text=True)

@@ -24,7 +24,11 @@ ADDRESS_PROMPT = (
     "I can post. Do not edit files, commit, push, or post anything to GitHub."
 )
 DEFAULT = {
-    "work_root": "~/work",
+    # Folders searched (3 levels deep) for your clones. Empty: the usual code folders that exist
+    # (see store.COMMON_ROOTS). Every clone found is remembered in ~/.cache/chip/repos.json.
+    "work_roots": [],
+    # Where chip clones a repo it cannot find; "" means ~/.cache/chip/repos.
+    "clone_root": "",
     # Empty: every PR gets one "Review" button that runs the repo's own review skill, or REVIEW_PROMPT.
     "skills": [],
     "address_skills": [{"name": "Address review", "prompt": ADDRESS_PROMPT}],
@@ -73,9 +77,14 @@ def validate(data) -> List[str]:
     errors = []
     for key in ("skills", "address_skills"):
         errors += _validate_skills(key, data.get(key, DEFAULT[key]), allow_empty=key == "skills")
-    for key in ("work_root", "permission_mode"):
+    for key in ("clone_root", "permission_mode"):
         if not isinstance(data.get(key, DEFAULT[key]), str):
             errors.append(f"{key} must be a string")
+    if not isinstance(data.get("work_root", ""), str):
+        errors.append("work_root must be a string")
+    roots = data.get("work_roots", DEFAULT["work_roots"])
+    if not isinstance(roots, list) or not all(isinstance(r, str) for r in roots):
+        errors.append("work_roots must be a list of folders")
     tools = data.get("disallowed_tools", DEFAULT["disallowed_tools"])
     if not isinstance(tools, list) or not all(isinstance(t, str) for t in tools):
         errors.append("disallowed_tools must be a list of strings")
@@ -89,9 +98,15 @@ def validate(data) -> List[str]:
     return errors
 
 
+def _expand(folder: str) -> str:
+    return str(Path(os.path.expanduser(folder)))
+
+
 def _resolved(data: dict, errors: List[str]) -> dict:
     out = {key: data[key] for key in DEFAULT}
-    out["work_root"] = str(Path(os.path.expanduser(out["work_root"])))
+    roots = list(out["work_roots"]) + ([data["work_root"]] if data.get("work_root") else [])  # old single key
+    out["work_roots"] = list(dict.fromkeys(_expand(r) for r in roots))
+    out["clone_root"] = _expand(out["clone_root"]) if out["clone_root"] else ""
     out["errors"] = errors
     return out
 
@@ -109,7 +124,7 @@ def load(path: Optional[Path] = None) -> dict:
     if errors:
         return _resolved(DEFAULT, errors)
     merged = dict(DEFAULT)
-    merged.update({k: v for k, v in data.items() if k in DEFAULT})
+    merged.update({k: v for k, v in data.items() if k in DEFAULT or k == "work_root"})
     return _resolved(merged, [])
 
 
@@ -126,13 +141,13 @@ def fill_prompt(skill: dict, row: dict) -> str:
                                   label=row["label"], title=row["title"], base=row.get("base", ""))
 
 
-def init(path: Optional[Path] = None) -> bool:
-    """Write the default config if missing; True when a file was written."""
+def init(path: Optional[Path] = None, **values) -> bool:
+    """Write the default config (with `values` overriding keys) if missing; True when a file was written."""
     path = Path(path) if path else config_path()
     if path.exists():
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(DEFAULT, ensure_ascii=False, indent=2) + "\n")
+    path.write_text(json.dumps(dict(DEFAULT, **values), ensure_ascii=False, indent=2) + "\n")
     return True
 
 
