@@ -11,7 +11,7 @@ from pathlib import Path
 import os
 from typing import Dict, List, Optional
 
-from chip import __version__, config, fetch, model, notify, project, runs, store, updates, watch
+from chip import __version__, config, fetch, model, notify, project, repos, runs, sessions, store, updates, watch
 
 GREY = "#8E8E93"
 PAGE = 12
@@ -224,6 +224,7 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
                               **action(ctx["plugin"], "run", r["label"], "--skill", i, "--address")))
         else:
             lines.extend(_round_lines(run[0], run[1], d, r["label"], ctx, ("--skill", i, "--address")))
+    lines.extend(feature_lines(r, d, ctx))
     pending = [login for login, state in r["reviewers"].items() if state != "APPROVED"]
     if pending:
         lines.append(item(f"Re-request review ({', '.join(pending)})", d, sfimage="bell", keep="run",
@@ -233,6 +234,39 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
     lines.append(separator(d))
     lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
     lines.append(item("Copy link", d, sfimage="doc.on.doc", keep="run", done="✓ Copied", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
+    return lines
+
+
+FEATURE_SKILL = "Address review (feature session)"
+
+
+def feature_lines(r: dict, d: int, ctx: dict) -> List[str]:
+    """The Claude Code session where this PR was built (linked, or found on its branch): address the review
+    there, open it, or link another one."""
+    plugin, label = ctx["plugin"], r["label"]
+    session = ctx.get("feature_sessions", {}).get(label)
+    if session is None:
+        hint = f"No Claude Code session found on {r.get('head') or 'this branch'}"
+        return [separator(d), item(hint, d, disabled="true"),
+                item("Link feature session…", d, sfimage="link", **action(plugin, "session", "link", label))]
+    when = (session.get("last") or "")[:10]
+    how = "linked" if session.get("linked") else f"found on {session.get('branch') or r.get('head', '')}"
+    prompt = _cut(session.get("prompt") or session["id"][:8], 40)
+    lines = [separator(d), item(f"Feature session · {when} · {how}", d, disabled="true"),
+             item(f"“{prompt}”", d, disabled="true", tooltip=session["id"])]
+    run = ctx["runs_by_label"].get(label, {}).get(FEATURE_SKILL)
+    if run is None:
+        lines.append(item("Address review in feature session", d, sfimage="play.fill", keep="run",
+                          busy="Starting…", done="✓ Started in the feature session",
+                          **action(plugin, "run", label, "--address", "--feature")))
+    else:
+        lines.extend(_round_lines(run[0], run[1], d, label, ctx, ("--address", "--feature")))
+    lines.append(item("Open feature session", d, sfimage="terminal",
+                      **action(plugin, "session", "open", label, refresh=False)))
+    lines.append(item("Link another session…", d, sfimage="link", **action(plugin, "session", "link", label)))
+    if session.get("linked"):
+        lines.append(item("Unlink", d, sfimage="link.badge.plus", keep="run", done="✓ Unlinked",
+                          **action(plugin, "session", "unlink", label)))
     return lines
 
 
@@ -441,7 +475,8 @@ def _filter(rows: List[dict], hidden_projects: set, query: str = "") -> List[dic
 
 
 def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, matches: int,
-              live_search: bool = False, project_skills: Optional[Dict[str, str]] = None) -> List[str]:
+              live_search: bool = False, project_skills: Optional[Dict[str, str]] = None,
+           feature_sessions: Optional[Dict[str, dict]] = None) -> List[str]:
     """Search (GitHubBar: a field in the menu; otherwise a native dialog) and the Projects submenu
     with a checkmark on every shown project."""
     lines = []
@@ -514,7 +549,8 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
            plugin: str, version: str, newer: Optional[str] = None, error: Optional[str] = None,
            now: Optional[float] = None, view: str = "review", query: str = "",
            history: Optional[List[dict]] = None, deliver: Optional[List[dict]] = None,
-           live_search: bool = False, project_skills: Optional[Dict[str, str]] = None) -> List[str]:
+           live_search: bool = False, project_skills: Optional[Dict[str, str]] = None,
+           feature_sessions: Optional[Dict[str, dict]] = None) -> List[str]:
     """One menu: `review` (PRs waiting for the user's review) or `mine` (the user's own PRs).
 
     `deliver` events become extra title-block lines (`notify=true`) that GitHubBar posts natively."""
@@ -555,7 +591,7 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     for key, rec in records.items():
         runs_by_label.setdefault(rec["label"], {})[rec["skill"]] = (rec, views[key])
     ctx = {"plugin": plugin, "skills": cfg["skills"], "address_skills": cfg.get("address_skills", []),
-           "project_skills": project_skills or {},
+           "project_skills": project_skills or {}, "feature_sessions": feature_sessions or {},
            "runs_by_label": runs_by_label, "style": style}
     rows = _filter(all_rows, hidden_projects, query)
     listed = _filter(all_rows, set(), query)  # hidden projects too, tagged hidden, for in-place toggling
@@ -657,7 +693,13 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
         notify.save(notify_path, current)
     pending = notify.cap(notify.drain(outbox_path)) if deliver else []
     args = (inbox_all, records, views, cfg, plugin, __version__, newer, error, now)
-    extra = {"query": store.load_query(), "history": notify.load_list(history_path),
+    feature = {}
+    if inbox_all is not None:
+        index = sessions.update_index(store.cache_dir() / "sessions.json", budget=1.5)
+        feature = sessions.for_rows(inbox_all.get("mine", []), index,
+                                    sessions.load_links(store.cache_dir() / "links.json"),
+                                    repos._load(store.cache_dir() / "repos.json"))
+    extra = {"query": store.load_query(), "history": notify.load_list(history_path), "feature_sessions": feature,
              "project_skills": project.known_skills({r["repo"] for r in every_row}, store.cache_dir() / "repos.json")}
     if not panes:
         return "\n".join(render(*args, view=view, deliver=pending, **extra))
