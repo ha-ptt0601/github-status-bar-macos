@@ -309,3 +309,10 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 - The fetch query adds `repository.primaryLanguage.name`; rows carry `language`.
 - A skill (review or address) may have `repos` (fnmatch patterns, case-insensitive, matched against `owner/repo` and the bare repo name) and `languages` (case-insensitive). `config.applies(skill, row)` requires both when set.
 - `swiftbar.review_buttons` keeps the matching skills with their config index (`--skill N` still indexes the full list), adds the repo's own skill, and falls back to the built-in Review when nothing matches. The TUI and MCP picker use `config.skills_for(cfg, row)[0]`.
+
+## Every run in the PR worktree (v0.1.2)
+
+- `chip run` (review or address, any skill) resolves/clones the repo, then `project.checkout` puts the PR in `~/.cache/chip/worktrees/<repo>-N` and the session runs there (`cwd`). Records keep `clone` and `worktree`.
+- `project.in_worktree(skill)` appends `project.NOTE` to the prompt template: HEAD is PR #{number}, base is `origin/{base}`.
+- `--project` picks the repo's own skill (`/<name> {url}`) or the built-in review; both get the note.
+- `chip forget` removes the worktree when no other record uses it; `runs.clean_worktrees` removes it when the PR is merged or closed. Only Claude Code is supported as the agent.

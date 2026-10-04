@@ -53,7 +53,7 @@ Quit GitHubBar
 - **Re-request review** from the reviewers who have not approved yet.
 
 ### Background reviews, in rounds
-- **Run** starts `claude "<prompt>" --bg` inside the PR's local clone. chip finds your clone (see [Where chip finds your repos](#where-chip-finds-your-repos)), or clones the repo into `~/.cache/chip/repos/`. A project review runs in the PR's own worktree instead (below). The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
+- **Run** finds your clone of the repo (see [Where chip finds your repos](#where-chip-finds-your-repos)) or clones it into `~/.cache/chip/repos/`, checks the PR out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, and starts `claude "<prompt>" --bg` there. Your clone and its branch are never touched. The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
 - **The row follows the run:** 🔵 Reviewing → 🟡 Needs you (waiting for input or permission) → ✅ Reviewed. The icon shows `🔵N` and `🟡N` badges.
 - **View session** opens the session in Terminal (`claude attach`), so you can read the report and keep talking to Claude.
 - **Round resolved.** After you post your review on GitHub, or new commits land, the round is resolved: the PR goes back to its GitHub status and leaves "Reviews by chip". Merged or closed PRs resolve on their own.
@@ -150,7 +150,7 @@ A review runs in a local clone of the PR's repo, so chip needs to find one:
 2. **Your folders:** otherwise it scans `work_roots` (3 levels deep) for a git repo whose `origin` is that GitHub repo. With `work_roots` empty, it scans the usual code folders that exist on your Mac, so most people need no setup. `chip install` prints the folders it will use.
 3. **Its own clone:** if none is found, it clones the repo with `gh repo clone` into `clone_root` (`~/.cache/chip/repos/<repo>` by default). Nothing is created in your home or code folders.
 
-PR worktrees for project review skills go in `~/.cache/chip/worktrees/`. If you keep your code somewhere unusual, set `"work_roots": ["~/my/code"]`.
+Each PR is reviewed in a worktree of that clone, in `~/.cache/chip/worktrees/`. If you keep your code somewhere unusual, set `"work_roots": ["~/my/code"]`.
 
 ### Which review runs
 
@@ -164,7 +164,8 @@ PR worktrees for project review skills go in `~/.cache/chip/worktrees/`. If you 
 | yours | no | your skills that match the PR (none match: `Run "Review"`) |
 
 - **A repo's review skill** is `.claude/skills/<name>/SKILL.md` or `.claude/commands/<name>.md` in the repo, with "review" in its name (one named exactly `review` wins). Committed with the repo, it is the same for everyone on the team.
-- **It runs on the PR's code.** Project skills usually review the checked-out branch (`git diff main...HEAD`), so chip fetches the PR and checks it out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, without touching your clone. The prompt tells the skill the real base branch (`origin/<base>`). "Continue review" updates the same worktree to the new commits, and it is removed when the PR is merged or closed.
+- **Every review runs on the PR's code.** Whatever runs (your skill, the repo's skill or the built-in review), chip fetches the PR and its base branch and checks the PR out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, without touching your clone. The prompt ends with a note saying HEAD is the PR and the base is `origin/<base>`, so skills that review "the current branch" (`git diff main...HEAD`) see the right diff. "Continue review" updates the same worktree to the new commits; it is removed when the PR is merged or closed, or when you remove the review.
+- Reviews run with **Claude Code** (`claude`).
 - Until chip has cloned a repo, the button reads `Run "Review"`; it still uses the repo's skill if it finds one when the run starts.
 
 ### Plug in your own review skill
@@ -196,7 +197,7 @@ Give a skill `repos` and/or `languages` to offer it only on matching PRs. `repos
 ```
 
 A PR gets the skills that match it, plus the repo's own review skill. If none of your skills matches and the repo has no skill of its own, it gets the built-in **Review**. `address_skills` accept `repos` and `languages` too.
-- Your skills run in your clone of the repo, which may be on another branch: have them read the PR with `gh pr diff {number}` (or the `{url}`).
+- Your skills run in the PR's worktree like every review, so they can read the code directly or use `gh pr diff {number}`.
 - The run is read-only (`disallowed_tools`), and "Continue review" rounds reuse the same prompt.
 - `address_skills` works the same way for the **Address review** button on your own PRs.
 - If the file is invalid, the menu shows an orange "Config: …" line and uses the defaults until you fix it.
