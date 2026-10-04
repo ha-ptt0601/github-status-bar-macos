@@ -121,7 +121,8 @@ def _cut(text: str, width: int) -> str:
 
 def _active_run(r: dict, ctx: dict) -> Optional[tuple]:
     """The latest (record, view) of a chip review on this PR that is running, waiting or done."""
-    runs = [rv for rv in ctx["runs_by_label"].get(r["label"], {}).values() if rv[1]["kind"] in RUN_SHORT]
+    runs = [rv for rv in ctx["runs_by_label"].get(r["label"], {}).values()
+            if rv[1]["kind"] in RUN_SHORT and not rv[0].get("resolved_at")]
     return max(runs, key=lambda rv: rv[0].get("started_at", 0)) if runs else None
 
 
@@ -146,6 +147,25 @@ def _row(r: dict, depth: int, style: str, run: Optional[tuple] = None) -> str:
     return item(text, depth, **symbol(sf_name, color), tooltip=tooltip, **ROW_FONT)
 
 
+def _round_lines(record: dict, view: dict, skill_no: int, d: int, label: str, ctx: dict) -> List[str]:
+    """`Last chip review · …` for one skill on one PR, then View / Continue / Open last session."""
+    number = record.get("round", 1)
+    head = f"Last chip review · {record['skill']} · round {number}"
+    if view["kind"] in ("running", "needs_you") and not record.get("resolved_at"):
+        lines = [item(f"{head} · {view['text']}", d, disabled="true")]
+        text = "View running review" if view["kind"] == "running" else "Open session (needs you)"
+        lines.append(item(text, d, sfimage="eye", **action(ctx["plugin"], "attach", record["id"], refresh=False)))
+        return lines
+    when = datetime.fromtimestamp(record.get("done_at", record["started_at"])).strftime("%H:%M")
+    state = f"resolved ({record['resolved_by']})" if record.get("resolved_at") else view["kind"]
+    return [
+        item(f"{head} · {when} · {state}", d, disabled="true"),
+        item(f"Continue review (round {number + 1})", d, sfimage="play.fill",
+             **action(ctx["plugin"], "run", label, "--skill", skill_no)),
+        item("Open last session", d, sfimage="eye", **action(ctx["plugin"], "attach", record["id"], refresh=False)),
+    ]
+
+
 def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
     lines = [_row(r, depth, ctx["style"], _active_run(r, ctx))]
     name = STATUS[r["status"]][0]
@@ -158,15 +178,13 @@ def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
     lines.append(separator(d))
     my_runs = ctx["runs_by_label"].get(r["label"], {})
     for i, skill in enumerate(ctx["skills"], 1):
-        again = " again" if skill["name"] in my_runs else ""
-        lines.append(item(f'Run "{skill["name"]}"{again}', d, sfimage="play.fill",
-                          **action(ctx["plugin"], "run", r["label"], "--skill", i)))
-    for skill_name, (record, view) in my_runs.items():
-        if view["kind"] == "gone":
+        run = my_runs.get(skill["name"])
+        if run is None:
+            lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill",
+                              **action(ctx["plugin"], "run", r["label"], "--skill", i)))
             continue
-        text = f"View running review ({skill_name})" if view["kind"] == "running" \
-            else f"View review ({skill_name}) · {view['text']}"
-        lines.append(item(text, d, sfimage="eye", **action(ctx["plugin"], "attach", record["id"], refresh=False)))
+        record, view = run
+        lines.extend(_round_lines(record, view, i, d, r["label"], ctx))
     lines.append(separator(d))
     lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
     lines.append(item("Copy link", d, sfimage="doc.on.doc", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
@@ -239,6 +257,7 @@ def project_sections(rows: List[dict], depth: int, ctx: dict) -> List[str]:
 
 
 def run_lines(records: Dict[str, dict], views: Dict[str, dict], ctx: dict) -> List[str]:
+    records = {key: rec for key, rec in records.items() if not rec.get("resolved_at")}
     if not records:
         return []
     lines = ["---", item("Reviews by chip", 0, **HEADER)]
@@ -327,7 +346,9 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     runs_path = store.cache_dir() / "runs.json"
     records = runs.load(runs_path)
     agents = runs.fetch_agents(runner) if records else {}
-    if runs.observe(records, agents, now):
+    rows_by_label = {r["label"]: r for r in (inbox_all or {}).get("rows", [])}
+    observed = runs.observe(records, agents, now)
+    if runs.resolve(records, rows_by_label, now) or observed:
         runs.save(runs_path, records)
     views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}
     latest = updates.latest_release(store.cache_dir() / "update.json", runner, now)

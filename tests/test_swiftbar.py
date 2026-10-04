@@ -118,8 +118,8 @@ class RenderTest(unittest.TestCase):
                       lines)
         self.assertIn("--Stop | sfimage=stop.circle bash=/p/chip.3m.sh terminal=false param1=stop param2=ab12cd34 "
                       "refresh=true", lines)
-        self.assertTrue(any(l.startswith('--Run "Full review" again') for l in lines))
-        self.assertTrue(any(l.startswith("--View running review (Full review)") for l in lines))
+        self.assertFalse(any(l.startswith('--Run "Full review"') for l in lines))
+        self.assertTrue(any(l.startswith("--View running review") for l in lines))
 
     def test_error_update_and_config_lines(self):
         cfg_errors = dict(CFG, errors=["skills[1] unknown placeholder(s): pr"])
@@ -217,6 +217,50 @@ class RunOnRowTest(unittest.TestCase):
         self.assertTrue(self.lines("done", "done 11:40")[0].startswith("2 | templateImage="))
 
 
+class RoundMenuTest(unittest.TestCase):
+    KEY = "api#2001::Full review"
+
+    def lines(self, kind, resolved=False, round_no=1):
+        rec = {"id": "ab12cd34", "session_id": "ab12cd34-full", "label": "api#2001", "skill": "Full review",
+               "url": "u", "started_at": 0, "round": round_no, "done_at": 0}
+        if resolved:
+            rec.update(resolved_at=1, resolved_by="new commits")
+        views = {self.KEY: {"kind": kind, "text": {"done": "done 07:00", "running": "running 3m"}.get(kind, kind)}}
+        return render([row(1)], {self.KEY: rec}, views, style="dots")
+
+    def test_resolved_round_leaves_reviews_section_and_row(self):
+        lines = self.lines("done", resolved=True)
+        self.assertNotIn("Reviews by chip | size=11 color=#8E8E93", lines)
+        self.assertTrue(next(l for l in lines if l.startswith("🟢 #2001")).startswith("🟢 #2001  New"))
+
+    def test_submenu_remembers_last_round_and_continues(self):
+        lines = self.lines("done", resolved=True)
+        self.assertIn("--Last chip review · Full review · round 1 · 07:00 · resolved (new commits) | disabled=true",
+                      [l.replace(datetime_hm(0), "07:00") for l in lines])
+        self.assertIn("--Continue review (round 2) | sfimage=play.fill bash=/p/chip.3m.sh terminal=false "
+                      "param1=run param2=api#2001 param3=--skill param4=1 refresh=true", lines)
+        self.assertIn("--Open last session | sfimage=eye bash=/p/chip.3m.sh terminal=false param1=attach "
+                      "param2=ab12cd34", lines)
+        self.assertFalse(any(l.startswith('--Run "Full review"') for l in lines))
+        self.assertTrue(any(l.startswith('--Run "Quick"') for l in lines))
+
+    def test_unresolved_round_still_in_reviews_section(self):
+        lines = self.lines("done")
+        self.assertIn("Reviews by chip | size=11 color=#8E8E93", lines)
+        self.assertTrue(any(l.startswith("✅ #2001  Reviewed") for l in lines))
+
+    def test_running_round_offers_view_not_continue(self):
+        lines = self.lines("running", round_no=2)
+        self.assertTrue(any(l.startswith("--Last chip review · Full review · round 2 · running 3m") for l in lines))
+        self.assertTrue(any(l.startswith("--View running review") for l in lines))
+        self.assertFalse(any(l.startswith("--Continue review") for l in lines))
+
+
+def datetime_hm(ts):
+    from datetime import datetime
+    return datetime.fromtimestamp(ts).strftime("%H:%M")
+
+
 class BuildMenuTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -253,3 +297,10 @@ class BuildMenuTest(unittest.TestCase):
         notes = [c for c in self.calls if c[0] == "osascript"]
         self.assertEqual(len(notes), 1)
         self.assertIn("New review request: api#2", notes[0][2])
+
+    def test_round_resolves_when_commits_land_after_it(self):
+        Path(self.tmp.name, "runs.json").write_text(json.dumps({"api#1::Full review": {
+            "id": "ab", "label": "api#1", "skill": "Full review", "url": "u", "started_at": 0, "done_at": 10}}))
+        swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner, now=1000)
+        record = json.loads(Path(self.tmp.name, "runs.json").read_text())["api#1::Full review"]
+        self.assertEqual(record["resolved_by"], "new commits")
