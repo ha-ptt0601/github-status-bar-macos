@@ -229,9 +229,34 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
         lines.append(item(f"Re-request review ({', '.join(pending)})", d, sfimage="bell", keep="run",
                           busy="Asking again…", done="✓ Review re-requested",
                           **action(ctx["plugin"], "nudge", r["label"])))
+    lines.extend(github_actions(r, d, ctx))
     lines.append(separator(d))
     lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
     lines.append(item("Copy link", d, sfimage="doc.on.doc", keep="run", done="✓ Copied", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
+    return lines
+
+
+def github_actions(r: dict, d: int, ctx: dict) -> List[str]:
+    """Buttons that change the PR on GitHub (chip act). Those that ask first open a dialog, which closes
+    the menu; chip then refetches, so the menu shows the new state everywhere when it reopens."""
+    plugin, label = ctx["plugin"], r["label"]
+    lines = [separator(d)]
+    if r.get("kind") == "mine":
+        if r["mine_status"] == model.READY:
+            lines.append(item("Merge…", d, sfimage="arrow.triangle.merge", **action(plugin, "act", label, "merge")))
+        if r["draft"]:
+            lines.append(item("Mark as ready for review", d, sfimage="checkmark.circle", keep="run",
+                              busy="Marking ready…", done="✓ Ready for review", **action(plugin, "act", label, "ready")))
+        else:
+            lines.append(item("Convert to draft", d, sfimage="pencil.circle", keep="run",
+                              busy="Converting…", done="✓ Draft", **action(plugin, "act", label, "draft")))
+        lines.append(item("Comment…", d, sfimage="text.bubble", **action(plugin, "act", label, "comment")))
+        lines.append(item("Close PR…", d, sfimage="xmark.circle", **action(plugin, "act", label, "close")))
+        return lines
+    lines.append(item("Approve…", d, sfimage="checkmark.seal", **action(plugin, "act", label, "approve")))
+    lines.append(item("Request changes…", d, sfimage="exclamationmark.bubble",
+                      **action(plugin, "act", label, "request-changes")))
+    lines.append(item("Comment…", d, sfimage="text.bubble", **action(plugin, "act", label, "comment")))
     return lines
 
 
@@ -271,6 +296,7 @@ def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
             continue
         record, view = run
         lines.extend(_round_lines(record, view, d, r["label"], ctx, run_args))
+    lines.extend(github_actions(r, d, ctx))
     lines.append(separator(d))
     lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
     lines.append(item("Copy link", d, sfimage="doc.on.doc", keep="run", done="✓ Copied", **action(ctx["plugin"], "copy", r["label"], refresh=False)))

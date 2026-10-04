@@ -318,6 +318,17 @@ class MineSectionTest(unittest.TestCase):
         self.assertTrue(any(l.startswith("🔴 #2119") for l in own))
         self.assertFalse(any(l.startswith("🟢 #2001") for l in own))
 
+    def test_my_pr_actions(self):
+        ready = self.render([self.mine(1, model.READY)], view="mine")
+        acts = [l.split(" | ")[0] for l in ready if "param1=act" in l]
+        self.assertEqual(acts, ["--Merge…", "--Convert to draft", "--Comment…", "--Close PR…"])
+        waiting = self.render([self.mine(2, model.AWAITING)], view="mine")
+        self.assertFalse(any(l.startswith("--Merge…") for l in waiting))
+        draft = self.mine(3, model.DRAFT)
+        draft["draft"] = True
+        lines = self.render([draft], view="mine")
+        self.assertTrue(any(l.startswith("--Mark as ready for review") and "keep=run" in l for l in lines))
+
     def test_todo_counts_only_prs_waiting_on_the_user(self):
         mine = [self.mine(1, model.CONFLICT), self.mine(2, model.READY), self.mine(3, model.AWAITING),
                 self.mine(4, model.DRAFT), self.mine(5, model.THREADS, unresolved=2)]
@@ -454,6 +465,14 @@ class ReviewButtonsTest(unittest.TestCase):
                                 project_skills={"acme/api": "review"})
         cont = next(l for l in lines if l.startswith("--Continue review (round 2)"))
         self.assertIn("param3=--project", cont)
+
+
+class GitHubActionsTest(unittest.TestCase):
+    def test_review_pr_offers_approve_request_changes_comment(self):
+        lines = render([row(1)])
+        acts = [l.split(" | ")[0] for l in lines if "param1=act" in l]
+        self.assertEqual(acts, ["--Approve…", "--Request changes…", "--Comment…"])
+        self.assertIn("param2=api#2001 param3=request-changes", next(l for l in lines if l.startswith("--Request")))
 
 
 class LiveSearchTest(unittest.TestCase):
