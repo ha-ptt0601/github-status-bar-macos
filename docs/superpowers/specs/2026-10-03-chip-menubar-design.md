@@ -40,9 +40,9 @@ Pull requests · 44 open · updated 12:05           ← grey, disabled
 ↻ Refresh now
 ──────────────────────────────────────────────
 API · 9 PRs                                       ← project header (small, grey)
-  ⟳ #2094  ABC-997 fix: Brevo leftovers, Sessi…   alice     ⟳ orange = Re-review
+  ⟳ #2094  ABC-123 fix: Brevo leftovers, Sessi…   alice     ⟳ orange = Re-review
   ✦ #2069  update(newsletter): migrate from reti…   alice     ✦ green  = New
-  ⌛ #2079  ABC-997 feat(mcp): OAuth 2.1 agent…    alice     ⌛ grey   = Waiting on author / Commented
+  ⌛ #2079  ABC-123 feat(mcp): OAuth 2.1 agent…    alice     ⌛ grey   = Waiting on author / Commented
 SHOPBOX-API · 6 PRs
   ✦ #274   fix(orders): only require a customer…  alice
   …
@@ -88,8 +88,8 @@ Copy link
 
 | Style | Row | Notes |
 |---|---|---|
-| `dots` (default) | `🟠 #2079  Re-review  ABC-997 feat(mcp)…  alice` | coloured emoji dot plus a short label; always coloured |
-| `emoji` | `🔁 #2079  ABC-997 feat(mcp)…  alice` | 🔁 Re-review · 🆕 New · 💬 Commented · ⏳ Waiting, with a one-line legend above the list |
+| `dots` (default) | `🟠 #2079  Re-review  ABC-123 feat(mcp)…  alice` | coloured emoji dot plus a short label; always coloured |
+| `emoji` | `🔁 #2079  ABC-123 feat(mcp)…  alice` | 🔁 Re-review · 🆕 New · 💬 Commented · ⏳ Waiting, with a one-line legend above the list |
 | `symbols` | SF Symbol + `#2079 …` | tinted with `sfconfig`; SwiftBar 2.1.1 may still draw them monochrome |
 
 The Settings submenu lists the three styles with a checkmark on the current one; choosing one runs `chip config set status_style <style>` and refreshes. Runs under "Reviews by chip" use 🔵 running · 🟡 needs you · 🟢 done · ⚪ gone outside the `symbols` style.

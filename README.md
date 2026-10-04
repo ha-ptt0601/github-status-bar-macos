@@ -12,11 +12,11 @@ Updated 13:40
 ▤ Projects ›
 ──────────────
 API · 15 PRs
-🟠 #2079  Re-review  ABC-997 feat(mcp): OAuth 2.1 agent au…  alice  ›
-🟢 #2069  New        update(newsletter): migrate from retire…  alice  ›
+🟠 #2079  Re-review  ABC-123 feat(auth): add login with Goo…  alice  ›
+🟢 #2069  New        fix(cart): keep discounts after upd…  alice  ›
 10 more in API ›
 MAILER-API · 2 PRs
-🟢 #58    New        feat(campaigns): schedule a campaign …  bob  ›
+🟢 #58    New        feat(export): download orders as C…  bob  ›
 Older than 30 days · 11 PRs ›
 ──────────────
 Reviews by chip

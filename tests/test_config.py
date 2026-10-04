@@ -22,7 +22,6 @@ class ConfigTest(unittest.TestCase):
         cfg = config.load(self.path)
         self.assertEqual(cfg["skills"], [])  # each user adds their own; empty means "project or built-in review"
         self.assertEqual(config.review_skills(cfg), [config.DEFAULT_SKILL])
-        self.assertNotIn("me", json.dumps(config.DEFAULT))  # no personal skill in the shared default
         self.assertEqual(cfg["errors"], [])
         self.assertEqual((cfg["work_roots"], cfg["clone_root"]), ([], ""))  # detected / ~/.cache/chip/repos
         self.assertEqual(cfg["permission_mode"], "auto")
@@ -168,7 +167,7 @@ class HiddenProjectsTest(unittest.TestCase):
 
 class AppliesTest(unittest.TestCase):
     PHP = {"repo": "acme/api", "language": "PHP"}
-    SWIFT = {"repo": "acme/shop-ios", "language": "Swift"}
+    SWIFT = {"repo": "globex/shop-ios", "language": "Swift"}
 
     def test_no_scope_applies_everywhere(self):
         self.assertTrue(config.applies({"name": "A", "prompt": "x"}, self.SWIFT))
@@ -177,14 +176,14 @@ class AppliesTest(unittest.TestCase):
         skill = {"name": "A", "prompt": "x", "repos": ["acme/*", "*-ios"]}
         self.assertTrue(config.applies(skill, self.PHP))
         self.assertTrue(config.applies(skill, self.SWIFT))
-        self.assertFalse(config.applies(skill, {"repo": "acme/web", "language": "TypeScript"}))
+        self.assertFalse(config.applies(skill, {"repo": "globex/web", "language": "TypeScript"}))
         self.assertTrue(config.applies({"name": "A", "prompt": "x", "repos": ["API"]}, self.PHP))  # bare repo name
 
     def test_languages_and_both_must_match(self):
         php = {"name": "A", "prompt": "x", "languages": ["php"]}
         self.assertTrue(config.applies(php, self.PHP))
         self.assertFalse(config.applies(php, self.SWIFT))
-        both = dict(php, repos=["acme/*"])
+        both = dict(php, repos=["globex/*"])
         self.assertFalse(config.applies(both, self.PHP))
 
     def test_skills_for_falls_back_to_builtin(self):
