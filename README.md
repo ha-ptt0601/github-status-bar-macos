@@ -124,7 +124,7 @@ It is safe to run again, and it never overwrites files it did not create. `chip 
 
 ## Configuration
 
-`chip install` writes `~/.config/chip/config.json` once; it is yours and is never overwritten. Open it with `chip config open` (or **Settings → Open config**), and check it with `chip config check`. GitHubBar picks up changes at the next refresh.
+`chip install` writes `~/.config/chip/config.json` once; it is yours and is never overwritten. It starts with a `_help` line and `_skill_examples` to copy into `skills` (keys starting with `_` are ignored). A complete example is in [`config.example.json`](config.example.json), or run `chip config example`. Open it with `chip config open` (or **Settings → Open config**), and check it with `chip config check`. GitHubBar picks up changes at the next refresh.
 
 ```json
 {
@@ -227,7 +227,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 | `chip view review\|mine` | Switch the menu tab |
 | `chip notifications --clear` | Empty the Recent notifications menu |
 | `chip search [--clear]` · `chip project toggle <name>\|all` | Search and project filter |
-| `chip config init\|check\|path\|open\|set <key> <value>` | Configuration |
+| `chip config init\|check\|path\|open\|example\|set <key> <value>` | Configuration (`example` prints a filled-in config) |
 | `chip swiftbar [--view review\|mine] [--panes] [--deliver]` | Print the menu. GitHubBar uses `--panes` (both tabs, in-menu search) and `--deliver` (queued notifications) |
 | `chip mcp` | MCP server used by Claude Code's `@` picker |
 
