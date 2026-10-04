@@ -348,7 +348,7 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     agents = runs.fetch_agents(runner) if records else {}
     rows_by_label = {r["label"]: r for r in (inbox_all or {}).get("rows", [])}
     observed = runs.observe(records, agents, now)
-    if runs.resolve(records, rows_by_label, now) or observed:
+    if runs.resolve(records, rows_by_label, now, fetched=inbox_all is not None and not error) or observed:
         runs.save(runs_path, records)
     views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}
     latest = updates.latest_release(store.cache_dir() / "update.json", runner, now)

@@ -157,3 +157,15 @@ class RoundTest(unittest.TestCase):
         self.assertNotIn("resolved_at", records["c"])
         self.assertNotIn("resolved_at", records["d"])  # still running: not resolved
         self.assertFalse(runs.resolve(records, rows, now=1000.0))
+
+    def test_closed_or_merged_pr_resolves_any_round(self):
+        records = {"a": {"label": "api#9", "started_at": 0, "done_at": 5},
+                   "b": {"label": "api#8", "started_at": 0}}
+        self.assertTrue(runs.resolve(records, {}, now=50.0, fetched=True))
+        self.assertEqual(records["a"]["resolved_by"], "PR merged or closed")
+        self.assertEqual(records["b"]["resolved_by"], "PR merged or closed")
+
+    def test_missing_pr_is_not_resolved_without_a_successful_fetch(self):
+        records = {"a": {"label": "api#9", "started_at": 0, "done_at": 5}}
+        self.assertFalse(runs.resolve(records, {}, now=50.0))
+        self.assertNotIn("resolved_at", records["a"])

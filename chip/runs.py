@@ -144,12 +144,20 @@ def _after(iso: Optional[str], epoch: float) -> bool:
     return bool(iso) and model.parse_ts(iso).timestamp() > epoch
 
 
-def resolve(records: Dict[str, dict], rows_by_label: Dict[str, dict], now: float) -> bool:
-    """Mark finished rounds resolved once GitHub shows the user's review or newer commits; True if changed."""
+def resolve(records: Dict[str, dict], rows_by_label: Dict[str, dict], now: float, fetched: bool = False) -> bool:
+    """Mark rounds resolved: finished ones once GitHub shows the user's review or newer commits, and any
+    round whose PR is gone from a successful fetch (merged or closed). True if anything changed."""
     changed = False
     for record in records.values():
+        if record.get("resolved_at"):
+            continue
         row = rows_by_label.get(record["label"])
-        if row is None or "done_at" not in record or record.get("resolved_at"):
+        if row is None:
+            if fetched:
+                record.update(resolved_at=now, resolved_by="PR merged or closed")
+                changed = True
+            continue
+        if "done_at" not in record:
             continue
         if _after(row.get("my_review_at"), record["started_at"]):
             record.update(resolved_at=now, resolved_by="you reviewed on GitHub")
