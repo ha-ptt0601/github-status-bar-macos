@@ -128,6 +128,48 @@ A chip review of a PR is a **round**. The record for `<label>::<skill>` keeps th
 - **Round N+1 continues the same session.** The button is **Continue review (round N+1)**. It runs `claude stop <id>`, then `claude "<skill prompt> — round N+1: …" --resume <session_id> --bg` with **no other flags**: the session keeps its saved name, permission mode and disallowed tools (verified; extra flags would fork a copy). The note asks the skill to check whether each finding of the previous round was addressed, then review only what changed.
 - **Remove** deletes the record and its session (history included).
 
+## My pull requests (PRs the user authored)
+
+The same menu gets a **My pull requests** section above **Review requests**. It lists every open PR by the user, grouped by project (5 per project, then `N more in X ›`).
+
+- **Data.** A third search, `is:pr is:open author:@me`, runs in parallel with the two review searches and adds `reviewThreads(first:100){totalCount nodes{isResolved}}` to the query. The cached inbox gains `mine` rows with:
+  - `mine_status`;
+  - `reviewers` (login → latest state, the user excluded);
+  - `requested` (logins or team slugs);
+  - `unresolved` (number of unresolved threads);
+  - the usual `ci`, `conflict`, `base`, `stacked`, `jira`, `draft`, `size`, `wait`, `last_commit_at`.
+- **Status**, first match wins, and rows are sorted in this order:
+
+| Order | Status | Condition |
+|---|---|---|
+| 1 | 🔴 Changes | any reviewer's latest review is CHANGES_REQUESTED |
+| 2 | ❌ CI failed | rollup FAILURE/ERROR |
+| 3 | ⚠️ Conflict | mergeable CONFLICTING |
+| 4 | 💬 N threads | unresolved review threads > 0 |
+| 5 | ✅ Approved | an APPROVED review and none of the above |
+| 6 | ⚪ Waiting | otherwise |
+| 7 | ⚪ Draft | isDraft |
+
+  These rows always use the emoji dots, whatever `status_style` says.
+- **Row:** `🔴 #119   Changes    fix(auth): single-use TOTP…   bob ✗ carol 💬`. The last column lists the reviewers with ✓ / ✗ / 💬, or `→ bob, carol` when only requested, or `—`.
+- **Submenu** contains:
+  - the label and the full title;
+  - `<status> · opened N days ago`;
+  - `Reviews: …`;
+  - the size, base, Jira and conflict details;
+  - one `Address review` entry per address skill. These use the same round lines as reviews: **Continue … (round N+1)** and **Open last session**;
+  - **Re-request review**, which runs `gh api -X POST repos/<repo>/pulls/<n>/requested_reviewers` for the reviewers who reviewed but did not approve. It is shown only when there are such reviewers;
+  - Open on GitHub and Copy link.
+- **Address skills** (config `address_skills`, same shape and placeholders as `skills`) only propose fixes and draft replies. Their runs add `Bash(git commit:*)`, `Bash(git push:*)`, `Bash(gh pr comment:*)` and `Bash(gh pr review:*)` to the disallowed tools. The default prompt reads every unresolved thread and review comment, and for each one proposes the code change and drafts a reply, without editing, committing, pushing or posting.
+- **Rounds** for address runs resolve when the user pushes new commits after the round started, or when the PR becomes Approved.
+- **Title badge:** `🔴N` counts the user's PRs with changes requested.
+- **Notifications** (the first run is silent):
+  - "<reviewer> approved <label>";
+  - "<reviewer> requested changes on <label>";
+  - "<reviewer> commented on <label>";
+  - "CI failed on <label>";
+  - "Conflict on <label>".
+
 ## Notifications (English)
 
 On each `chip swiftbar` run, the current state is diffed against `notify.json`, then the snapshot is written:
