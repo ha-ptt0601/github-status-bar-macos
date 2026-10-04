@@ -261,6 +261,58 @@ def datetime_hm(ts):
     return datetime.fromtimestamp(ts).strftime("%H:%M")
 
 
+class MineSectionTest(unittest.TestCase):
+    CFG = dict(CFG, status_style="dots", address_skills=[{"name": "Address review", "prompt": "a {url}"}])
+
+    def mine(self, number, status, reviewers=None, requested=None, unresolved=0, title="fix(auth): single-use TOTP"):
+        r = row(number - 2000, title=title)
+        r.update(number=number, url=f"https://github.com/acme/api/pull/{number}", kind="mine",
+                 mine_status=status, reviewers=reviewers or {}, requested=requested or [], unresolved=unresolved)
+        return r
+
+    def render(self, mine, rows=None):
+        inbox = {"rows": assign_labels(rows if rows is not None else [row(1)]), "mine": assign_labels(mine),
+                 "fetched_at": 0}
+        return swiftbar.render(inbox, {}, {}, self.CFG, PLUGIN, "0.1.0", now=0)
+
+    def line(self, lines, number):
+        return next(l for l in lines if f"#{number}" in l.split(" | ")[0] and not l.startswith("-"))
+
+    def test_sections_and_order(self):
+        lines = self.render([self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})])
+        mine_at = lines.index("My pull requests · 1 | size=12")
+        review_at = lines.index("Review requests · 1 | size=12")
+        self.assertLess(mine_at, review_at)
+
+    def test_rows_show_status_and_reviewers(self):
+        lines = self.render([
+            self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED", "carol": "APPROVED"}),
+            self.mine(2116, model.THREADS, {"carol": "COMMENTED"}, unresolved=3),
+            self.mine(2122, model.AWAITING, requested=["bob", "carol"]),
+        ])
+        self.assertTrue(self.line(lines, 2119).startswith("🔴 #2119  Changes    fix(auth): single-use TOTP"))
+        self.assertIn("bob ✗ carol ✓ |", self.line(lines, 2119))
+        self.assertTrue(self.line(lines, 2116).startswith("💬 #2116  3 threads  "))
+        self.assertIn("→ bob, carol |", self.line(lines, 2122))
+
+    def test_submenu_actions(self):
+        lines = self.render([self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED", "carol": "APPROVED"})])
+        self.assertIn("--Changes requested · opened 2 days ago | disabled=true", lines)
+        self.assertIn("--Reviews: bob ✗ · carol ✓ | disabled=true", lines)
+        self.assertIn('--Run "Address review" | sfimage=play.fill bash=/p/chip.3m.sh terminal=false param1=run '
+                      'param2=api#2119 param3=--skill param4=1 param5=--address refresh=true', lines)
+        self.assertIn("--Re-request review (bob) | sfimage=bell bash=/p/chip.3m.sh terminal=false param1=nudge "
+                      "param2=api#2119 refresh=true", lines)
+
+    def test_no_rerequest_when_everyone_approved(self):
+        lines = self.render([self.mine(2118, model.READY, {"carol": "APPROVED"})])
+        self.assertFalse(any(l.startswith("--Re-request review") for l in lines))
+
+    def test_title_badge_counts_changes_requested(self):
+        lines = self.render([self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})])
+        self.assertTrue(lines[0].startswith("1 🔴1 | templateImage="))
+
+
 class BuildMenuTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

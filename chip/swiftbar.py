@@ -37,6 +37,17 @@ RUN_DOT = {"running": "🔵", "needs_you": "🟡", "done": "🟢", "gone": "⚪"
 RUN_SHORT = {"running": "Reviewing", "needs_you": "Needs you", "done": "Reviewed"}
 RUN_ROW_DOT = {"running": "🔵", "needs_you": "🟡", "done": "✅"}
 STYLES = (("dots", "Colored dots + label"), ("emoji", "Emoji"), ("symbols", "Symbols"))
+# The user's own PRs (always emoji dots).
+MINE_DOT = {model.CHANGES: "🔴", model.CI_FAILED: "❌", model.CONFLICT: "⚠️", model.THREADS: "💬",
+            model.READY: "✅", model.AWAITING: "⚪", model.DRAFT: "⚪"}
+MINE_SHORT = {model.CHANGES: "Changes", model.CI_FAILED: "CI failed", model.CONFLICT: "Conflict",
+              model.THREADS: "{n} threads", model.READY: "Approved", model.AWAITING: "Waiting", model.DRAFT: "Draft"}
+MINE_LONG = {model.CHANGES: "Changes requested", model.CI_FAILED: "CI failed", model.CONFLICT: "Merge conflict",
+             model.THREADS: "Unresolved review threads", model.READY: "Approved — ready to merge",
+             model.AWAITING: "Waiting for review", model.DRAFT: "Draft"}
+MINE_ACTIONABLE = (model.CHANGES, model.CI_FAILED, model.CONFLICT, model.THREADS)
+MINE_RUN_SHORT = {"running": "Drafting", "needs_you": "Needs you", "done": "Drafted"}
+REVIEW_MARK = {"APPROVED": "✓", "CHANGES_REQUESTED": "✗", "COMMENTED": "💬", "DISMISSED": "–"}
 RUN_SYMBOL = {
     "running": ("circle.lefthalf.filled", "#0A84FF"),
     "needs_you": ("exclamationmark.triangle.fill", "#FFCC00"),
@@ -147,7 +158,8 @@ def _row(r: dict, depth: int, style: str, run: Optional[tuple] = None) -> str:
     return item(text, depth, **symbol(sf_name, color), tooltip=tooltip, **ROW_FONT)
 
 
-def _round_lines(record: dict, view: dict, skill_no: int, d: int, label: str, ctx: dict) -> List[str]:
+def _round_lines(record: dict, view: dict, skill_no: int, d: int, label: str, ctx: dict,
+                 extra: tuple = ()) -> List[str]:
     """`Last chip review · …` for one skill on one PR, then View / Continue / Open last session."""
     number = record.get("round", 1)
     head = f"Last chip review · {record['skill']} · round {number}"
@@ -161,12 +173,68 @@ def _round_lines(record: dict, view: dict, skill_no: int, d: int, label: str, ct
     return [
         item(f"{head} · {when} · {state}", d, disabled="true"),
         item(f"Continue review (round {number + 1})", d, sfimage="play.fill",
-             **action(ctx["plugin"], "run", label, "--skill", skill_no)),
+             **action(ctx["plugin"], "run", label, "--skill", skill_no, *extra)),
         item("Open last session", d, sfimage="eye", **action(ctx["plugin"], "attach", record["id"], refresh=False)),
     ]
 
 
+def _reviewers_text(r: dict) -> str:
+    if r["reviewers"]:
+        return " ".join(f"{login} {REVIEW_MARK.get(state, '?')}" for login, state in r["reviewers"].items())
+    if r["requested"]:
+        return "→ " + ", ".join(r["requested"])
+    return "—"
+
+
+def _mine_row(r: dict, depth: int, run: Optional[tuple]) -> str:
+    status = r["mine_status"]
+    dot, short, tooltip = MINE_DOT[status], MINE_SHORT[status].format(n=r["unresolved"]), MINE_LONG[status]
+    if run:
+        record, view = run
+        dot, short = RUN_ROW_DOT[view["kind"]], MINE_RUN_SHORT[view["kind"]]
+        tooltip = f"{record['skill']} · {view['text']}"
+    number = f"#{r['number']}"
+    text = f"{dot} {number:<7}{short:<11}{_cut(r['title'], 34):<35} {_cut(_reviewers_text(r), 26)}"
+    return item(text, depth, tooltip=tooltip, **ROW_FONT)
+
+
+def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
+    """One of the user's own PRs: status, reviewers, Address-review rounds, Re-request review, links."""
+    lines = [_mine_row(r, depth, _active_run(r, ctx))]
+    d = depth + 1
+    lines.append(item(r["label"], d, disabled="true"))
+    for chunk in textwrap.wrap(r["title"], 60) or [""]:
+        lines.append(item(chunk, d, disabled="true"))
+    lines.append(item(f"{MINE_LONG[r['mine_status']]} · opened {ago(r['wait'])}", d, disabled="true"))
+    reviews = " · ".join(f"{login} {REVIEW_MARK.get(state, '?')}" for login, state in r["reviewers"].items())
+    if r["requested"]:
+        reviews = " · ".join(filter(None, [reviews, "requested: " + ", ".join(r["requested"])]))
+    lines.append(item(f"Reviews: {reviews or 'none yet'}", d, disabled="true"))
+    if r["unresolved"]:
+        lines.append(item(plural(r["unresolved"], "unresolved thread"), d, disabled="true"))
+    lines.append(item(details(r), d, disabled="true"))
+    lines.append(separator(d))
+    my_runs = ctx["runs_by_label"].get(r["label"], {})
+    for i, skill in enumerate(ctx["address_skills"], 1):
+        run = my_runs.get(skill["name"])
+        if run is None:
+            lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill",
+                              **action(ctx["plugin"], "run", r["label"], "--skill", i, "--address")))
+        else:
+            lines.extend(_round_lines(run[0], run[1], i, d, r["label"], ctx, extra=("--address",)))
+    pending = [login for login, state in r["reviewers"].items() if state != "APPROVED"]
+    if pending:
+        lines.append(item(f"Re-request review ({', '.join(pending)})", d, sfimage="bell",
+                          **action(ctx["plugin"], "nudge", r["label"])))
+    lines.append(separator(d))
+    lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
+    lines.append(item("Copy link", d, sfimage="doc.on.doc", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
+    return lines
+
+
 def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
+    if r.get("kind") == "mine":
+        return mine_lines(r, depth, ctx)
     lines = [_row(r, depth, ctx["style"], _active_run(r, ctx))]
     name = STATUS[r["status"]][0]
     d = depth + 1
@@ -197,7 +265,8 @@ def _project_order(rows: List[dict]) -> List[str]:
     for r in rows:
         p = _project(r)
         counts[p] = counts.get(p, 0) + 1
-        actionable[p] = actionable.get(p, 0) + (r["status"] in (model.REREVIEW, model.NEW))
+        mine_actionable = r.get("kind") == "mine" and r.get("mine_status") in MINE_ACTIONABLE
+        actionable[p] = actionable.get(p, 0) + (r["status"] in (model.REREVIEW, model.NEW) or mine_actionable)
     return sorted(counts, key=lambda p: (-actionable[p], -counts[p], p))
 
 
@@ -292,10 +361,14 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     for key, rec in records.items():
         runs_by_label.setdefault(rec["label"], {})[rec["skill"]] = (rec, views[key])
     style = cfg.get("status_style", "dots")
-    ctx = {"plugin": plugin, "skills": cfg["skills"], "runs_by_label": runs_by_label, "style": style}
+    ctx = {"plugin": plugin, "skills": cfg["skills"], "address_skills": cfg.get("address_skills", []),
+           "runs_by_label": runs_by_label, "style": style}
 
     active = [view["kind"] for view in views.values()]
-    badges = [f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
+    mine = (inbox_all or {}).get("mine", [])
+    changes = sum(1 for r in mine if r["mine_status"] == model.CHANGES)
+    badges = ([f"🔴{changes}"] if changes else []) + [
+        f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
     title = "!" if error else " ".join(([str(count)] if count else []) + badges)
     lines = [item(title, 0, templateImage=icon_b64()), "---"]
     if newer:
@@ -311,6 +384,11 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     lines.append(item("Refresh now", 0, sfimage="arrow.clockwise", **action(plugin, "swiftbar", "--force")))
     if inbox_all is not None:
         lines.append("---")
+        if "mine" in inbox_all:
+            lines.append(item(f"My pull requests · {len(mine)}", 0, size="12"))
+            lines.extend(project_sections(mine, 0, ctx))
+            lines.append("---")
+            lines.append(item(f"Review requests · {len(visible)}", 0, size="12"))
         if not visible:
             lines.append(item("Nothing waiting for your review", 0, color=GREY))
         elif style == "emoji":
