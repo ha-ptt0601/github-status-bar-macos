@@ -3,12 +3,52 @@
 **GitHubBar** is a macOS menu bar app that shows the GitHub pull requests waiting for **your** review and your **own** open pull requests. With one click, it runs your Claude Code review skill on a PR in the background. **chip** is the command-line tool behind it. chip also powers a `/chip` skill, an `@`-mention picker inside Claude Code and an fzf picker in the terminal.
 
 <p align="center">
-  <img src="docs/images/menu.svg" alt="GitHubBar menu: review requests grouped by project, a PR submenu with Run review buttons, a review running in the background" width="900">
+  <img src="docs/images/menu-review.svg" alt="GitHubBar menu: review requests grouped by project, a PR submenu with Run review, Approve, Request changes and Comment, a review running in the background" width="900">
 </p>
 
 ## Features
 
-### What the numbers mean
+### Review requests tab (default)
+
+- **Every PR waiting for you**, from two searches: `review-requested:@me` and `reviewed-by:@me`. GitHub drops you from the requested reviewers once you review, so the second search is what keeps PRs that need a **re-review** visible.
+- **Grouped by project, newest change first.** PRs waiting on you (re-reviews and new requests) come first, ordered by their latest change (opened or new commits), so a request that just arrived is at the top. Every project is always visible, with up to 5 PRs each and the rest under `N more in <project> ›`, paged 12 at a time with nested `Next ›` submenus.
+- **Status on every row:** 🟠 Re-review (new commits after your review, or you were re-requested) · 🟢 New · ⚪ Waiting on author / Commented. PRs older than 30 days go under **Older than 30 days**, and approved PRs and drafts under **Show approved & drafts**.
+- **PR submenu:**
+  - the full title, status, author, age, size, base branch (flagged *stacked*), Jira key and conflict;
+  - review buttons: one `Run "<skill>"` per skill in your config, plus `Run "/review (project)"` when the repo has its own review skill (see [Which review runs](#which-review-runs));
+  - **Approve…**, **Request changes…** (a reason is required) and **Comment…**, each confirmed in a small dialog;
+  - Open on GitHub and Copy link.
+
+### My pull requests tab
+
+<p align="center"><img src="docs/images/menu-mine.svg" alt="My pull requests tab: your PRs with status and reviewers; a PR submenu with Address review, the feature session, Re-request review, Convert to draft, Comment and Close PR" width="900"></p>
+
+- **Your open PRs, grouped by project.** Each row shows its status, first match wins: 🔴 Changes requested · ❌ CI failed · ⚠️ Conflict · 💬 N unresolved threads · ✅ Approved · ⚪ Waiting · ⚪ Draft.
+- **Reviewer column:** `bob ✗ carol ✓` (✓ approved, ✗ changes requested, 💬 commented), or `→ bob, carol` while you are still waiting on requested reviewers.
+- **Address review:** runs a skill that reads every unresolved thread, then **only proposes** the code change and drafts a reply for each one. It never edits files, commits, pushes or posts. `git commit`, `git push`, `gh pr comment` and `gh pr review` are blocked for these runs.
+- **Feature session:** chip finds the Claude Code session where you built the PR (the session with the most work on the PR's branch, from `~/.claude/projects`), or one you link by hand (**Link feature session…**, paste the session id). Then:
+  - **Address review in feature session** continues that very session in the background, so Claude remembers how the feature was built while it answers the reviewers (don't keep that session open elsewhere at the same time);
+  - **Open feature session** resumes it in Terminal, in the folder it started in;
+  - **Link another session…** / **Unlink** change the link.
+- **Re-request review** from the reviewers who have not approved yet.
+- **Merge…** (only once the PR is approved and CI is not failing; the repo's preferred method, squash first, branch kept), **Close PR…** and **Comment…**, confirmed in a dialog; **Mark as ready for review** / **Convert to draft** in one click.
+- After any of these, chip refetches from GitHub, so every part of the menu shows the new state (an approved PR moves to "Show approved & drafts", a merged or closed PR leaves the list, counts follow).
+
+### Background reviews, in rounds
+
+<p align="center"><img src="docs/images/review-rounds.svg" alt="What Run does: find the clone, check the PR out in a worktree, pick the review, run claude in the background, read the result; rounds continue the same session" width="900"></p>
+
+- **Run** finds your clone of the repo (see [Where chip finds your repos](#where-chip-finds-your-repos)) or clones it into `~/.cache/chip/repos/`, checks the PR out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, and starts `claude "<prompt>" --bg` there. Your clone and its branch are never touched. The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
+- **The row follows the run:** 🔵 Reviewing → 🟡 Needs you (waiting for input or permission) → ✅ Reviewed. The icon shows `🔵N` and `🟡N` badges.
+- **View session** opens the session in Terminal (`claude attach`), so you can read the report and keep talking to Claude.
+- **Round resolved.** After you post your review on GitHub, or new commits land, the round is resolved: the PR goes back to its GitHub status and leaves "Reviews by GitHubBar". Merged or closed PRs resolve on their own.
+- **Continue review (round N+1)** resumes **the same session**, so Claude still has round N in context. It checks whether each earlier finding was fixed, answered or is still open, then reviews only what changed.
+
+### The menu bar and notifications
+
+<p align="center"><img src="docs/images/menu-bar.svg" alt="Menu bar states: counts, a spinning ring while a review runs, a yellow dot when one needs you, badges, a plain icon; Settings › Menu bar; a notification" width="900"></p>
+
+**What the numbers mean**
 
 | Where | Shows |
 |---|---|
@@ -22,49 +62,8 @@
 
 **Your PRs to do** = 🔴 changes requested + ❌ CI failed + ⚠️ conflict + 💬 unresolved threads + ✅ approved and ready to merge. Not counted: PRs waiting for reviewers, drafts.
 
-### A menu that stays open
-- **Tabs:** *Review requests* (default) and *My pull requests* sit in a tab bar at the top. Switching is instant and keeps the menu open; both tabs share one width, and the choice is remembered.
-- **Refresh now** keeps the menu open: it shows a spinner and *Refreshing…* while it fetches from GitHub, updates the list in place, then says *✓ Up to date* for two seconds.
-- **Projects ›** and **Settings › Status style** toggle their checkmarks without closing the menu, so you can hide several projects in a row.
-- **Settings › Menu bar** chooses what the menu bar shows: **Show counts** (`19 · ⚠8`, on), **Show review badges** (`🔵1 🟡1`, off) and **Animate while reviewing** (the spinning ring and yellow dot, on). Turn everything off for a plain icon; the tooltip always has the full counts.
-- **Run, Continue review, Stop, Remove, Re-request review, Copy link** keep the menu open: the row shows a spinner, then the outcome (e.g. "✓ Review started"), and the PR row and the review list update in place.
-- **Updates within about a minute.** Every minute GitHubBar asks GitHub Notifications whether anything changed (`If-Modified-Since`; "nothing new" is a free `304`). A new review request, a review or comment on your PR, a mention, a merge or a CI result fetches everything at once, so the numbers and notifications follow within ~1 minute. Without such a change, the full list is still refreshed every 5 minutes (changes GitHub does not notify, such as a conflict on someone else's PR). If notifications are not available to your `gh` token, chip falls back to a full refresh every 3 minutes.
+**Notifications**
 
-### Review requests tab (default)
-- **Every PR waiting for you**, from two searches: `review-requested:@me` and `reviewed-by:@me`. GitHub drops you from the requested reviewers once you review, so the second search is what keeps PRs that need a **re-review** visible.
-- **Grouped by project, newest change first.** PRs waiting on you (re-reviews and new requests) come first, ordered by their latest change (opened or new commits), so a request that just arrived is at the top. Every project is always visible, with up to 5 PRs each and the rest under `N more in <project> ›`, paged 12 at a time with nested `Next ›` submenus.
-- **Status on every row:** 🟠 Re-review (new commits after your review, or you were re-requested) · 🟢 New · ⚪ Waiting on author / Commented. PRs older than 30 days go under **Older than 30 days**, and approved PRs and drafts under **Show approved & drafts**.
-- **PR submenu:**
-  - the full title, status, author, age, size, base branch (flagged *stacked*), Jira key and conflict;
-  - review buttons: one `Run "<skill>"` per skill in your config, plus `Run "/review (project)"` when the repo has its own review skill (see [Which review runs](#which-review-runs));
-  - **Approve…**, **Request changes…** (a reason is required) and **Comment…**, each confirmed in a small dialog;
-  - Open on GitHub and Copy link.
-
-### My pull requests tab
-- **Your open PRs, grouped by project.** Each row shows its status, first match wins: 🔴 Changes requested · ❌ CI failed · ⚠️ Conflict · 💬 N unresolved threads · ✅ Approved · ⚪ Waiting · ⚪ Draft.
-- **Reviewer column:** `bob ✗ carol ✓` (✓ approved, ✗ changes requested, 💬 commented), or `→ bob, carol` while you are still waiting on requested reviewers.
-- **Address review:** runs a skill that reads every unresolved thread, then **only proposes** the code change and drafts a reply for each one. It never edits files, commits, pushes or posts. `git commit`, `git push`, `gh pr comment` and `gh pr review` are blocked for these runs.
-- **Feature session:** chip finds the Claude Code session where you built the PR (the session with the most work on the PR's branch, from `~/.claude/projects`), or one you link by hand (**Link feature session…**, paste the session id). Then:
-  - **Address review in feature session** continues that very session in the background, so Claude remembers how the feature was built while it answers the reviewers (don't keep that session open elsewhere at the same time);
-  - **Open feature session** resumes it in Terminal, in the folder it started in;
-  - **Link another session…** / **Unlink** change the link.
-- **Re-request review** from the reviewers who have not approved yet.
-- **Merge…** (only once the PR is approved and CI is not failing; the repo's preferred method, squash first, branch kept), **Close PR…** and **Comment…**, confirmed in a dialog; **Mark as ready for review** / **Convert to draft** in one click.
-- After any of these, chip refetches from GitHub, so every part of the menu shows the new state (an approved PR moves to "Show approved & drafts", a merged or closed PR leaves the list, counts follow).
-
-### Background reviews, in rounds
-- **Run** finds your clone of the repo (see [Where chip finds your repos](#where-chip-finds-your-repos)) or clones it into `~/.cache/chip/repos/`, checks the PR out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, and starts `claude "<prompt>" --bg` there. Your clone and its branch are never touched. The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
-- **The row follows the run:** 🔵 Reviewing → 🟡 Needs you (waiting for input or permission) → ✅ Reviewed. The icon shows `🔵N` and `🟡N` badges.
-- **View session** opens the session in Terminal (`claude attach`), so you can read the report and keep talking to Claude.
-- **Round resolved.** After you post your review on GitHub, or new commits land, the round is resolved: the PR goes back to its GitHub status and leaves "Reviews by GitHubBar". Merged or closed PRs resolve on their own.
-- **Continue review (round N+1)** resumes **the same session**, so Claude still has round N in context. It checks whether each earlier finding was fixed, answered or is still open, then reviews only what changed.
-
-### Search and filters
-- **Search pull requests** is a field at the top of the menu, focused when the menu opens. Type and the tab shows only the PRs whose number, project, title, author, reviewers or Jira key contain all of your words, including PRs under *N more*, *Older than 30 days* and *Show approved & drafts* (up to 40 results). Clear the field to get the full list back. The text stays when you switch tabs.
-- **Projects ›** hides or shows a project's PRs at once (✓ = shown). The choice is saved in your config.
-- Outside GitHubBar (`chip swiftbar` without `--panes`, e.g. in SwiftBar), **Search…** opens a small dialog instead.
-
-### Notifications (macOS)
 You are notified about:
 - new review requests and PRs that need a re-review;
 - finished reviews and reviews waiting for you;
@@ -74,6 +73,19 @@ You are notified about:
 The first refresh after install is silent, and each refresh sends at most 3 notifications.
 
 GitHubBar posts them as native macOS notifications (allow them when macOS asks). **Clicking one opens the PR**, or the review session for "Review finished" and "Review needs you". The last 10 are also kept under **Recent notifications ›** in the menu, with the same click actions and a **Clear** button.
+
+### A menu that stays open
+- **Tabs:** *Review requests* (default) and *My pull requests* sit in a tab bar at the top. Switching is instant and keeps the menu open; both tabs share one width, and the choice is remembered.
+- **Refresh now** keeps the menu open: it shows a spinner and *Refreshing…* while it fetches from GitHub, updates the list in place, then says *✓ Up to date* for two seconds.
+- **Projects ›** and **Settings › Status style** toggle their checkmarks without closing the menu, so you can hide several projects in a row.
+- **Settings › Menu bar** chooses what the menu bar shows: **Show counts** (`19 · ⚠8`, on), **Show review badges** (`🔵1 🟡1`, off) and **Animate while reviewing** (the spinning ring and yellow dot, on). Turn everything off for a plain icon; the tooltip always has the full counts.
+- **Run, Continue review, Stop, Remove, Re-request review, Copy link** keep the menu open: the row shows a spinner, then the outcome (e.g. "✓ Review started"), and the PR row and the review list update in place.
+- **Updates within about a minute.** Every minute GitHubBar asks GitHub Notifications whether anything changed (`If-Modified-Since`; "nothing new" is a free `304`). A new review request, a review or comment on your PR, a mention, a merge or a CI result fetches everything at once, so the numbers and notifications follow within ~1 minute. Without such a change, the full list is still refreshed every 5 minutes (changes GitHub does not notify, such as a conflict on someone else's PR). If notifications are not available to your `gh` token, chip falls back to a full refresh every 3 minutes.
+
+### Search and filters
+- **Search pull requests** is a field at the top of the menu, focused when the menu opens. Type and the tab shows only the PRs whose number, project, title, author, reviewers or Jira key contain all of your words, including PRs under *N more*, *Older than 30 days* and *Show approved & drafts* (up to 40 results). Clear the field to get the full list back. The text stays when you switch tabs.
+- **Projects ›** hides or shows a project's PRs at once (✓ = shown). The choice is saved in your config.
+- Outside GitHubBar (`chip swiftbar` without `--panes`, e.g. in SwiftBar), **Search…** opens a small dialog instead.
 
 ### Other ways to pick PRs
 - **Claude Code prompt bar:** type `/chip @`, pick PRs from the `@` autocomplete (served by chip's MCP server), and press Enter to review them one by one.
@@ -245,6 +257,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 - Python tests: `python3 -m unittest discover -s tests -t .` (stdlib only).
 - GitHubBar (`app/`, Swift, AppKit): `swift build -c release --package-path app`. Parser checks: `swift run --package-path app GitHubBarChecks [menu.txt]`. Command Line Tools ship no XCTest, so the checks are a plain executable.
 - After editing `skill/SKILL.md` or the app, run `chip install` to re-render the skill and rebuild the app.
+- README images: `python3 scripts/mockups.py` redraws `docs/images/*.svg` (made-up data).
 - Release from `main`: `scripts/release.sh X.Y.Z`. It bumps the version, runs the tests, tags and creates a GitHub release.
 
 ## License
