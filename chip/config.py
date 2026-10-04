@@ -7,11 +7,11 @@ import string
 from pathlib import Path
 from typing import List, Optional
 
-PLACEHOLDERS = {"url", "repo", "number", "label", "title"}
+PLACEHOLDERS = {"url", "repo", "number", "label", "title", "base"}
 TERMINALS = ("Terminal", "iTerm")
 STATUS_STYLES = ("dots", "emoji", "symbols")
 SETTABLE = {"status_style": STATUS_STYLES, "terminal": TERMINALS}
-# The default review works on any machine; point `skills` at your own skill (e.g. "/my-review {url}").
+# Used when `skills` is empty and the repo has no review skill of its own (see chip/project.py).
 REVIEW_PROMPT = (
     "Review the pull request {url}. Use gh to read its description, diff and existing review comments, and read "
     "the surrounding code in this repository. Report findings ordered by severity (bugs, security, data loss, "
@@ -25,7 +25,8 @@ ADDRESS_PROMPT = (
 )
 DEFAULT = {
     "work_root": "~/work",
-    "skills": [{"name": "Full review", "prompt": REVIEW_PROMPT}],
+    # Empty: every PR gets one "Review" button that runs the repo's own review skill, or REVIEW_PROMPT.
+    "skills": [],
     "address_skills": [{"name": "Address review", "prompt": ADDRESS_PROMPT}],
     "permission_mode": "auto",
     "disallowed_tools": ["Edit", "Write", "NotebookEdit"],
@@ -43,9 +44,9 @@ def _fields(prompt: str) -> set:
     return {field for _, field, _, _ in string.Formatter().parse(prompt) if field is not None}
 
 
-def _validate_skills(key: str, skills) -> List[str]:
-    if not isinstance(skills, list) or not skills:
-        return [f"{key} must be a non-empty list"]
+def _validate_skills(key: str, skills, allow_empty: bool = False) -> List[str]:
+    if not isinstance(skills, list) or not (skills or allow_empty):
+        return [f"{key} must be a {'' if allow_empty else 'non-empty '}list"]
     errors = []
     for i, skill in enumerate(skills, 1):
         ok = isinstance(skill, dict) and all(
@@ -71,7 +72,7 @@ def validate(data) -> List[str]:
         return ["config must be a JSON object"]
     errors = []
     for key in ("skills", "address_skills"):
-        errors += _validate_skills(key, data.get(key, DEFAULT[key]))
+        errors += _validate_skills(key, data.get(key, DEFAULT[key]), allow_empty=key == "skills")
     for key in ("work_root", "permission_mode"):
         if not isinstance(data.get(key, DEFAULT[key]), str):
             errors.append(f"{key} must be a string")
@@ -112,9 +113,17 @@ def load(path: Optional[Path] = None) -> dict:
     return _resolved(merged, [])
 
 
+DEFAULT_SKILL = {"name": "Review", "prompt": REVIEW_PROMPT}
+
+
+def review_skills(cfg: dict) -> List[dict]:
+    """The configured review skills, or the built-in review when none are configured."""
+    return cfg["skills"] or [DEFAULT_SKILL]
+
+
 def fill_prompt(skill: dict, row: dict) -> str:
     return skill["prompt"].format(url=row["url"], repo=row["repo"], number=row["number"],
-                                  label=row["label"], title=row["title"])
+                                  label=row["label"], title=row["title"], base=row.get("base", ""))
 
 
 def init(path: Optional[Path] = None) -> bool:

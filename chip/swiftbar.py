@@ -11,7 +11,7 @@ from pathlib import Path
 import os
 from typing import Dict, List, Optional
 
-from chip import __version__, config, fetch, model, notify, runs, store, updates
+from chip import __version__, config, fetch, model, notify, project, runs, store, updates
 
 GREY = "#8E8E93"
 PAGE = 12
@@ -159,8 +159,7 @@ def _row(r: dict, depth: int, style: str, run: Optional[tuple] = None) -> str:
     return item(text, depth, **symbol(sf_name, color), tooltip=tooltip, **ROW_FONT)
 
 
-def _round_lines(record: dict, view: dict, skill_no: int, d: int, label: str, ctx: dict,
-                 extra: tuple = ()) -> List[str]:
+def _round_lines(record: dict, view: dict, d: int, label: str, ctx: dict, run_args: tuple) -> List[str]:
     """`Last chip review · …` for one skill on one PR, then View / Continue / Open last session."""
     number = record.get("round", 1)
     head = f"Last chip review · {record['skill']} · round {number}"
@@ -174,7 +173,7 @@ def _round_lines(record: dict, view: dict, skill_no: int, d: int, label: str, ct
     return [
         item(f"{head} · {when} · {state}", d, disabled="true"),
         item(f"Continue review (round {number + 1})", d, sfimage="play.fill",
-             **action(ctx["plugin"], "run", label, "--skill", skill_no, *extra)),
+             **action(ctx["plugin"], "run", label, *run_args)),
         item("Open last session", d, sfimage="eye", **action(ctx["plugin"], "attach", record["id"], refresh=False)),
     ]
 
@@ -222,7 +221,7 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
             lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill",
                               **action(ctx["plugin"], "run", r["label"], "--skill", i, "--address")))
         else:
-            lines.extend(_round_lines(run[0], run[1], i, d, r["label"], ctx, extra=("--address",)))
+            lines.extend(_round_lines(run[0], run[1], d, r["label"], ctx, ("--skill", i, "--address")))
     pending = [login for login, state in r["reviewers"].items() if state != "APPROVED"]
     if pending:
         lines.append(item(f"Re-request review ({', '.join(pending)})", d, sfimage="bell",
@@ -231,6 +230,18 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
     lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
     lines.append(item("Copy link", d, sfimage="doc.on.doc", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
     return lines
+
+
+def review_buttons(r: dict, ctx: dict) -> List[tuple]:
+    """(name, run args) per review button: the configured skills, plus the repo's own review skill.
+    With no skills configured, a repo without its own skill gets one built-in "Review" button."""
+    buttons = [(skill["name"], ("--skill", i)) for i, skill in enumerate(ctx["skills"], 1)]
+    own = ctx.get("project_skills", {}).get(r["repo"])
+    if own:
+        buttons.append((project.skill_label(own), ("--project",)))
+    elif not ctx["skills"]:
+        buttons.append((config.DEFAULT_SKILL["name"], ("--project",)))
+    return buttons
 
 
 def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
@@ -246,14 +257,16 @@ def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
     lines.append(item(details(r), d, disabled="true"))
     lines.append(separator(d))
     my_runs = ctx["runs_by_label"].get(r["label"], {})
-    for i, skill in enumerate(ctx["skills"], 1):
-        run = my_runs.get(skill["name"])
+    for name, run_args in review_buttons(r, ctx):
+        run = my_runs.get(name)
+        if run is None and run_args == ("--project",):
+            run = next((v for v in my_runs.values() if v[0].get("auto")), None)
         if run is None:
-            lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill",
-                              **action(ctx["plugin"], "run", r["label"], "--skill", i)))
+            lines.append(item(f'Run "{name}"', d, sfimage="play.fill",
+                              **action(ctx["plugin"], "run", r["label"], *run_args)))
             continue
         record, view = run
-        lines.extend(_round_lines(record, view, i, d, r["label"], ctx))
+        lines.extend(_round_lines(record, view, d, r["label"], ctx, run_args))
     lines.append(separator(d))
     lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
     lines.append(item("Copy link", d, sfimage="doc.on.doc", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
@@ -398,7 +411,7 @@ def _filter(rows: List[dict], hidden_projects: set, query: str = "") -> List[dic
 
 
 def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, matches: int,
-              live_search: bool = False) -> List[str]:
+              live_search: bool = False, project_skills: Optional[Dict[str, str]] = None) -> List[str]:
     """Search (GitHubBar: a field in the menu; otherwise a native dialog) and the Projects submenu
     with a checkmark on every shown project."""
     lines = []
@@ -460,7 +473,7 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
            plugin: str, version: str, newer: Optional[str] = None, error: Optional[str] = None,
            now: Optional[float] = None, view: str = "review", query: str = "",
            history: Optional[List[dict]] = None, deliver: Optional[List[dict]] = None,
-           live_search: bool = False) -> List[str]:
+           live_search: bool = False, project_skills: Optional[Dict[str, str]] = None) -> List[str]:
     """One menu: `review` (PRs waiting for the user's review) or `mine` (the user's own PRs).
 
     `deliver` events become extra title-block lines (`notify=true`) that GitHubBar posts natively."""
@@ -488,6 +501,7 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     for key, rec in records.items():
         runs_by_label.setdefault(rec["label"], {})[rec["skill"]] = (rec, views[key])
     ctx = {"plugin": plugin, "skills": cfg["skills"], "address_skills": cfg.get("address_skills", []),
+           "project_skills": project_skills or {},
            "runs_by_label": runs_by_label, "style": style}
     rows = _filter(all_rows, hidden_projects, query)
     listed = _filter(all_rows, set(), query)  # hidden projects too, tagged hidden, for in-place toggling
@@ -565,7 +579,8 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     every_row = (inbox_all or {}).get("rows", []) + (inbox_all or {}).get("mine", [])
     rows_by_label = {r["label"]: r for r in every_row}  # mine too, or address rounds would look "closed"
     observed = runs.observe(records, agents, now)
-    if runs.resolve(records, rows_by_label, now, fetched=inbox_all is not None and not error) or observed:
+    resolved = runs.resolve(records, rows_by_label, now, fetched=inbox_all is not None and not error)
+    if runs.clean_worktrees(records) or resolved or observed:
         runs.save(runs_path, records)
     views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}
     latest = updates.latest_release(store.cache_dir() / "update.json", runner, now)
@@ -585,7 +600,8 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
         notify.save(notify_path, current)
     pending = notify.cap(notify.drain(outbox_path)) if deliver else []
     args = (inbox_all, records, views, cfg, plugin, __version__, newer, error, now)
-    extra = {"query": store.load_query(), "history": notify.load_list(history_path)}
+    extra = {"query": store.load_query(), "history": notify.load_list(history_path),
+             "project_skills": project.known_skills({r["repo"] for r in every_row}, store.cache_dir() / "repos.json")}
     if not panes:
         return "\n".join(render(*args, view=view, deliver=pending, **extra))
     extra.update(query="", live_search=True)  # GitHubBar searches inside the menu

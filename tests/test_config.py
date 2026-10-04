@@ -20,7 +20,8 @@ class ConfigTest(unittest.TestCase):
 
     def test_defaults_when_missing(self):
         cfg = config.load(self.path)
-        self.assertEqual(cfg["skills"], [{"name": "Full review", "prompt": config.REVIEW_PROMPT}])
+        self.assertEqual(cfg["skills"], [])  # each user adds their own; empty means "project or built-in review"
+        self.assertEqual(config.review_skills(cfg), [config.DEFAULT_SKILL])
         self.assertNotIn("me", json.dumps(config.DEFAULT))  # no personal skill in the shared default
         self.assertEqual(cfg["errors"], [])
         self.assertEqual(cfg["work_root"], os.path.expanduser("~/work"))
@@ -39,19 +40,21 @@ class ConfigTest(unittest.TestCase):
     def test_bad_json_falls_back_to_defaults(self):
         self.write("{nope")
         cfg = config.load(self.path)
-        self.assertEqual(cfg["skills"][0]["name"], "Full review")
+        self.assertEqual(cfg["skills"], [])
         self.assertIn("invalid JSON", cfg["errors"][0])
 
     def test_unknown_placeholder(self):
         self.write({"skills": [{"name": "A", "prompt": "/a {pr}"}]})
         cfg = config.load(self.path)
         self.assertIn("unknown placeholder", cfg["errors"][0])
-        self.assertEqual(cfg["skills"][0]["name"], "Full review")
+        self.assertEqual(cfg["skills"], [])
 
     def test_duplicate_and_empty_skills(self):
         self.write({"skills": [{"name": "A", "prompt": "x"}, {"name": "A", "prompt": "y"}]})
         self.assertIn("unique", config.load(self.path)["errors"][0])
         self.write({"skills": []})
+        self.assertEqual(config.load(self.path)["errors"], [])  # empty skills are allowed
+        self.write({"address_skills": []})
         self.assertIn("non-empty", config.load(self.path)["errors"][0])
 
     def test_bad_terminal(self):
@@ -66,7 +69,9 @@ class ConfigTest(unittest.TestCase):
     def test_init_writes_once(self):
         self.assertTrue(config.init(self.path))
         self.assertFalse(config.init(self.path))
-        self.assertEqual(json.loads(self.path.read_text())["skills"][0]["name"], "Full review")
+        written = json.loads(self.path.read_text())
+        self.assertEqual(written["skills"], [])
+        self.assertEqual(written["address_skills"][0]["name"], "Address review")
 
     def test_env_path(self):
         self.assertTrue(str(config.config_path()).endswith("no-such-config.json"))

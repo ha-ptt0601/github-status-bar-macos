@@ -279,7 +279,7 @@ class ConfigCliTest(CliCase):
     def test_check_ok_then_bad(self):
         code, out, _ = self.run_cli(["config", "check"])
         self.assertEqual(code, 0)
-        self.assertIn("Full review", out)
+        self.assertIn("Address review", out)
         Path(os.environ["CHIP_CONFIG"]).write_text(json.dumps({"skills": [{"name": "A", "prompt": "/a {pr}"}]}))
         code, _, err = self.run_cli(["config", "check"])
         self.assertEqual(code, 1)
@@ -337,7 +337,36 @@ class RunCliTest(RunCliBase):
         self.assertEqual(bg[1], config.REVIEW_PROMPT.format(url="https://github.com/acme/api/pull/1"))
         self.assertTrue(any(c[0] == "osascript" for c in self.calls))
         self.assertIn("ab12cd34", out)
-        self.assertIn("api#274::Full review", runs.load(self.runs_path()))
+        self.assertIn("api#274::Review", runs.load(self.runs_path()))
+
+    def test_run_project_uses_repo_skill_in_a_worktree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = Path(tmp) / "api"
+            (clone / ".claude" / "skills" / "review").mkdir(parents=True)
+            (clone / ".claude" / "skills" / "review" / "SKILL.md").write_text("x")
+            cli.repos.resolve = lambda slug, root, cache: str(clone)
+            os.environ["CHIP_WORK_ROOT"] = tmp
+            try:
+                self.run_cli(["menu"], runner=fake_runner)
+                code, out, _ = self.run_cli(["run", "api#274", "--project"])
+            finally:
+                os.environ.pop("CHIP_WORK_ROOT")
+            self.assertEqual(code, 0)
+            worktree = str(Path(tmp) / ".chip-worktrees" / "api-274")
+            self.assertTrue(any(c[:5] == ["git", "-C", str(clone), "worktree", "add"] for c in self.calls))
+            bg = next(c for c in self.calls if "--bg" in c)
+            self.assertTrue(bg[1].startswith("/review https://github.com/acme/api/pull/1\n"))
+            record = runs.load(self.runs_path())["api#274::/review (project)"]
+            self.assertEqual((record["cwd"], record["worktree"], record["clone"], record["auto"]),
+                             (worktree, worktree, str(clone), True))
+
+    def test_run_project_without_repo_skill_falls_back_to_builtin(self):
+        self.run_cli(["menu"], runner=fake_runner)
+        code, _, _ = self.run_cli(["run", "api#274", "--project"])
+        self.assertEqual(code, 0)
+        self.assertFalse(any(c[:1] == ["git"] for c in self.calls))
+        record = runs.load(self.runs_path())["api#274::Review"]
+        self.assertEqual((record["cwd"], record["auto"]), ("/src/acme/api", True))
 
     def test_run_unknown_label(self):
         self.run_cli(["menu"], runner=fake_runner)
@@ -364,7 +393,7 @@ class RunCliTest(RunCliBase):
     def test_attach_falls_back_to_resume_when_background_session_is_gone(self):
         self.start()
         records = runs.load(self.runs_path())
-        records["api#274::Full review"]["session_id"] = "ab12cd34-full"
+        records["api#274::Review"]["session_id"] = "ab12cd34-full"
         runs.save(self.runs_path(), records)
         self.calls.clear()
         self.run_cli(["attach", "ab12cd34"])

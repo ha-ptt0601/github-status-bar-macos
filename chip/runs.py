@@ -54,7 +54,7 @@ def parse_bg_id(stdout: str) -> Optional[str]:
 
 
 def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
-          now: Callable[[], float] = time.time, address: bool = False) -> dict:
+          now: Callable[[], float] = time.time, address: bool = False, extra: Optional[dict] = None) -> dict:
     """Round 1 starts a new background session; later rounds continue the same session."""
     runner = runner or subprocess.run
     key = run_key(row["label"], skill["name"])
@@ -85,10 +85,23 @@ def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
     record = {"id": run_id, "session_id": previous.get("session_id") if number > 1 else None,
               "label": row["label"], "title": row["title"], "url": row["url"], "repo": row["repo"],
               "skill": skill["name"], "kind": "address" if address else "review", "cwd": cwd,
-              "round": number, "history": history, "started_at": now()}
+              "round": number, "history": history, "started_at": now(), **(extra or {})}
     records[key] = record
     save(path, records)
     return record
+
+
+def clean_worktrees(records: Dict[str, dict], runner=None) -> bool:
+    """Remove the PR worktree of project-skill runs whose PR was merged or closed; True if any changed."""
+    from chip import project
+    changed = False
+    for record in records.values():
+        if record.get("worktree") and record.get("resolved_by") == "PR merged or closed":
+            number = record["label"].rsplit("#", 1)[-1]
+            project.remove(record["clone"], record["worktree"], number, runner)
+            record.pop("worktree")
+            changed = True
+    return changed
 
 
 def fetch_agents(runner=None) -> Dict[str, dict]:

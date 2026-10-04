@@ -381,6 +381,36 @@ class RecentNotificationsTest(unittest.TestCase):
         self.assertEqual(lines[1], 'chip v9 is available | notify=true href=https://r')
 
 
+class ReviewButtonsTest(unittest.TestCase):
+    def buttons(self, lines):
+        return [l for l in lines if l.startswith('--Run "')]
+
+    def test_no_skills_no_project_skill_gets_builtin_review(self):
+        lines = swiftbar.render({"rows": assign_labels([row(1)]), "fetched_at": 0}, {}, {},
+                                dict(CFG, skills=[]), PLUGIN, "0.1.0", now=0)
+        self.assertEqual(self.buttons(lines), ['--Run "Review" | sfimage=play.fill bash=/p/chip.3m.sh terminal=false '
+                                               'param1=run param2=api#2001 param3=--project refresh=true'])
+
+    def test_project_skill_is_added_next_to_configured_skills(self):
+        lines = render([row(1)], project_skills={"acme/api": "review"})
+        names = [b.split(" | ")[0] for b in self.buttons(lines)]
+        self.assertEqual(names, ['--Run "Full review"', '--Run "Quick"', '--Run "/review (project)"'])
+        self.assertIn("param3=--project", self.buttons(lines)[2])
+
+    def test_configured_skills_only_when_repo_has_none(self):
+        names = [b.split(" | ")[0] for b in self.buttons(render([row(1)]))]
+        self.assertEqual(names, ['--Run "Full review"', '--Run "Quick"'])
+
+    def test_auto_run_shows_its_rounds(self):
+        rec = {"id": "ab", "label": "api#2001", "skill": "/review (project)", "auto": True, "url": "u",
+               "started_at": 0, "done_at": 0, "round": 1}
+        lines = swiftbar.render({"rows": assign_labels([row(1)]), "fetched_at": 0}, {"k": rec},
+                                {"k": {"kind": "done", "text": "done"}}, dict(CFG, skills=[]), PLUGIN, "0.1.0", now=0,
+                                project_skills={"acme/api": "review"})
+        cont = next(l for l in lines if l.startswith("--Continue review (round 2)"))
+        self.assertIn("param3=--project", cont)
+
+
 class LiveSearchTest(unittest.TestCase):
     def test_field_body_tags_and_search_rows(self):
         lines = render([row(1), row(2, title='say "hi" | bye')], live_search=True)

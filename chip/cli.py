@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import config, fetch, installer, mcp_server, menu, model, notify, render, repos, runs, store, terminal, tui, updates
+from chip import (config, fetch, installer, mcp_server, menu, model, notify, project, render, repos, runs, store,
+                  terminal, tui, updates)
 from chip.selection import SelectionError, parse_selection
 
 AUTH_HINT = "gh does not seem to be logged in — run `! gh auth login` and try again."
@@ -258,7 +259,7 @@ def cmd_prompt(args) -> int:
     if row is None:
         _error(f"PR {args.label} is not in the list")
         return 2
-    skill = _skill(config.load()["skills"], args.skill)
+    skill = _skill(config.review_skills(config.load()), args.skill)
     if skill is None:
         return 2
     print(config.fill_prompt(skill, row))
@@ -271,7 +272,10 @@ def _runs_path() -> Path:
 
 def cmd_run(args, runner) -> int:
     cfg = config.load()
-    skill = _skill(cfg["address_skills" if args.address else "skills"], args.skill)
+    if args.project:
+        skill = config.DEFAULT_SKILL  # replaced by the repo's own skill once the clone is known
+    else:
+        skill = _skill(cfg["address_skills"] if args.address else config.review_skills(cfg), args.skill)
     if skill is None:
         return 2
     row = _find_row(args.label)
@@ -284,14 +288,27 @@ def cmd_run(args, runner) -> int:
     cache = cache_dir() / "repos.json"
     try:
         path = repos.resolve(row["repo"], work_root(), cache) or repos.clone(row["repo"], work_root(), cache)
-        record = runs.start(row, skill, cfg, path, _runs_path(), address=args.address)
-    except (repos.CloneError, runs.RunError) as exc:
+        extra = {}
+        if args.project:
+            skill, path, extra = _project_run(row, path)
+        record = runs.start(row, skill, cfg, path, _runs_path(), address=args.address, extra=extra)
+    except (repos.CloneError, runs.RunError, project.WorktreeError) as exc:
         notify.send([f"Could not start review for {args.label}: {exc}"])
         _error(str(exc))
         return 1
     notify.send([f"Reviewing {row['label']} ({skill['name']})"])
     print(f"started {record['id']} for {row['label']} ({skill['name']})")
     return 0
+
+
+def _project_run(row: dict, clone: str):
+    """The repo's review skill, run on the PR checked out in its own worktree; or the built-in review."""
+    name = project.find_review_skill(clone)
+    if name is None:
+        return config.DEFAULT_SKILL, clone, {"auto": True}
+    worktree = project.checkout(clone, row, work_root())
+    skill = {"name": project.skill_label(name), "prompt": project.prompt_template(name)}
+    return skill, worktree, {"auto": True, "clone": clone, "worktree": worktree}
 
 
 def _known_run(run_id: str) -> bool:
@@ -465,6 +482,8 @@ def main(argv=None, runner=None) -> int:
     p_run.add_argument("label")
     p_run.add_argument("--skill", type=int, default=1)
     p_run.add_argument("--address", action="store_true", help="run an address-review skill on your own PR")
+    p_run.add_argument("--project", action="store_true",
+                       help="run the repo's own review skill on the PR in a worktree (built-in review if it has none)")
     p_search = sub.add_parser("search", help="search the menu (native dialog); --clear removes the search")
     p_search.add_argument("--clear", action="store_true")
     p_project = sub.add_parser("project", help="hide/show a project in the menu: toggle NAME | all")
