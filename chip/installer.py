@@ -129,7 +129,7 @@ def _make_icon(repo: Path, resources: Path, runner) -> None:
 
 
 def _install_app(repo: Path, home: Path, chip_bin: Path, runner, which, out) -> bool:
-    """Build GitHubBar, assemble the .app, sign it ad hoc, add a Login Item and launch it. False on failure."""
+    """Build GitHubBar, assemble the .app, sign it ad hoc and launch it (it adds itself to Login Items). False on failure."""
     if not which("swift"):
         out("note  GitHubBar needs Swift from the Command Line Tools: xcode-select --install")
         return True
@@ -152,11 +152,9 @@ def _install_app(repo: Path, home: Path, chip_bin: Path, runner, which, out) -> 
                 ["xattr", "-dr", "com.apple.quarantine", str(app)],
                 [LSREGISTER, "-f", str(app)]):
         runner(cmd, capture_output=True, text=True)
-    login = (f'tell application "System Events" to if not (exists login item "{APP_NAME}") then '
-             f'make login item at end with properties {{path:"{app}", hidden:false}}')
-    runner(["osascript", "-e", login], capture_output=True, text=True)
+    # The app registers itself as a login item (SMAppService) on first launch: no Apple-events permission needed.
     runner(["open", str(app)], capture_output=True, text=True)
-    out(f"app   {app} (opens at login)")
+    out(f"app   {app} (opens at login; toggle in its menu)")
     return True
 
 
@@ -221,6 +219,7 @@ def uninstall(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None, o
     info = app / "Contents" / "Info.plist"
     if info.exists() and plistlib.loads(info.read_bytes()).get("CFBundleIdentifier") == BUNDLE_ID:
         runner(["osascript", "-e", f'quit app "{APP_NAME}"'], capture_output=True, text=True)
+        # Removing the bundle drops its SMAppService login item; clear a legacy System Events item too.
         runner(["osascript", "-e", f'tell application "System Events" to delete login item "{APP_NAME}"'],
                capture_output=True, text=True)
         shutil.rmtree(app)

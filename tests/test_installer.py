@@ -90,8 +90,7 @@ class InstallTest(unittest.TestCase):
         self.assertIn(["xattr", "-dr", "com.apple.quarantine", str(self.app)], self.calls)
         self.assertIn(["open", str(self.app)], self.calls)
         self.assertTrue(any(c[:2] == ["iconutil", "-c"] for c in self.calls))
-        login = [c for c in self.calls if c[0] == "osascript" and "login item" in c[-1]]
-        self.assertTrue(login and str(self.app) in login[0][-1])
+        self.assertFalse(any(c[0] == "osascript" and "System Events" in c[-1] for c in self.calls))
 
     def test_without_swift_skips_the_app(self):
         self.tools.discard("swift")
