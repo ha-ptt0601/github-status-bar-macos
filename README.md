@@ -13,7 +13,8 @@
 | Where | Shows |
 |---|---|
 | Icon `19 · ⚠8` | PRs to review that wait on you · your own PRs that wait on you (hover for a tooltip) |
-| Icon `🔵1 🟡1` | chip reviews running · waiting for your input |
+| Icon ring / dot | A ring spins around the icon while a review runs; a yellow dot means a review needs your input |
+| Icon `🔵1 🟡1` | The same as badges, if you turn them on |
 | Tab `Review requests · 19 / 27` | to do / all PRs that request your review |
 | Tab `My pull requests · 8 / 72` | to do / all your open PRs |
 
@@ -25,6 +26,8 @@
 - **Tabs:** *Review requests* (default) and *My pull requests* sit in a tab bar at the top. Switching is instant and keeps the menu open; both tabs share one width, and the choice is remembered.
 - **Refresh now** keeps the menu open: it shows a spinner and *Refreshing…* while it fetches from GitHub, updates the list in place, then says *✓ Up to date* for two seconds.
 - **Projects ›** and **Settings › Status style** toggle their checkmarks without closing the menu, so you can hide several projects in a row.
+- **Settings › Menu bar** chooses what the menu bar shows: **Show counts** (`19 · ⚠8`, on), **Show review badges** (`🔵1 🟡1`, off) and **Animate while reviewing** (the spinning ring and yellow dot, on). Turn everything off for a plain icon; the tooltip always has the full counts.
+- **Run, Continue review, Stop, Remove, Re-request review, Copy link** keep the menu open: the row shows a spinner, then the outcome (e.g. "✓ Review started"), and the PR row and the review list update in place.
 - **Updates within about a minute.** Every minute GitHubBar asks GitHub Notifications whether anything changed (`If-Modified-Since`; "nothing new" is a free `304`). A new review request, a review or comment on your PR, a mention, a merge or a CI result fetches everything at once, so the numbers and notifications follow within ~1 minute. Without such a change, the full list is still refreshed every 5 minutes (changes GitHub does not notify, such as a conflict on someone else's PR). If notifications are not available to your `gh` token, chip falls back to a full refresh every 3 minutes.
 
 ### Review requests tab (default)
@@ -206,6 +209,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 | `address_skills` | Skills for your own PRs (the Address review button). Same placeholders |
 | `permission_mode`, `disallowed_tools` | Passed to `claude --bg` for every run |
 | `terminal` | `Terminal` or `iTerm`, used by View session |
+| `menu_bar_counts`, `menu_bar_badges`, `menu_bar_animate` | What the menu bar shows (true/false; defaults true, false, true). Also under **Settings › Menu bar** |
 | `status_style` | `dots` (🟠🟢⚪ + label), `emoji` (🔁 🆕 💬 ⏳ + legend) or `symbols` (SF Symbols). Also under **Settings → Status style** |
 | `hidden_projects` | Projects hidden from the menu. Also under **Projects ›** |
 
