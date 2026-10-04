@@ -2,32 +2,9 @@
 
 **GitHubBar** is a macOS menu bar app that shows the GitHub pull requests waiting for **your** review and your **own** open pull requests. With one click, it runs your Claude Code review skill on a PR in the background. **chip** is the command-line tool behind it. chip also powers a `/chip` skill, an `@`-mention picker inside Claude Code and an fzf picker in the terminal.
 
-```
-[GitHub 19 · ⚠8 🔵1]                    ← PRs waiting on your review · your PRs waiting on you · reviews running
-[ Review requests · 19 / 27 | My pull requests · 8 / 72 ]   ← tabs: to do / all; switch without closing
-Updated 13:40
-↻ Refresh now                           ← spinner "Refreshing…", then "✓ Up to date"
-──────────────
-[ 🔍 Search pull requests        ]      ← type to filter, right in the menu
-▤ Projects ›
-──────────────
-API · 15 PRs
-🟠 #2079  Re-review  ABC-123 feat(auth): add login with Goo…  alice  ›
-🟢 #2069  New        fix(cart): keep discounts after upd…  alice  ›
-10 more in API ›
-MAILER-API · 2 PRs
-🟢 #58    New        feat(export): download orders as C…  bob  ›
-Older than 30 days · 11 PRs ›
-──────────────
-Reviews by GitHubBar
-🔵 shopbox-api#272 · /review (project) · running 3m ›
-──────────────
-Show approved & drafts (8) ›
-Recent notifications ›
-Settings ›
-Open at Login ✓
-Quit GitHubBar
-```
+<p align="center">
+  <img src="docs/images/menu.svg" alt="GitHubBar menu: review requests grouped by project, a PR submenu with Run review buttons, a review running in the background" width="900">
+</p>
 
 ## Features
 
