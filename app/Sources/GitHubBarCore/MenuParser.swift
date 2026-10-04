@@ -22,20 +22,27 @@ public struct ParsedMenu: Equatable {
     public var items: [MenuEntry]
     /// Number of input lines consumed (title block + items), used to check nothing is dropped.
     public var lineCount: Int
+    /// Title-block lines marked `notify=true`: notifications for GitHubBar to post (text + click action).
+    public var notifications: [MenuEntry] = []
 }
 
 /// Parses the subset of the SwiftBar plugin format that `chip swiftbar` prints:
 /// the first line is the title; `---` ends the title block and separates items;
 /// a `--` prefix per level nests items; `text | key=value key="value with spaces"`.
+/// Later title-block lines with `notify=true` are notifications, not titles.
 public enum MenuParser {
     public static func parse(_ text: String) -> ParsedMenu {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
         var title = MenuEntry()
         var index = 0
         var titleSeen = false
+        var notifications: [MenuEntry] = []
         while index < lines.count, lines[index] != "---" {
-            if !titleSeen {
-                title = entry(from: lines[index])
+            let line = entry(from: lines[index])
+            if line.params["notify"] == "true" {
+                notifications.append(line)
+            } else if !titleSeen {
+                title = line
                 titleSeen = true
             }
             index += 1
@@ -81,7 +88,7 @@ public enum MenuParser {
             append(rest == "---" ? MenuEntry(isSeparator: true) : entry(from: rest), depth: allowed)
         }
         closeLevels(to: 0)
-        return ParsedMenu(title: title, items: root, lineCount: consumed)
+        return ParsedMenu(title: title, items: root, lineCount: consumed, notifications: notifications)
     }
 
     /// `----x` → (2, "x"); `-----` → (1, "---"); a line that is exactly `---` stays a top separator.

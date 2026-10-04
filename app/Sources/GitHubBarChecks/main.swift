@@ -55,6 +55,20 @@ let plain = MenuParser.parse("t\n---\n\u{200B}-1 thing\nno params here")
 check(plain.items[0].text == "\u{200B}-1 thing", "zero-width escaped dash kept")
 check(plain.items[1].params.isEmpty, "no params")
 
+// Notifications in the title block.
+let noted = MenuParser.parse("""
+3 | templateImage=QUJD==
+New review request: api#2 | notify=true href=https://github.com/o/api/pull/2
+Review finished: api#1 (Full review) | notify=true bash=/a/chip param1=attach param2=ab
+---
+Refresh now
+""")
+check(noted.title.text == "3", "title stays the first non-notify line: \(noted.title.text)")
+check(noted.notifications.count == 2, "two notifications: \(noted.notifications.count)")
+check(noted.notifications[0].params["href"] == "https://github.com/o/api/pull/2", "notification href")
+check(noted.notifications[1].params["param2"] == "ab", "notification action")
+check(noted.items.count == 1 && basic.notifications.isEmpty, "items unaffected")
+
 // Real chip output, if a fixture path is given.
 if CommandLine.arguments.count > 1, let real = try? String(contentsOfFile: CommandLine.arguments[1]) {
     let menu = MenuParser.parse(real)

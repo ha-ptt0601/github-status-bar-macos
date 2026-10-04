@@ -8,6 +8,7 @@ import textwrap
 import time
 from datetime import datetime
 from pathlib import Path
+import os
 from typing import Dict, List, Optional
 
 from chip import __version__, config, fetch, model, notify, runs, store, updates
@@ -310,18 +311,33 @@ def _paged_rows(rows: List[dict], depth: int, ctx: dict) -> List[str]:
     return lines
 
 
-def project_sections(rows: List[dict], depth: int, ctx: dict) -> List[str]:
-    """Every project gets a header and its first PER_PROJECT rows; the rest go into `N more in X ›`."""
+def _tag(lines: List[str], depth: int, params: dict) -> List[str]:
+    """Add params to the items at exactly `depth` (not to their submenus or separators)."""
+    prefix, extra = "--" * depth, " ".join(_param(k, v) for k, v in params.items())
+    tagged = []
+    for line in lines:
+        if line.startswith(prefix) and not line[len(prefix):].startswith("-"):
+            line += (" " if " | " in line else " | ") + extra
+        tagged.append(line)
+    return tagged
+
+
+def project_sections(rows: List[dict], depth: int, ctx: dict, hidden_projects: frozenset = frozenset()) -> List[str]:
+    """Every project gets a header and its first PER_PROJECT rows; the rest go into `N more in X ›`.
+
+    Each project's lines carry `proj=<name>` (plus `hidden=true` for hidden projects, which are still
+    listed) so GitHubBar can show or hide a project in place from the Projects submenu."""
     lines: List[str] = []
     for proj in _project_order(rows):
         prs = [r for r in rows if _project(r) == proj]
-        lines.append(item(f"{proj.upper()} · {plural(len(prs), 'PR')}", depth, **HEADER))
+        section = [item(f"{proj.upper()} · {plural(len(prs), 'PR')}", depth, **HEADER)]
         for r in prs[:PER_PROJECT]:
-            lines.extend(pr_lines(r, depth, ctx))
+            section.extend(pr_lines(r, depth, ctx))
         rest = prs[PER_PROJECT:]
         if rest:
-            lines.append(item(f"{len(rest)} more in {proj.upper()} ›", depth, color=GREY))
-            lines.extend(_paged_rows(rest, depth + 1, ctx))
+            section.append(item(f"{len(rest)} more in {proj.upper()} ›", depth, color=GREY))
+            section.extend(_paged_rows(rest, depth + 1, ctx))
+        lines.extend(_tag(section, depth, {"proj": proj, **({"hidden": "true"} if proj in hidden_projects else {})}))
     return lines
 
 
@@ -351,6 +367,23 @@ def _matches(n: int) -> str:
     return f"{n} match{'' if n == 1 else 'es'}"
 
 
+def _haystack(r: dict) -> str:
+    """What search matches: label, repo, title, author, Jira key and reviewers (lowercase)."""
+    return " ".join([r["label"], r["repo"], r["title"], r["author"], r.get("jira", ""),
+                     " ".join(r.get("reviewers", {})), " ".join(r.get("requested", []))]).lower()
+
+
+def search_lines(rows: List[dict], ctx: dict) -> List[str]:
+    """For GitHubBar's in-menu search field: every PR of the tab as a top-level row tagged with what it
+    matches (`find=`), hidden until the user types, plus a "no matches" line."""
+    lines = []
+    for r in rows:
+        find = " ".join(re.sub(r"[\"|¦]", " ", _haystack(r)).split())
+        lines.extend(_tag(pr_lines(r, 0, ctx), 0, {"searchonly": "true", "find": find}))
+    lines.append(item("No matching pull requests", 0, color=GREY, nomatch="true"))
+    return lines
+
+
 def _filter(rows: List[dict], hidden_projects: set, query: str = "") -> List[dict]:
     """Drop hidden projects and rows that miss any search word (label, repo, title, author, Jira, reviewers)."""
     words = query.lower().split()
@@ -358,27 +391,53 @@ def _filter(rows: List[dict], hidden_projects: set, query: str = "") -> List[dic
     for r in rows:
         if _project(r) in hidden_projects:
             continue
-        haystack = " ".join([r["label"], r["repo"], r["title"], r["author"], r.get("jira", ""),
-                             " ".join(r.get("reviewers", {})), " ".join(r.get("requested", []))]).lower()
+        haystack = _haystack(r)
         if all(word in haystack for word in words):
             kept.append(r)
     return kept
 
 
-def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, matches: int) -> List[str]:
-    """Search (native dialog) and the Projects submenu with a checkmark on every shown project."""
+def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, matches: int,
+              live_search: bool = False) -> List[str]:
+    """Search (GitHubBar: a field in the menu; otherwise a native dialog) and the Projects submenu
+    with a checkmark on every shown project."""
     lines = []
-    if query:
+    if live_search:
+        lines.append(item("Search pull requests", 0, searchfield="true"))
+    elif query:
         lines.append(item(f'"{query}" · {_matches(matches)} — Clear search', 0, sfimage="xmark.circle",
                           **action(plugin, "search", "--clear")))
-    lines.append(item("Search…", 0, sfimage="magnifyingglass", **action(plugin, "search")))
+    if not live_search:
+        lines.append(item("Search…", 0, sfimage="magnifyingglass", **action(plugin, "search")))
     projects = sorted({_project(r) for r in rows})
     if projects:
         lines.append(item("Projects", 0, sfimage="square.grid.2x2"))
-        lines.append(item("Show all", 1, **action(plugin, "project", "all")))
+        lines.append(item("Show all", 1, keep="all", **action(plugin, "project", "all")))
         for proj in projects:
             checked = {} if proj in hidden_projects else {"checked": "true"}
-            lines.append(item(proj, 1, **checked, **action(plugin, "project", "toggle", proj)))
+            lines.append(item(proj, 1, keep="toggle", **checked, **action(plugin, "project", "toggle", proj)))
+    return lines
+
+
+def event_params(plugin: str, event: dict) -> dict:
+    """What clicking a notification does: open the review session, or open the PR/release page."""
+    if event.get("run"):
+        return action(plugin, "attach", event["run"], refresh=False)
+    return {"href": event["href"]} if event.get("href") else {}
+
+
+def _when(at: float, now: float) -> str:
+    stamp = datetime.fromtimestamp(at)
+    return stamp.strftime("%H:%M" if stamp.date() == datetime.fromtimestamp(now).date() else "%b %d")
+
+
+def recent_lines(plugin: str, history: List[dict], now: float) -> List[str]:
+    if not history:
+        return []
+    lines = [item("Recent notifications", 0, sfimage="bell")]
+    for event in history:
+        lines.append(item(f"{_when(event.get('at', now), now)}  {event['text']}", 1, **event_params(plugin, event)))
+    lines += [separator(1), item("Clear", 1, sfimage="trash", **action(plugin, "notifications", "--clear"))]
     return lines
 
 
@@ -386,7 +445,7 @@ def _settings(plugin: str, style: str, version: str) -> List[str]:
     lines = [item("Settings", 0, sfimage="gearshape"), item("Status style", 1, sfimage="paintpalette")]
     for value, label in STYLES:
         checked = {"checked": "true"} if value == style else {}
-        lines.append(item(label, 2, **checked, **action(plugin, "config", "set", "status_style", value)))
+        lines.append(item(label, 2, keep="radio", **checked, **action(plugin, "config", "set", "status_style", value)))
     lines += [
         item("Open config", 1, sfimage="doc.text", **action(plugin, "config", "open", refresh=False)),
         item("Reinstall", 1, sfimage="arrow.triangle.2.circlepath", **action(plugin, "install")),
@@ -399,8 +458,12 @@ def _settings(plugin: str, style: str, version: str) -> List[str]:
 
 def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str, dict], cfg: dict,
            plugin: str, version: str, newer: Optional[str] = None, error: Optional[str] = None,
-           now: Optional[float] = None, view: str = "review", query: str = "") -> List[str]:
-    """One menu: `review` (PRs waiting for the user's review) or `mine` (the user's own PRs)."""
+           now: Optional[float] = None, view: str = "review", query: str = "",
+           history: Optional[List[dict]] = None, deliver: Optional[List[dict]] = None,
+           live_search: bool = False) -> List[str]:
+    """One menu: `review` (PRs waiting for the user's review) or `mine` (the user's own PRs).
+
+    `deliver` events become extra title-block lines (`notify=true`) that GitHubBar posts natively."""
     now = time.time() if now is None else now
     hidden_projects = set(cfg.get("hidden_projects", []))
     style = cfg.get("status_style", "dots")
@@ -414,7 +477,9 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     active = [v["kind"] for v in views.values()]
     badges = ([str(count)] if count else []) + ([f"🔴{changes}"] if changes else []) + [
         f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
-    lines = [item("!" if error else " ".join(badges), 0, templateImage=icon_b64()), "---"]
+    lines = [item("!" if error else " ".join(badges), 0, templateImage=icon_b64())]
+    lines += [item(event["text"], 0, notify="true", **event_params(plugin, event)) for event in deliver or []]
+    lines.append("---")
 
     all_rows = (inbox_all or {}).get("mine" if mine_view else "rows", [])
     records = {k: rec for k, rec in records.items() if (rec.get("kind") == "address") == mine_view}
@@ -425,6 +490,7 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     ctx = {"plugin": plugin, "skills": cfg["skills"], "address_skills": cfg.get("address_skills", []),
            "runs_by_label": runs_by_label, "style": style}
     rows = _filter(all_rows, hidden_projects, query)
+    listed = _filter(all_rows, set(), query)  # hidden projects too, tagged hidden, for in-place toggling
     if newer:
         lines.append(item(f"Update available: v{newer} — Update now", 0, **symbol("arrow.up.circle.fill", "#FF9500"),
                           color="#FF9500", **action(plugin, "update")))
@@ -439,45 +505,57 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         visible = [r for r in rows if not r["draft"] and r["status"] != model.APPROVED]
         hidden = [r for r in rows if r["draft"] or r["status"] == model.APPROVED]
     if inbox_all is not None:
-        # Tabs: clicking the other one switches the menu (it closes; reopen to see the other tab).
+        # Tabs: GitHubBar shows `tab=` items as one segmented control that switches without closing the menu.
         mine_text = f"My pull requests · {len(mine_shown)}" + (f" · 🔴{changes}" if changes else "")
         for name, text in (("review", f"Review requests · {len(review_open)}"), ("mine", mine_text)):
             checked = {"checked": "true"} if name == view else {}
-            lines.append(item(text, 0, **checked, **action(plugin, "view", name)))
+            lines.append(item(text, 0, tab=name, **checked, **action(plugin, "view", name)))
         updated = datetime.fromtimestamp(inbox_all.get("fetched_at", now)).strftime("%H:%M")
         lines.append(item(f"Updated {updated}", 0, color=GREY, size="12"))
-    lines.append(item("Refresh now", 0, sfimage="arrow.clockwise", **action(plugin, "swiftbar", "--force")))
+    lines.append(item("Refresh now", 0, sfimage="arrow.clockwise", keep="refresh",
+                      **action(plugin, "swiftbar", "--force")))
     if inbox_all is not None:
         lines.append("---")
-        lines.extend(_controls(plugin, all_rows, hidden_projects, query, len(rows)))
+        lines.extend(_controls(plugin, all_rows, hidden_projects, query, len(rows), live_search))
         lines.append("---")
+        body_start = len(lines)
         if mine_view:
             if not visible:
                 lines.append(item("No open pull requests" + (" match" if query else ""), 0, color=GREY))
-            lines.extend(project_sections(visible, 0, ctx))
+            lines.extend(project_sections(listed, 0, ctx, frozenset(hidden_projects)))
         else:
-            fresh = [r for r in visible if r["status"] == model.REREVIEW or not r.get("stale")]
+            fresh = [r for r in listed if not r["draft"] and r["status"] != model.APPROVED
+                     and (r["status"] == model.REREVIEW or not r.get("stale"))]
             older = [r for r in visible if r["status"] != model.REREVIEW and r.get("stale")]
             if not visible:
                 lines.append(item("Nothing waiting for your review", 0, color=GREY))
             elif style == "emoji":
                 lines.append(item(LEGEND, 0, **HEADER))
-            lines.extend(project_sections(fresh, 0, ctx))
+            lines.extend(project_sections(fresh, 0, ctx, frozenset(hidden_projects)))
             if older:
                 lines.append(item(f"Older than 30 days · {plural(len(older), 'PR')}", 0, sfimage="clock", color=GREY))
                 lines.extend(pr_pages(older, 1, ctx))
+        if live_search:
+            # While searching, GitHubBar hides the `body=` lines and shows the matching search rows.
+            lines[body_start:] = _tag(lines[body_start:], 0, {"body": "true"})
+            lines.extend(search_lines(_filter(all_rows, hidden_projects), ctx))
     lines.extend(run_lines(records, views, ctx))
     lines.append("---")
     if hidden:
         lines.append(item(f"Show approved & drafts ({len(hidden)})", 0, sfimage="eye.slash"))
         lines.extend(pr_pages(hidden, 1, ctx))
+    lines.extend(recent_lines(plugin, history or [], now))
     lines.extend(_settings(plugin, style, version))
     return lines
 
 
 def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
-               now: Optional[float] = None, view: str = "review") -> str:
-    """One refresh: inbox (3-min cache), run states, release check, notifications, menu text."""
+               now: Optional[float] = None, view: str = "review", deliver: bool = False,
+               env: Optional[Dict[str, str]] = None, panes: bool = False) -> str:
+    """One refresh: inbox (3-min cache), run states, release check, notifications, menu text.
+
+    Under GitHubBar (GITHUBBAR_NOTIFY=1) notifications are queued; `deliver` drains them into the menu."""
+    env = os.environ if env is None else env
     now = time.time() if now is None else now
     cfg = config.load()
     inbox_all, error = store.load_all(fetch_runner or fetch.run_gh_graphql, force)
@@ -492,11 +570,35 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}
     latest = updates.latest_release(store.cache_dir() / "update.json", runner, now)
     newer = latest if latest and updates.is_newer(latest, __version__) else None
+    history_path, outbox_path = store.cache_dir() / "history.json", store.cache_dir() / "outbox.json"
     if inbox_all is not None:
         visible = model.visible_view(inbox_all)["rows"]
         notify_path = store.cache_dir() / "notify.json"
         current = notify.snapshot(visible, views, newer, inbox_all.get("mine", []))
-        notify.send(notify.diff(notify.load(notify_path), current, visible, records), runner)
+        found = notify.events(notify.load(notify_path), current, visible, records)
+        if found:
+            notify.remember(history_path, found, now)
+            if env.get("GITHUBBAR_NOTIFY"):
+                notify.queue(outbox_path, found)
+            else:
+                notify.send([event["text"] for event in found], runner)
         notify.save(notify_path, current)
-    return "\n".join(render(inbox_all, records, views, cfg, plugin, __version__, newer, error, now,
-                            view=view, query=store.load_query()))
+    pending = notify.cap(notify.drain(outbox_path)) if deliver else []
+    args = (inbox_all, records, views, cfg, plugin, __version__, newer, error, now)
+    extra = {"query": store.load_query(), "history": notify.load_list(history_path)}
+    if not panes:
+        return "\n".join(render(*args, view=view, deliver=pending, **extra))
+    extra.update(query="", live_search=True)  # GitHubBar searches inside the menu
+    return "\n".join(both_panes(render(*args, view="review", deliver=pending, **extra),
+                                render(*args, view="mine", **extra), view))
+
+
+def both_panes(review: List[str], mine: List[str], view: str) -> List[str]:
+    """Both tabs in one menu for GitHubBar: review's title block, then each tab's body after a
+    `pane=` marker line. The app shows the active pane and switches by hiding items, without closing the menu."""
+    split = review.index("---")
+    lines = review[:split + 1]
+    for name, body in (("review", review[split + 1:]), ("mine", mine[mine.index("---") + 1:])):
+        lines.append(item("", 0, pane=name, **({"active": "true"} if name == view else {})))
+        lines.extend(body)
+    return lines

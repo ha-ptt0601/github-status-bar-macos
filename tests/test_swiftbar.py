@@ -59,7 +59,7 @@ class RenderTest(unittest.TestCase):
 
     def test_project_header_row_and_submenu(self):
         lines = render([row(1), row(2)])
-        self.assertIn("API · 2 PRs | size=11 color=#8E8E93", lines)
+        self.assertIn("API · 2 PRs | size=11 color=#8E8E93 proj=api", lines)
         pr = next(l for l in lines if l.startswith("#2001"))
         self.assertIn(f"sfimage=sparkle sfconfig={swiftbar.sf_config('#34C759')} tooltip=New font=Menlo size=12", pr)
         self.assertIn("--api#2001 | disabled=true", lines)
@@ -83,14 +83,14 @@ class RenderTest(unittest.TestCase):
         lines = render(rows)
         top = [l for l in lines if l.startswith("#")]
         self.assertEqual(len(top), 7)  # 5 from API + 2 from mailer-api
-        self.assertIn("API · 15 PRs | size=11 color=#8E8E93", lines)
-        self.assertIn("MAILER-API · 2 PRs | size=11 color=#8E8E93", lines)
-        self.assertIn("10 more in API › | color=#8E8E93", lines)
+        self.assertIn("API · 15 PRs | size=11 color=#8E8E93 proj=api", lines)
+        self.assertIn("MAILER-API · 2 PRs | size=11 color=#8E8E93 proj=mailer-api", lines)
+        self.assertIn("10 more in API › | color=#8E8E93 proj=api", lines)
         self.assertFalse(any(l.startswith("Next ") for l in lines))
 
     def test_more_submenu_pages_with_nested_next(self):
         lines = render([row(i) for i in range(1, 31)])
-        self.assertIn("25 more in API › | color=#8E8E93", lines)
+        self.assertIn("25 more in API › | color=#8E8E93 proj=api", lines)
         self.assertEqual(len([l for l in lines if l.startswith("--#")]), 12)
         self.assertIn("--Next 12 ›  (13–24 of 25)", lines)
         self.assertIn("----Next 1 ›  (25–25 of 25)", lines)
@@ -175,11 +175,11 @@ class StatusStyleTest(unittest.TestCase):
     def test_settings_offer_styles_with_checkmark(self):
         lines = render(self.rows(), style="emoji")
         self.assertIn("--Status style | sfimage=paintpalette", lines)
-        self.assertIn("----Colored dots + label | bash=/p/chip.3m.sh terminal=false param1=config param2=set "
+        self.assertIn("----Colored dots + label | keep=radio bash=/p/chip.3m.sh terminal=false param1=config param2=set "
                       "param3=status_style param4=dots refresh=true", lines)
-        self.assertIn("----Emoji | checked=true bash=/p/chip.3m.sh terminal=false param1=config param2=set "
+        self.assertIn("----Emoji | keep=radio checked=true bash=/p/chip.3m.sh terminal=false param1=config param2=set "
                       "param3=status_style param4=emoji refresh=true", lines)
-        self.assertIn("----Symbols | bash=/p/chip.3m.sh terminal=false param1=config param2=set "
+        self.assertIn("----Symbols | keep=radio bash=/p/chip.3m.sh terminal=false param1=config param2=set "
                       "param3=status_style param4=symbols refresh=true", lines)
 
 
@@ -284,14 +284,14 @@ class MineSectionTest(unittest.TestCase):
         mine = [self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})]
         review = self.render(mine, view="review")
         self.assertTrue(review[0].startswith("1 🔴1 | templateImage="))
-        self.assertIn("Review requests · 1 | checked=true bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertIn("Review requests · 1 | tab=review checked=true bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=review refresh=true", review)
-        self.assertIn("My pull requests · 1 · 🔴1 | bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertIn("My pull requests · 1 · 🔴1 | tab=mine bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=mine refresh=true", review)
         self.assertFalse(any(l.startswith("🔴 #2119") for l in review))
         own = self.render(mine)
         self.assertTrue(own[0].startswith("1 🔴1 | templateImage="))
-        self.assertIn("My pull requests · 1 · 🔴1 | checked=true bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertIn("My pull requests · 1 · 🔴1 | tab=mine checked=true bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=mine refresh=true", own)
         self.assertTrue(any(l.startswith("🔴 #2119") for l in own))
         self.assertFalse(any(l.startswith("🟢 #2001") for l in own))
@@ -325,16 +325,18 @@ class MineSectionTest(unittest.TestCase):
         self.assertIn("Search… | sfimage=magnifyingglass bash=/p/chip.3m.sh terminal=false param1=search "
                       "refresh=true", lines)
         self.assertIn("Projects | sfimage=square.grid.2x2", lines)
-        self.assertIn("--Show all | bash=/p/chip.3m.sh terminal=false param1=project param2=all refresh=true", lines)
-        self.assertIn("--api | checked=true bash=/p/chip.3m.sh terminal=false param1=project param2=toggle "
+        self.assertIn("--Show all | keep=all bash=/p/chip.3m.sh terminal=false param1=project param2=all refresh=true", lines)
+        self.assertIn("--api | keep=toggle checked=true bash=/p/chip.3m.sh terminal=false param1=project param2=toggle "
                       "param3=api refresh=true", lines)
 
     def test_hidden_project_is_unchecked_and_filtered(self):
         cfg = dict(self.CFG, hidden_projects=["api"])
         lines = self.render([], rows=[row(1), row(2, repo="acme/mailer-api")], view="review", cfg=cfg)
-        self.assertFalse(any("#2001" in l.split(" | ")[0] for l in lines if not l.startswith("-")))
+        # Hidden projects stay listed but tagged, so GitHubBar can show them in place.
+        hidden = [l for l in lines if "#2001" in l.split(" | ")[0] and not l.startswith("-")]
+        self.assertTrue(hidden and all("proj=api hidden=true" in l for l in hidden))
         self.assertTrue(any("#2002" in l.split(" | ")[0] for l in lines if not l.startswith("-")))
-        self.assertIn("--api | bash=/p/chip.3m.sh terminal=false param1=project param2=toggle param3=api "
+        self.assertIn("--api | keep=toggle bash=/p/chip.3m.sh terminal=false param1=project param2=toggle param3=api "
                       "refresh=true", lines)
 
     def test_query_filters_and_offers_clear(self):
@@ -358,6 +360,53 @@ class MineSectionTest(unittest.TestCase):
         self.assertFalse(any(l.startswith("🔵 api#2119") for l in review))
         self.assertTrue(any(l.startswith("🔵 api#2119") for l in own))
         self.assertTrue(own[0].startswith("1 🔵2 | templateImage="))
+
+
+class RecentNotificationsTest(unittest.TestCase):
+    def test_section_links_prs_and_sessions(self):
+        history = [{"text": "Review finished: api#1 (Full review)", "run": "ab", "at": 0},
+                   {"text": "New review request: api#2 — t", "href": "https://x/2", "at": 0}]
+        lines = render([row(1)], history=history)
+        start = lines.index(swiftbar.item("Recent notifications", 0, sfimage="bell"))
+        self.assertIn("param1=attach param2=ab", lines[start + 1])
+        self.assertIn("href=https://x/2", lines[start + 2])
+        self.assertIn("param1=notifications param2=--clear", lines[start + 4])
+
+    def test_no_history_no_section(self):
+        self.assertFalse(any("Recent notifications" in line for line in render([row(1)])))
+
+    def test_deliver_lines_sit_in_the_title_block(self):
+        lines = render([row(1)], deliver=[{"text": "chip v9 is available", "href": "https://r"}])
+        self.assertEqual(lines[2], "---")
+        self.assertEqual(lines[1], 'chip v9 is available | notify=true href=https://r')
+
+
+class LiveSearchTest(unittest.TestCase):
+    def test_field_body_tags_and_search_rows(self):
+        lines = render([row(1), row(2, title='say "hi" | bye')], live_search=True)
+        self.assertIn("Search pull requests | searchfield=true", lines)
+        self.assertFalse(any(l.startswith("Search…") for l in lines))
+        header = next(l for l in lines if l.startswith("API · 2 PRs"))
+        self.assertTrue(header.endswith("proj=api body=true"))
+        found = [l for l in lines if "searchonly=true" in l]
+        self.assertEqual(len(found), 2)
+        self.assertIn('find="api#2002 acme/api say hi bye alice"', found[1])
+        self.assertIn("No matching pull requests | color=#8E8E93 nomatch=true", lines)
+
+    def test_off_by_default(self):
+        lines = render([row(1)])
+        self.assertTrue(any(l.startswith("Search…") for l in lines))
+        self.assertFalse(any("searchonly" in l or "body=true" in l for l in lines))
+
+
+class PanesTest(unittest.TestCase):
+    def test_both_tabs_follow_one_title_block(self):
+        review = ["title", "notice | notify=true", "---", "Review requests", "r1"]
+        mine = ["title", "---", "My pull requests", "m1"]
+        self.assertEqual(swiftbar.both_panes(review, mine, "mine"), [
+            "title", "notice | notify=true", "---",
+            " | pane=review", "Review requests", "r1",
+            " | pane=mine active=true", "My pull requests", "m1"])
 
 
 class BuildMenuTest(unittest.TestCase):
@@ -396,6 +445,26 @@ class BuildMenuTest(unittest.TestCase):
         notes = [c for c in self.calls if c[0] == "osascript"]
         self.assertEqual(len(notes), 1)
         self.assertIn("New review request: api#2", notes[0][2])
+
+    def test_events_are_remembered_and_queued_for_githubbar(self):
+        env = {"GITHUBBAR_NOTIFY": "1"}
+        swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner, now=1000, env=env)
+        self.nodes.append(make_node(id="b", number=2, url="https://github.com/acme/api/pull/2"))
+        out = swiftbar.build_menu(PLUGIN, force=True, fetch_runner=self.fetch_runner, runner=self.runner,
+                                  now=2000, env=env)
+        self.assertFalse(any(c[0] == "osascript" for c in self.calls))
+        self.assertNotIn("notify=true", out.split("\n---\n")[0])  # queued, not delivered yet
+        self.assertIn("Recent notifications", out)
+        self.assertIn("href=https://github.com/acme/api/pull/2", out)
+        delivered = swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner,
+                                        now=2010, env=env, deliver=True)
+        title_block = delivered.split("\n---\n")[0].splitlines()
+        self.assertEqual(len(title_block), 2)
+        self.assertIn("New review request: api#2", title_block[1])
+        self.assertIn("notify=true", title_block[1])
+        again = swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner,
+                                    now=2020, env=env, deliver=True)
+        self.assertEqual(len(again.split("\n---\n")[0].splitlines()), 1)  # the outbox was drained
 
     def test_round_resolves_when_commits_land_after_it(self):
         Path(self.tmp.name, "runs.json").write_text(json.dumps({"api#1::Full review": {

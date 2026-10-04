@@ -4,12 +4,11 @@
 
 ```
 [GitHub 11 🔴1 🔵1]                      ← PRs to review · your PRs with changes requested · reviews running
-✓ Review requests · 30                  ← tab (default)
-  My pull requests · 75 · 🔴1           ← tab
+[ Review requests · 30 | My pull requests · 75 · 🔴1 ]   ← tabs: switch without closing the menu
 Updated 13:40
-↻ Refresh now
+↻ Refresh now                           ← spinner "Refreshing…", then "✓ Up to date"
 ──────────────
-🔍 Search…
+[ 🔍 Search pull requests        ]      ← type to filter, right in the menu
 ▤ Projects ›
 ──────────────
 API · 15 PRs
@@ -24,12 +23,19 @@ Reviews by chip
 🔵 shopbox-api#272 · Full review · running 3m ›
 ──────────────
 Show approved & drafts (8) ›
+Recent notifications ›
 Settings ›
 Open at Login ✓
 Quit GitHubBar
 ```
 
 ## Features
+
+### A menu that stays open
+- **Tabs:** *Review requests* (default) and *My pull requests* sit in a tab bar at the top. Switching is instant and keeps the menu open; both tabs share one width, and the choice is remembered.
+- **Refresh now** keeps the menu open: it shows a spinner and *Refreshing…* while it fetches from GitHub, updates the list in place, then says *✓ Up to date* for two seconds.
+- **Projects ›** and **Settings › Status style** toggle their checkmarks without closing the menu, so you can hide several projects in a row.
+- GitHubBar refreshes on its own every minute (GitHub data is cached for 3 minutes), so new PRs usually show up within a few minutes along with a notification.
 
 ### Review requests tab (default)
 - **Every PR waiting for you**, from two searches: `review-requested:@me` and `reviewed-by:@me`. GitHub drops you from the requested reviewers once you review, so the second search is what keeps PRs that need a **re-review** visible.
@@ -54,8 +60,9 @@ Quit GitHubBar
 - **Continue review (round N+1)** resumes **the same session**, so Claude still has round N in context. It checks whether each earlier finding was fixed, answered or is still open, then reviews only what changed.
 
 ### Search and filters
-- **Search…** opens a small dialog. Both tabs then show only the PRs whose label, repo, title, author, reviewers and Jira key contain all of your words, with a `"query" · N matches — Clear search` line on top.
-- **Projects ›** lets you hide or show projects (✓ = shown). The choice is saved in your config.
+- **Search pull requests** is a field at the top of the menu, focused when the menu opens. Type and the tab shows only the PRs whose number, project, title, author, reviewers or Jira key contain all of your words, including PRs under *N more*, *Older than 30 days* and *Show approved & drafts* (up to 40 results). Clear the field to get the full list back. The text stays when you switch tabs.
+- **Projects ›** hides or shows a project's PRs at once (✓ = shown). The choice is saved in your config.
+- Outside GitHubBar (`chip swiftbar` without `--panes`, e.g. in SwiftBar), **Search…** opens a small dialog instead.
 
 ### Notifications (macOS)
 You are notified about:
@@ -65,6 +72,8 @@ You are notified about:
 - CI failures, conflicts, and new chip versions.
 
 The first refresh after install is silent, and each refresh sends at most 3 notifications.
+
+GitHubBar posts them as native macOS notifications (allow them when macOS asks). **Clicking one opens the PR**, or the review session for "Review finished" and "Review needs you". The last 10 are also kept under **Recent notifications ›** in the menu, with the same click actions and a **Clear** button.
 
 ### Other ways to pick PRs
 - **Claude Code prompt bar:** type `/chip @`, pick PRs from the `@` autocomplete (served by chip's MCP server), and press Enter to review them one by one.
@@ -144,9 +153,10 @@ Open the config with `chip config open` (or **Settings → Open config**), and c
 | `chip attach / stop / forget <session-id>` | Open, stop or remove a chip review session |
 | `chip nudge <label>` | Re-request review on your PR |
 | `chip view review\|mine` | Switch the menu tab |
+| `chip notifications --clear` | Empty the Recent notifications menu |
 | `chip search [--clear]` · `chip project toggle <name>\|all` | Search and project filter |
 | `chip config init\|check\|path\|open\|set <key> <value>` | Configuration |
-| `chip swiftbar [--view review\|mine]` | Print the menu (what GitHubBar renders) |
+| `chip swiftbar [--view review\|mine] [--panes] [--deliver]` | Print the menu. GitHubBar uses `--panes` (both tabs, in-menu search) and `--deliver` (queued notifications) |
 | `chip mcp` | MCP server used by Claude Code's `@` picker |
 
 ## Development

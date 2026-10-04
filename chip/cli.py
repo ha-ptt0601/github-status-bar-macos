@@ -406,7 +406,8 @@ def cmd_copy(args) -> int:
 def cmd_swiftbar(args, runner) -> int:
     from chip import swiftbar
     plugin = os.environ.get("CHIP_PLUGIN") or str(tui.BIN)
-    print(swiftbar.build_menu(plugin, force=args.force, fetch_runner=runner, view=args.view or store.load_view()))
+    print(swiftbar.build_menu(plugin, force=args.force, fetch_runner=runner, view=args.view or store.load_view(),
+                              deliver=args.deliver, panes=args.panes))
     return 0
 
 
@@ -477,6 +478,12 @@ def main(argv=None, runner=None) -> int:
     p_swiftbar.add_argument("--force", action="store_true", help="refetch from GitHub now")
     p_swiftbar.add_argument("--view", choices=list(store.VIEWS),
                             help="override the remembered tab: review (default) or mine")
+    p_swiftbar.add_argument("--deliver", action="store_true",
+                            help="print queued notifications in the title block (GitHubBar posts them)")
+    p_swiftbar.add_argument("--panes", action="store_true",
+                            help="print both tabs, each after a pane= marker (GitHubBar switches tabs in place)")
+    sub.add_parser("notifications", help="clear the Recent notifications menu").add_argument(
+        "--clear", action="store_true", required=True)
     sub.add_parser("view", help="switch the menu tab: review | mine").add_argument("tab", choices=list(store.VIEWS))
     sub.add_parser("install", help="link chip, install the /chip skill, MCP server and menu bar plugin")
     sub.add_parser("uninstall", help="remove what `chip install` added")
@@ -512,6 +519,9 @@ def main(argv=None, runner=None) -> int:
         return cmd_forget(args)
     if args.cmd == "view":
         store.save_view(args.tab)
+        return 0
+    if args.cmd == "notifications":
+        (cache_dir() / "history.json").unlink(missing_ok=True)
         return 0
     if args.cmd == "search":
         return cmd_search(args)
