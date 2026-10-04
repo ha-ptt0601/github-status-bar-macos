@@ -171,25 +171,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     /// open submenu is untouched. The rest of the new menu is applied when the menu closes.
     private func updateInPlace(_ parsed: ParsedMenu, from view: KeepOpenView) {
         setTitle(parsed.title)
-        guard let submenu = view.enclosingMenuItem?.menu else { return }
-        if let menu = statusItem.menu { updateRunRows(menu, parsed) }
-        guard let label = submenu.items.first?.title, !label.isEmpty else { return }
-        func entry(in entries: [MenuEntry]) -> MenuEntry? {
-            for e in entries {
-                if e.children.first?.text == label { return e }
-                if let found = entry(in: e.children) { return found }
-            }
-            return nil
+        guard let menu = statusItem.menu, let submenu = view.enclosingMenuItem?.menu else { return }
+        updateRunRows(menu, parsed)
+        // The PR the click was about: a PR submenu starts with its label ("api#2123"); a review row's
+        // text starts with it ("api#2123 · Full review · …").
+        var label = submenu.items.first?.title ?? ""
+        if label.range(of: #"^[\w.-]+#\d+$"#, options: .regularExpression) == nil {
+            let parent = Self.allItems(menu).first { $0.submenu === submenu }
+            label = (parent?.representedObject as? MenuEntry).flatMap { Self.runKey($0.text) }?
+                .components(separatedBy: " · ").first ?? ""
         }
-        func row(in menu: NSMenu) -> NSMenuItem? {
-            for item in menu.items {
-                if item.submenu === submenu { return item }
-                if let sub = item.submenu, let found = row(in: sub) { return found }
-            }
-            return nil
+        guard !label.isEmpty, let fresh = Self.prEntry(label, in: parsed.items) else { return }
+        for item in Self.allItems(menu) where item.submenu?.items.first?.title == label {
+            refresh(item, with: fresh)
         }
-        guard let menu = statusItem.menu, let item = row(in: menu), let fresh = entry(in: parsed.items) else { return }
-        refresh(item, with: fresh)
     }
 
     private func refresh(_ item: NSMenuItem, with fresh: MenuEntry) {
@@ -199,17 +194,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         item.representedObject = fresh
     }
 
-    /// "Reviews by GitHubBar" rows ("<label> · <skill> · <state>") that already exist get their new state.
-    private func updateRunRows(_ menu: NSMenu, _ parsed: ParsedMenu) {
-        func key(_ text: String) -> String? {
-            guard let match = text.range(of: #"[\w.-]+#\d+ · [^·]+ · "#, options: .regularExpression) else { return nil }
-            return String(text[match])
+    /// Every item of a menu and its submenus.
+    static func allItems(_ menu: NSMenu) -> [NSMenuItem] {
+        menu.items.flatMap { [$0] + ($0.submenu.map(allItems) ?? []) }
+    }
+
+    /// The PR row entry whose submenu starts with `label`.
+    static func prEntry(_ label: String, in entries: [MenuEntry]) -> MenuEntry? {
+        for entry in entries {
+            if entry.children.first?.text == label { return entry }
+            if let found = prEntry(label, in: entry.children) { return found }
         }
+        return nil
+    }
+
+    /// "api#2123 · Full review · " from a "Reviews by GitHubBar" row text.
+    static func runKey(_ text: String) -> String? {
+        guard let match = text.range(of: #"[\w.-]+#\d+ · [^·]+ · "#, options: .regularExpression) else { return nil }
+        return String(text[match])
+    }
+
+    /// "Reviews by GitHubBar" rows get their new state; a removed review is greyed out (it disappears when
+    /// the menu closes; removing an item under an open submenu is unsafe).
+    private func updateRunRows(_ menu: NSMenu, _ parsed: ParsedMenu) {
         var fresh: [String: MenuEntry] = [:]
-        for entry in parsed.items { if let k = key(entry.text) { fresh[k] = entry } }
+        for entry in parsed.items { if let k = Self.runKey(entry.text) { fresh[k] = entry } }
         for item in menu.items {
-            guard let old = item.representedObject as? MenuEntry, let k = key(old.text), let new = fresh[k] else { continue }
-            refresh(item, with: new)
+            guard let old = item.representedObject as? MenuEntry, let k = Self.runKey(old.text) else { continue }
+            if let new = fresh[k] {
+                refresh(item, with: new)
+            } else {
+                let gone = k.trimmingCharacters(in: .whitespaces) + " removed"
+                item.attributedTitle = NSAttributedString(string: gone, attributes: [
+                    .font: NSFont.menuFont(ofSize: 0), .foregroundColor: NSColor.secondaryLabelColor])
+                item.image = nil
+            }
         }
     }
 
