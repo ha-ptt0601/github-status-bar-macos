@@ -147,7 +147,7 @@ HELP = (
     "plain text; placeholders: {url} {repo} {number} {label} {title} {base}. Optional: repos (\"owner/repo\", "
     "\"acme/*\", \"*-ios\") and languages (\"PHP\", \"Swift\"...) limit where a skill is offered. "
     "Keys starting with _ are ignored. Check with: chip config check. "
-    "Docs: https://github.com/ha-ptt0601/chip#configuration"
+    "Docs: https://github.com/ha-ptt0601/github-status-bar-macos#configuration"
 )
 EXAMPLE_SKILLS = [
     {"name": "My review", "prompt": "/my-review-skill {url}"},

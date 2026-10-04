@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
 
-REPO = os.environ.get("CHIP_UPDATE_REPO", "ha-ptt0601/chip")
+REPO = os.environ.get("CHIP_UPDATE_REPO", "ha-ptt0601/github-status-bar-macos")
 CHECK_EVERY_SECONDS = 6 * 3600
 VERSION_RE = re.compile(r'^__version__ = "([^"]+)"', re.M)
 

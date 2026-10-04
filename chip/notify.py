@@ -15,7 +15,7 @@ from chip import model
 
 LIMIT = 3
 HISTORY = 10
-RELEASES_URL = "https://github.com/ha-ptt0601/chip/releases/latest"
+RELEASES_URL = "https://github.com/ha-ptt0601/github-status-bar-macos/releases/latest"
 
 
 def _short(text: str, width: int = 60) -> str:

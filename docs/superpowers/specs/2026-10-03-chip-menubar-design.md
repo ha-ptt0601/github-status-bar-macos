@@ -197,8 +197,8 @@ Each notification is an event `{text, href}` (the PR or release page) or `{text,
 
 ## Version updates (in-app)
 
-- **Version source.** `chip/__init__.py` holds `__version__ = "X.Y.Z"`. Releases are GitHub releases tagged `vX.Y.Z` on `ha-ptt0601/chip`, created by `scripts/release.sh X.Y.Z`. The script bumps the version, commits, tags, pushes and runs `gh release create`.
-- **Check.** `chip swiftbar` checks the latest release with `gh api repos/ha-ptt0601/chip/releases/latest`, at most once every 6 hours (cached in `~/.cache/chip/update.json`), or immediately via Settings → Check for updates. `gh` uses each user's own auth, so the private repo works for anyone invited.
+- **Version source.** `chip/__init__.py` holds `__version__ = "X.Y.Z"`. Releases are GitHub releases tagged `vX.Y.Z` on `ha-ptt0601/github-status-bar-macos`, created by `scripts/release.sh X.Y.Z`. The script bumps the version, commits, tags, pushes and runs `gh release create`.
+- **Check.** `chip swiftbar` checks the latest release with `gh api repos/ha-ptt0601/github-status-bar-macos/releases/latest`, at most once every 6 hours (cached in `~/.cache/chip/update.json`), or immediately via Settings → Check for updates. `gh` uses each user's own auth, so the private repo works for anyone invited.
 - **Show.** When the latest version is newer than the local one: an orange "⬆︎ Update available: vX — Update now" line at the top of the menu, plus one notification per version.
 - **Update now** (`chip update`) runs `git -C <repo> pull --ff-only`, then `chip install` (idempotent), then refreshes the menu. If the working tree is dirty or the pull is not a fast-forward, it stops and opens the repo in Terminal with the git message, without changing anything.
 
@@ -226,9 +226,9 @@ Anyone can run their own skill instead of, or next to, `/my-review-skill`. The c
 
 The `/chip` skill and the fzf picker use the same config: their review step uses the default skill's prompt instead of the hard-coded `/my-review-skill`.
 
-## Sharing with other people (private repo `ha-ptt0601/chip`)
+## Sharing with other people (private repo `ha-ptt0601/github-status-bar-macos`)
 
-Other people clone the repo anywhere and run one command. Nothing may assume `/Users/me` or `~/work/chip`.
+Other people clone the repo anywhere and run one command. Nothing may assume `/Users/me` or `~/work/github-status-bar-macos`.
 
 - **No hard-coded paths.** The repo location comes from the launcher's real path (`bin/chip` already resolves it). Generated files (the skill, the SwiftBar plugin, the MCP registration) embed the absolute path of *that* clone at install time. `work_root` comes from the config.
 - **`chip install`** (idempotent) checks the prerequisites (`python3` ≥ 3.9, `gh` authenticated, `claude`; `fzf` and SwiftBar are optional) and prints `brew install …` for anything missing. It then:

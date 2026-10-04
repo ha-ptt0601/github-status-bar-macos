@@ -1,4 +1,4 @@
-# GitHubBar + chip — your PR review inbox for Claude Code
+# GitHub Status Bar for macOS — GitHubBar + chip, your PR review inbox for Claude Code
 
 **GitHubBar** is a macOS menu bar app that shows the GitHub pull requests waiting for **your** review and your **own** open pull requests. With one click, it runs your Claude Code review skill on a PR in the background. **chip** is the command-line tool behind it. chip also powers a `/chip` skill, an `@`-mention picker inside Claude Code and an fzf picker in the terminal.
 
@@ -121,8 +121,8 @@ chip has no login of its own: every request goes through `gh` with **your** toke
 The repository is private. Ask for access, then:
 
 ```sh
-git clone git@github.com:ha-ptt0601/chip.git ~/work/chip
-~/work/chip/bin/chip install
+git clone git@github.com:ha-ptt0601/github-status-bar-macos.git ~/work/github-status-bar-macos
+~/work/github-status-bar-macos/bin/chip install
 ```
 
 `chip install` does the following:
