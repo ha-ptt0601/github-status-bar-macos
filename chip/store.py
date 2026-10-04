@@ -69,3 +69,20 @@ def load_query() -> str:
 def save_query(query: str) -> None:
     cache_dir().mkdir(parents=True, exist_ok=True)
     (cache_dir() / "filter.json").write_text(json.dumps({"q": query.strip()}, ensure_ascii=False))
+
+
+VIEWS = ("review", "mine")
+
+
+def load_view() -> str:
+    """The menu tab to show: `review` (default) or `mine`."""
+    try:
+        view = json.loads((cache_dir() / "view.json").read_text()).get("view")
+    except (OSError, ValueError):
+        view = None
+    return view if view in VIEWS else "review"
+
+
+def save_view(view: str) -> None:
+    cache_dir().mkdir(parents=True, exist_ok=True)
+    (cache_dir() / "view.json").write_text(json.dumps({"view": view}))

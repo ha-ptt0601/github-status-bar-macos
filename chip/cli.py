@@ -406,7 +406,7 @@ def cmd_copy(args) -> int:
 def cmd_swiftbar(args, runner) -> int:
     from chip import swiftbar
     plugin = os.environ.get("CHIP_PLUGIN") or str(tui.BIN)
-    print(swiftbar.build_menu(plugin, force=args.force, fetch_runner=runner, view=args.view))
+    print(swiftbar.build_menu(plugin, force=args.force, fetch_runner=runner, view=args.view or store.load_view()))
     return 0
 
 
@@ -475,8 +475,9 @@ def main(argv=None, runner=None) -> int:
     sub.add_parser("copy", help="copy a PR link").add_argument("label")
     p_swiftbar = sub.add_parser("swiftbar", help="print the SwiftBar menu (used by the menu bar plugin)")
     p_swiftbar.add_argument("--force", action="store_true", help="refetch from GitHub now")
-    p_swiftbar.add_argument("--view", choices=["review", "mine"], default="review",
-                            help="review = PRs waiting for your review; mine = your own PRs")
+    p_swiftbar.add_argument("--view", choices=list(store.VIEWS),
+                            help="override the remembered tab: review (default) or mine")
+    sub.add_parser("view", help="switch the menu tab: review | mine").add_argument("tab", choices=list(store.VIEWS))
     sub.add_parser("install", help="link chip, install the /chip skill, MCP server and menu bar plugin")
     sub.add_parser("uninstall", help="remove what `chip install` added")
     p_update = sub.add_parser("update", help="pull the latest chip and reinstall")
@@ -509,6 +510,9 @@ def main(argv=None, runner=None) -> int:
         return cmd_stop(args)
     if args.cmd == "forget":
         return cmd_forget(args)
+    if args.cmd == "view":
+        store.save_view(args.tab)
+        return 0
     if args.cmd == "search":
         return cmd_search(args)
     if args.cmd == "project":

@@ -481,3 +481,10 @@ class SearchProjectCliTest(RunCliBase):
         self.assertEqual(config.load()["hidden_projects"], ["loyalty-partners"])
         self.run_cli(["project", "all"])
         self.assertEqual(config.load()["hidden_projects"], [])
+
+    def test_view_switch_is_remembered(self):
+        self.assertEqual(store.load_view(), "review")
+        self.run_cli(["view", "mine"])
+        self.assertEqual(store.load_view(), "mine")
+        self.run_cli(["view", "review"])
+        self.assertEqual(store.load_view(), "review")
