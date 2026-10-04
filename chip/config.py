@@ -9,12 +9,15 @@ from typing import List, Optional
 
 PLACEHOLDERS = {"url", "repo", "number", "label", "title"}
 TERMINALS = ("Terminal", "iTerm")
+STATUS_STYLES = ("dots", "emoji", "symbols")
+SETTABLE = {"status_style": STATUS_STYLES, "terminal": TERMINALS}
 DEFAULT = {
     "work_root": "~/work",
     "skills": [{"name": "Full review", "prompt": "/my-review-skill {url}"}],
     "permission_mode": "auto",
     "disallowed_tools": ["Edit", "Write", "NotebookEdit"],
     "terminal": "Terminal",
+    "status_style": "dots",
 }
 
 
@@ -58,6 +61,8 @@ def validate(data) -> List[str]:
         errors.append("disallowed_tools must be a list of strings")
     if data.get("terminal", DEFAULT["terminal"]) not in TERMINALS:
         errors.append(f"terminal must be one of {', '.join(TERMINALS)}")
+    if data.get("status_style", DEFAULT["status_style"]) not in STATUS_STYLES:
+        errors.append(f"status_style must be one of {', '.join(STATUS_STYLES)}")
     return errors
 
 
@@ -98,3 +103,25 @@ def init(path: Optional[Path] = None) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(DEFAULT, ensure_ascii=False, indent=2) + "\n")
     return True
+
+
+def set_value(key: str, value: str, path: Optional[Path] = None) -> List[str]:
+    """Set one menu-settable key in the config file; returns errors (nothing is written on error)."""
+    path = Path(path) if path else config_path()
+    if key not in SETTABLE:
+        return [f"{key} cannot be set from the menu (settable: {', '.join(sorted(SETTABLE))})"]
+    if value not in SETTABLE[key]:
+        return [f"{key} must be one of {', '.join(SETTABLE[key])}"]
+    data = {}
+    if path.exists():
+        try:
+            data = json.loads(path.read_text())
+        except ValueError as exc:
+            return [f"{path}: invalid JSON ({exc})"]
+    data[key] = value
+    errors = validate(data)
+    if errors:
+        return errors
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    return []

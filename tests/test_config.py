@@ -69,3 +69,34 @@ class ConfigTest(unittest.TestCase):
 
     def test_env_path(self):
         self.assertTrue(str(config.config_path()).endswith("no-such-config.json"))
+
+
+class StatusStyleTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "config.json"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_default_is_dots(self):
+        self.assertEqual(config.load(self.path)["status_style"], "dots")
+
+    def test_bad_style(self):
+        self.path.write_text(json.dumps({"status_style": "stars"}))
+        self.assertIn("status_style", config.load(self.path)["errors"][0])
+
+    def test_set_value_writes_and_keeps_other_keys(self):
+        self.path.write_text(json.dumps({"work_root": "~/src"}))
+        self.assertEqual(config.set_value("status_style", "emoji", self.path), [])
+        data = json.loads(self.path.read_text())
+        self.assertEqual((data["status_style"], data["work_root"]), ("emoji", "~/src"))
+
+    def test_set_value_creates_file(self):
+        self.assertEqual(config.set_value("status_style", "symbols", self.path), [])
+        self.assertEqual(config.load(self.path)["status_style"], "symbols")
+
+    def test_set_value_rejects_bad_value_and_unknown_key(self):
+        self.assertTrue(config.set_value("status_style", "stars", self.path))
+        self.assertTrue(config.set_value("skills", "x", self.path))
+        self.assertFalse(self.path.exists())
