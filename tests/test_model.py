@@ -147,3 +147,47 @@ class ReviewTimesTest(unittest.TestCase):
 
     def test_no_review(self):
         self.assertIsNone(model.build_row(make_node(), "me", NOW)["my_review_at"])
+
+
+def threads(*resolved):
+    return {"totalCount": len(resolved), "nodes": [{"isResolved": r} for r in resolved]}
+
+
+class MineRowTest(unittest.TestCase):
+    def mine(self, **overrides):
+        return model.build_mine_row(make_node(author={"login": "me"}, **overrides), "me", NOW)
+
+    def test_reviewers_requested_and_unresolved(self):
+        r = self.mine(latestReviews=reviews(review("bob", "APPROVED", MINE_AT), review("eve", "COMMENTED", MINE_AT)),
+                      reviewRequests={"nodes": [{"requestedReviewer": {"login": "zed"}},
+                                                {"requestedReviewer": {"slug": "backend"}}]},
+                      reviewThreads=threads(True, False, False))
+        self.assertEqual(r["reviewers"], {"bob": "APPROVED", "eve": "COMMENTED"})
+        self.assertEqual(r["requested"], ["zed", "backend"])
+        self.assertEqual(r["unresolved"], 2)
+        self.assertEqual(r["kind"], "mine")
+
+    def test_status_priority(self):
+        cases = [
+            ({"isDraft": True, "latestReviews": reviews(review("bob", "CHANGES_REQUESTED", MINE_AT))}, model.DRAFT),
+            ({"latestReviews": reviews(review("bob", "CHANGES_REQUESTED", MINE_AT)),
+              "commits": commits_at(MINE_AT, "FAILURE")}, model.CHANGES),
+            ({"commits": commits_at(MINE_AT, "FAILURE"), "mergeable": "CONFLICTING"}, model.CI_FAILED),
+            ({"mergeable": "CONFLICTING", "reviewThreads": threads(False)}, model.CONFLICT),
+            ({"reviewThreads": threads(False), "latestReviews": reviews(review("bob", "APPROVED", MINE_AT))}, model.THREADS),
+            ({"latestReviews": reviews(review("bob", "APPROVED", MINE_AT))}, model.READY),
+            ({}, model.AWAITING),
+        ]
+        for overrides, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(self.mine(**overrides)["mine_status"], expected)
+
+    def test_mine_list_sorted_by_priority_then_age(self):
+        nodes = [
+            make_node(id="w", number=1, createdAt="2026-09-01T00:00:00Z"),
+            make_node(id="c", number=2, latestReviews=reviews(review("bob", "CHANGES_REQUESTED", MINE_AT))),
+            make_node(id="a", number=3, createdAt="2026-08-01T00:00:00Z"),
+        ]
+        rows = model.build_mine_rows(nodes, "me", NOW)
+        self.assertEqual([r["number"] for r in rows], [2, 3, 1])
+        self.assertEqual([r["index"] for r in rows], [1, 2, 3])

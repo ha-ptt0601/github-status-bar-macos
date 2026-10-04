@@ -11,6 +11,16 @@ WAITING = "waiting-author"
 COMMENTED = "commented"
 APPROVED = "approved"
 
+# Status of the viewer's own PRs, in display priority.
+CHANGES = "changes"
+CI_FAILED = "ci-failed"
+CONFLICT = "conflict"
+THREADS = "threads"
+READY = "ready"
+AWAITING = "awaiting-review"
+DRAFT = "draft"
+MINE_ORDER = [CHANGES, CI_FAILED, CONFLICT, THREADS, READY, AWAITING, DRAFT]
+
 STATUS_GROUP = {REREVIEW: 0, NEW: 1, WAITING: 2, COMMENTED: 2, APPROVED: 4}
 STALE_GROUP = 3
 STALE_DAYS = 30
@@ -151,3 +161,45 @@ def visible_view(inbox_all: dict, show_all: bool = False) -> dict:
     view = dict(inbox_all)
     view.update(rows=rows, hidden=hidden)
     return view
+
+
+def _mine_status(row: dict) -> str:
+    states = set(row["reviewers"].values())
+    if row["draft"]:
+        return DRAFT
+    if "CHANGES_REQUESTED" in states:
+        return CHANGES
+    if row["ci"] == CI_MAP["FAILURE"]:
+        return CI_FAILED
+    if row["conflict"]:
+        return CONFLICT
+    if row["unresolved"]:
+        return THREADS
+    if "APPROVED" in states:
+        return READY
+    return AWAITING
+
+
+def build_mine_row(node: dict, viewer: str, now: datetime) -> dict:
+    """A row for one of the viewer's own PRs: who reviewed it, who is requested, open threads, status."""
+    row = build_row(node, viewer, now)
+    row["kind"] = "mine"
+    row["reviewers"] = {
+        _login(r.get("author")): r["state"] for r in _nodes(node, "latestReviews")
+        if _login(r.get("author")) not in (None, viewer) and r.get("submittedAt")
+    }
+    row["requested"] = [
+        _login(r.get("requestedReviewer")) or (r.get("requestedReviewer") or {}).get("slug")
+        for r in _nodes(node, "reviewRequests") if r.get("requestedReviewer")
+    ]
+    row["unresolved"] = sum(1 for t in _nodes(node, "reviewThreads") if not t.get("isResolved"))
+    row["mine_status"] = _mine_status(row)
+    return row
+
+
+def build_mine_rows(nodes: List[dict], viewer: str, now: datetime) -> List[dict]:
+    rows = [build_mine_row(n, viewer, now) for n in nodes]
+    rows.sort(key=lambda r: (MINE_ORDER.index(r["mine_status"]), r["created_at"]))
+    for index, row in enumerate(rows, 1):
+        row["index"] = index
+    return rows
