@@ -10,6 +10,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     private var menuIsOpen = false
     private var pending: ParsedMenu?
     private var refreshing = false
+    private var iconBase: NSImage?
+    private var iconAttention = false
+    private var spinTimer: Timer?
+    private var spinAngle: CGFloat = 90
     private var reopenWith: ParsedMenu?
     private let queue = DispatchQueue(label: "githubbar.chip")
 
@@ -66,12 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     /// Sets the menu bar title and (re)fills `menu`, which may be open.
     private func fill(_ menu: NSMenu, _ parsed: ParsedMenu) {
-        if let button = statusItem.button {
-            button.image = MenuBuilder.image(parsed.title, height: 18)
-            button.imagePosition = .imageLeft
-            button.title = parsed.title.text.isEmpty ? "" : " " + parsed.title.text
-            button.toolTip = parsed.title.params["tooltip"]
-        }
+        setTitle(parsed.title)
         menu.removeAllItems()
         MenuBuilder.hiddenProjects = []
         MenuBuilder.meta = [:]
@@ -117,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 if view.checked { MenuBuilder.hiddenProjects.remove(proj) } else { MenuBuilder.hiddenProjects.insert(proj) }
             }
         case "radio": siblings.forEach { $0.checked = $0 === view }
+        case "setting": view.checked.toggle()
         case "all":
             siblings.filter { $0.entry.params["keep"] == "toggle" }.forEach { $0.checked = true }
             MenuBuilder.hiddenProjects = []
@@ -154,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 }
             } else if kind == "refresh" {
                 self.refillOpenMenu()
-            } else if kind == "radio" {
+            } else if kind == "radio" || kind == "setting" {
                 // A new status style redraws every row. The click came from an open submenu, and replacing
                 // items under an open submenu is unsafe, so close the menu, swap it and open it again.
                 self.refillOpenMenu(reopen: true)
@@ -215,9 +215,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     private func setTitle(_ title: MenuEntry) {
         guard let button = statusItem.button else { return }
-        button.image = MenuBuilder.image(title, height: 18)
+        button.imagePosition = .imageLeft
         button.title = title.text.isEmpty ? "" : " " + title.text
         button.toolTip = title.params["tooltip"]
+        iconBase = MenuBuilder.image(title, height: 18)
+        iconAttention = title.params["attention"] == "true"
+        let animate = title.params["animate"] == "true"
+        if animate, spinTimer == nil {
+            let timer = Timer(timeInterval: 0.08, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                self.spinAngle = (self.spinAngle - 24).truncatingRemainder(dividingBy: 360)
+                self.drawIcon()
+            }
+            RunLoop.main.add(timer, forMode: .common)  // keeps spinning while the menu is open
+            spinTimer = timer
+        } else if !animate {
+            spinTimer?.invalidate()
+            spinTimer = nil
+        }
+        drawIcon()
+    }
+
+    /// The GitHub mark, plus a spinning ring while a review runs and a yellow dot when one needs the user.
+    /// A plain template image when neither, so macOS tints it like any menu bar icon.
+    private func drawIcon() {
+        guard let button = statusItem.button, let base = iconBase else { return }
+        let spinning = spinTimer != nil, attention = iconAttention
+        guard spinning || attention else {
+            button.image = base
+            return
+        }
+        let angle = spinAngle
+        let size = NSSize(width: 20, height: 20)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let mark = NSRect(x: 3, y: 3, width: 14, height: 14)
+            // Tint the template mark with the menu bar's text colour (resolved when drawn).
+            let tinted = NSImage(size: mark.size, flipped: false) { r in
+                base.draw(in: r)
+                NSColor.labelColor.set()
+                r.fill(using: .sourceAtop)
+                return true
+            }
+            tinted.draw(in: mark)
+            if spinning {
+                let ring = NSBezierPath()
+                ring.appendArc(withCenter: NSPoint(x: rect.midX, y: rect.midY), radius: 9.2,
+                               startAngle: angle, endAngle: angle + 110)
+                ring.lineWidth = 1.6
+                ring.lineCapStyle = .round
+                NSColor.labelColor.setStroke()
+                ring.stroke()
+            }
+            if attention {
+                NSColor.systemYellow.setFill()
+                NSBezierPath(ovalIn: NSRect(x: 13.5, y: 13.5, width: 6.5, height: 6.5)).fill()
+            }
+            return true
+        }
+        image.isTemplate = false
+        button.image = image
     }
 
     /// Runs `block` on the main thread, also while a menu is open (event-tracking run loop mode).
