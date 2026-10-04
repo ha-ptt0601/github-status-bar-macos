@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import (actions, config, fetch, installer, mcp_server, menu, model, notify, project, render, repos, runs, store,
+from chip import (actions, config, fetch, sessions, installer, mcp_server, menu, model, notify, project, render, repos, runs, store,
                   terminal, tui, updates)
 from chip.selection import SelectionError, parse_selection
 
@@ -290,6 +290,8 @@ def cmd_run(args, runner) -> int:
         notify.send([f"{args.label} is no longer waiting for your review"])
         _error(f"PR {args.label} is not in the list")
         return 1
+    if args.feature:
+        return _run_in_feature_session(row, skill, cfg)
     try:
         clone = find_clone(row["repo"]) or _first_clone(row["repo"], cfg)
         extra = {}
@@ -305,6 +307,75 @@ def cmd_run(args, runner) -> int:
         return 1
     notify.send([f"Reviewing {row['label']} ({skill['name']})"])
     print(f"started {record['id']} for {row['label']} ({skill['name']})")
+    return 0
+
+
+FEATURE_SKILL = "Address review (feature session)"
+
+
+def feature_session(row: dict) -> Optional[dict]:
+    """The session linked to this PR, else the one found on its branch."""
+    links = sessions.load_links(cache_dir() / "links.json")
+    if row["label"] in links:
+        return links[row["label"]]
+    index = sessions.update_index(cache_dir() / "sessions.json", budget=5)
+    clone = repos._load(cache_dir() / "repos.json").get(row["repo"].lower())
+    return sessions.find(index, row.get("head", ""), clone)
+
+
+def _run_in_feature_session(row: dict, skill: dict, cfg: dict) -> int:
+    """Address review inside the session where the feature was built (it remembers the work)."""
+    session = feature_session(row)
+    if session is None:
+        notify.send([f"No feature session for {row['label']}: use Link feature session…"])
+        _error(f"no Claude Code session found on branch {row.get('head') or '?'}; link one with chip session link")
+        return 1
+    try:
+        record = runs.start(row, dict(skill, name=FEATURE_SKILL), cfg, session["cwd"], _runs_path(), address=True,
+                            resume=session["id"], extra={"feature_session": session["id"]})
+    except runs.RunError as exc:
+        notify.send([f"Could not start {FEATURE_SKILL} for {row['label']}: {exc}"])
+        _error(str(exc))
+        return 1
+    notify.send([f"Addressing review on {row['label']} in its feature session"])
+    print(f"started {record['id']} for {row['label']} ({FEATURE_SKILL})")
+    return 0
+
+
+def cmd_session(args) -> int:
+    """open / link / unlink the Claude Code session where one of your PRs was built."""
+    row = _find_row(args.label)
+    if row is None or row.get("kind") != "mine":
+        _error(f"{args.label} is not one of your open PRs")
+        return 2
+    links_path = cache_dir() / "links.json"
+    if args.action == "unlink":
+        sessions.unlink(links_path, row["label"])
+        return 0
+    if args.action == "link":
+        session_id = args.id or actions.ask(
+            f"Session id for {row['label']}\n{row['title']}\n\nFrom `claude --resume` or "
+            "~/.claude/projects/<folder>/<session-id>.jsonl:", "Link", "required")
+        if not session_id:
+            return 0
+        index = sessions.update_index(cache_dir() / "sessions.json", budget=5)
+        session = sessions.by_id(index, session_id.strip())
+        if session is None:
+            notify.send([f"No Claude Code session {session_id.strip()}"])
+            _error(f"no session {session_id.strip()} in {sessions.projects_dir()}")
+            return 1
+        sessions.link(links_path, row["label"], session)
+        notify.send([f"Linked {row['label']} to its feature session"])
+        return 0
+    session = feature_session(row)
+    if session is None:
+        _error(f"no feature session for {row['label']}")
+        return 1
+    command = f"cd {shlex.quote(session['cwd'])} && claude --resume {shlex.quote(session['id'])}"
+    ok, message = terminal.open_command(command, terminal.pick_app(config.load()["terminal"]))
+    if not ok:
+        _error(message or "osascript failed")
+        return 1
     return 0
 
 
@@ -525,6 +596,8 @@ def main(argv=None, runner=None) -> int:
     p_run.add_argument("label")
     p_run.add_argument("--skill", type=int, default=1)
     p_run.add_argument("--address", action="store_true", help="run an address-review skill on your own PR")
+    p_run.add_argument("--feature", action="store_true",
+                       help="with --address: continue the Claude Code session where the PR's feature was built")
     p_run.add_argument("--project", action="store_true",
                        help="run the repo's own review skill on the PR in a worktree (built-in review if it has none)")
     p_search = sub.add_parser("search", help="search the menu (native dialog); --clear removes the search")
@@ -533,6 +606,10 @@ def main(argv=None, runner=None) -> int:
     p_project.add_argument("action", choices=["toggle", "all"])
     p_project.add_argument("name", nargs="?")
     sub.add_parser("nudge", help="re-request review from reviewers who have not approved").add_argument("label")
+    p_session = sub.add_parser("session", help="open | link [id] | unlink the feature session of your PR")
+    p_session.add_argument("action", choices=["open", "link", "unlink"])
+    p_session.add_argument("label")
+    p_session.add_argument("id", nargs="?")
     p_act = sub.add_parser("act", help="approve | request-changes | comment a PR; merge | close | ready | draft yours")
     p_act.add_argument("label")
     p_act.add_argument("action", choices=sorted(actions.ACTIONS))
@@ -594,6 +671,8 @@ def main(argv=None, runner=None) -> int:
         return cmd_project(args)
     if args.cmd == "nudge":
         return cmd_nudge(args)
+    if args.cmd == "session":
+        return cmd_session(args)
     if args.cmd == "act":
         return cmd_act(args, runner or fetch.run_gh_graphql)
     if args.cmd == "copy":
