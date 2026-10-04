@@ -9,10 +9,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from chip import config
+from chip import config, model
 
 BG_ID_RE = re.compile(r"backgrounded · ([0-9a-f]{6,})")
 KINDS = {"working": "running", "blocked": "needs_you", "done": "done"}
+ROUND_NOTE = (" — round {n}: re-review this PR. First check whether each finding from round {prev} was addressed "
+              "(fixed, answered, or still open), then review only what changed since round {prev}.")
 
 
 class RunError(RuntimeError):
@@ -51,16 +53,35 @@ def parse_bg_id(stdout: str) -> Optional[str]:
 
 def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
           now: Callable[[], float] = time.time) -> dict:
+    """Round 1 starts a new background session; later rounds continue the same session."""
     runner = runner or subprocess.run
-    cmd = build_command(config.fill_prompt(skill, row), row["label"], skill["name"], cfg)
+    key = run_key(row["label"], skill["name"])
+    records = load(path)
+    previous = records.get(key)
+    prompt = config.fill_prompt(skill, row)
+    if previous and previous.get("session_id"):
+        number = previous.get("round", 1) + 1
+        runner(["claude", "stop", previous["id"]], capture_output=True, text=True)
+        # No other flags: a background session keeps its saved name, permission mode and disallowed tools;
+        # passing flags would fork a copy instead of continuing it.
+        cmd = ["claude", prompt + ROUND_NOTE.format(n=number, prev=number - 1),
+               "--resume", previous["session_id"], "--bg"]
+        history = previous.get("history", []) + [{
+            "round": previous.get("round", 1), "started_at": previous["started_at"],
+            "done_at": previous.get("done_at"), "resolved_at": previous.get("resolved_at"),
+            "resolved_by": previous.get("resolved_by"),
+        }]
+    else:
+        number, history = 1, []
+        cmd = build_command(prompt, row["label"], skill["name"], cfg)
     proc = runner(cmd, cwd=cwd, capture_output=True, text=True)
     run_id = parse_bg_id(proc.stdout)
     if proc.returncode != 0 or not run_id:
         raise RunError((proc.stderr or proc.stdout or "claude --bg failed").strip())
-    record = {"id": run_id, "label": row["label"], "title": row["title"], "url": row["url"],
-              "repo": row["repo"], "skill": skill["name"], "started_at": now()}
-    records = load(path)
-    records[run_key(row["label"], skill["name"])] = record
+    record = {"id": run_id, "session_id": previous.get("session_id") if number > 1 else None,
+              "label": row["label"], "title": row["title"], "url": row["url"], "repo": row["repo"],
+              "skill": skill["name"], "cwd": cwd, "round": number, "history": history, "started_at": now()}
+    records[key] = record
     save(path, records)
     return record
 
@@ -107,12 +128,36 @@ def observe(records: Dict[str, dict], agents: Dict[str, dict], now: float) -> bo
         agent = agents.get(record["id"])
         if not agent:
             continue
+        if agent.get("sessionId") and record.get("session_id") != agent["sessionId"]:
+            record["session_id"] = agent["sessionId"]
+            changed = True
         if agent.get("state") == "done" and "done_at" not in record:
             record["done_at"] = now
             changed = True
         elif agent.get("state") != "done" and "done_at" in record:
             del record["done_at"]
             changed = True
+    return changed
+
+
+def _after(iso: Optional[str], epoch: float) -> bool:
+    return bool(iso) and model.parse_ts(iso).timestamp() > epoch
+
+
+def resolve(records: Dict[str, dict], rows_by_label: Dict[str, dict], now: float) -> bool:
+    """Mark finished rounds resolved once GitHub shows the user's review or newer commits; True if changed."""
+    changed = False
+    for record in records.values():
+        row = rows_by_label.get(record["label"])
+        if row is None or "done_at" not in record or record.get("resolved_at"):
+            continue
+        if _after(row.get("my_review_at"), record["started_at"]):
+            record.update(resolved_at=now, resolved_by="you reviewed on GitHub")
+        elif _after(row.get("last_commit_at"), record["started_at"]):
+            record.update(resolved_at=now, resolved_by="new commits")
+        else:
+            continue
+        changed = True
     return changed
 
 

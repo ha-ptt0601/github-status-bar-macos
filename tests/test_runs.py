@@ -94,3 +94,66 @@ class StatusTest(unittest.TestCase):
         records = {"k": {"id": "ab"}}
         self.assertEqual(runs.find_by_id(records, "ab"), ("k", {"id": "ab"}))
         self.assertIsNone(runs.find_by_id(records, "zz"))
+
+
+class RoundTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "runs.json"
+        self.calls = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def runner(self, cmd, **kw):
+        self.calls.append(cmd)
+        if cmd[:2] == ["claude", "stop"]:
+            return done(cmd)
+        return done(cmd, "backgrounded · ab12cd34 · x\n")
+
+    def first_round(self):
+        runs.start(ROW, SKILL, CFG, "/src/api", self.path, runner=self.runner, now=lambda: 100.0)
+        records = runs.load(self.path)
+        records["api#2069::Full review"].update(session_id="ab12cd34-0000", done_at=200.0)
+        runs.save(self.path, records)
+
+    def test_first_round_record(self):
+        record = runs.start(ROW, SKILL, CFG, "/src/api", self.path, runner=self.runner, now=lambda: 100.0)
+        self.assertEqual((record["round"], record["history"], record["cwd"]), (1, [], "/src/api"))
+
+    def test_second_round_resumes_the_same_session_without_flags(self):
+        self.first_round()
+        self.calls.clear()
+        record = runs.start(ROW, SKILL, CFG, "/src/api", self.path, runner=self.runner, now=lambda: 300.0)
+        self.assertEqual(self.calls[0], ["claude", "stop", "ab12cd34"])
+        cmd = self.calls[1]
+        self.assertEqual(cmd[2:], ["--resume", "ab12cd34-0000", "--bg"])
+        self.assertTrue(cmd[1].startswith("/my-review-skill https://github.com/acme/api/pull/2069 — round 2:"))
+        self.assertEqual((record["round"], record["session_id"], record["started_at"]), (2, "ab12cd34-0000", 300.0))
+        self.assertEqual(record["history"], [{"round": 1, "started_at": 100.0, "done_at": 200.0,
+                                              "resolved_at": None, "resolved_by": None}])
+        self.assertNotIn("done_at", record)
+
+    def test_observe_records_session_id(self):
+        records = {"k": {"id": "ab", "started_at": 0}}
+        self.assertTrue(runs.observe(records, {"ab": {"state": "working", "sessionId": "ab-full"}}, 1))
+        self.assertEqual(records["k"]["session_id"], "ab-full")
+
+    def test_resolve_on_my_github_review_or_new_commits(self):
+        started = datetime(2026, 10, 4, 10, 0).timestamp()
+        records = {"a": {"label": "api#1", "started_at": started, "done_at": started + 60},
+                   "b": {"label": "api#2", "started_at": started, "done_at": started + 60},
+                   "c": {"label": "api#3", "started_at": started, "done_at": started + 60},
+                   "d": {"label": "api#4", "started_at": started}}
+        after = datetime.utcfromtimestamp(started + 3600).strftime("%Y-%m-%dT%H:%M:%SZ")
+        before = datetime.utcfromtimestamp(started - 3600).strftime("%Y-%m-%dT%H:%M:%SZ")
+        rows = {"api#1": {"my_review_at": after, "last_commit_at": before},
+                "api#2": {"my_review_at": None, "last_commit_at": after},
+                "api#3": {"my_review_at": before, "last_commit_at": before},
+                "api#4": {"my_review_at": after, "last_commit_at": after}}
+        self.assertTrue(runs.resolve(records, rows, now=999.0))
+        self.assertEqual(records["a"]["resolved_by"], "you reviewed on GitHub")
+        self.assertEqual(records["b"]["resolved_by"], "new commits")
+        self.assertNotIn("resolved_at", records["c"])
+        self.assertNotIn("resolved_at", records["d"])  # still running: not resolved
+        self.assertFalse(runs.resolve(records, rows, now=1000.0))
