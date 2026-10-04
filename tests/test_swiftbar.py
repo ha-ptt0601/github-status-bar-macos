@@ -78,13 +78,22 @@ class RenderTest(unittest.TestCase):
         headers = [l for l in lines if "size=11 color=#8E8E93" in l and "·" in l and "PR" in l]
         self.assertEqual([h.split(" ·")[0] for h in headers[:2]], ["API", "SHOPBOX-API"])
 
-    def test_paging_with_nested_next(self):
+    def test_every_project_visible_with_capped_rows(self):
+        rows = [row(i) for i in range(1, 16)] + [row(20, repo="acme/mailer-api"), row(21, repo="acme/mailer-api")]
+        lines = render(rows)
+        top = [l for l in lines if l.startswith("#")]
+        self.assertEqual(len(top), 7)  # 5 from API + 2 from mailer-api
+        self.assertIn("API · 15 PRs | size=11 color=#8E8E93", lines)
+        self.assertIn("MAILER-API · 2 PRs | size=11 color=#8E8E93", lines)
+        self.assertIn("10 more in API › | color=#8E8E93", lines)
+        self.assertFalse(any(l.startswith("Next ") for l in lines))
+
+    def test_more_submenu_pages_with_nested_next(self):
         lines = render([row(i) for i in range(1, 31)])
-        self.assertEqual(len([l for l in lines if l.startswith("#")]), 12)
-        self.assertIn("Next 12 ›  (13–24 of 30)", lines)
-        self.assertIn("--API (cont.) | size=11 color=#8E8E93", lines)
-        self.assertIn("--Next 6 ›  (25–30 of 30)", lines)
-        self.assertIn("----API (cont.) | size=11 color=#8E8E93", lines)
+        self.assertIn("25 more in API › | color=#8E8E93", lines)
+        self.assertEqual(len([l for l in lines if l.startswith("--#")]), 12)
+        self.assertIn("--Next 12 ›  (13–24 of 25)", lines)
+        self.assertIn("----Next 1 ›  (25–25 of 25)", lines)
 
     def test_stale_go_to_older_submenu_but_rereview_stays(self):
         lines = render([row(1, stale=True), row(2, stale=True, status=model.REREVIEW), row(3)])

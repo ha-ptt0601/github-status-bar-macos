@@ -14,6 +14,7 @@ from chip import __version__, config, fetch, model, notify, runs, store, updates
 
 GREY = "#8E8E93"
 PAGE = 12
+PER_PROJECT = 5  # rows per project on the top level; the rest go into a "N more" submenu
 HEADER = {"size": "11", "color": GREY}
 ROW_FONT = {"font": "Menlo", "size": "12"}
 ICON_FILE = Path(__file__).resolve().parent / "assets" / "github-mark.png"
@@ -191,6 +192,36 @@ def pr_pages(rows: List[dict], depth: int, ctx: dict) -> List[str]:
     return lines
 
 
+def _paged_rows(rows: List[dict], depth: int, ctx: dict) -> List[str]:
+    """Plain PR rows, 12 per page; each further page sits in a nested `Next ›` submenu."""
+    lines: List[str] = []
+    start = 0
+    while start < len(rows):
+        for r in rows[start:start + PAGE]:
+            lines.extend(pr_lines(r, depth, ctx))
+        start += PAGE
+        if start < len(rows):
+            end = min(start + PAGE, len(rows))
+            lines.append(item(f"Next {end - start} ›  ({start + 1}–{end} of {len(rows)})", depth))
+            depth += 1
+    return lines
+
+
+def project_sections(rows: List[dict], depth: int, ctx: dict) -> List[str]:
+    """Every project gets a header and its first PER_PROJECT rows; the rest go into `N more in X ›`."""
+    lines: List[str] = []
+    for proj in _project_order(rows):
+        prs = [r for r in rows if _project(r) == proj]
+        lines.append(item(f"{proj.upper()} · {plural(len(prs), 'PR')}", depth, **HEADER))
+        for r in prs[:PER_PROJECT]:
+            lines.extend(pr_lines(r, depth, ctx))
+        rest = prs[PER_PROJECT:]
+        if rest:
+            lines.append(item(f"{len(rest)} more in {proj.upper()} ›", depth, color=GREY))
+            lines.extend(_paged_rows(rest, depth + 1, ctx))
+    return lines
+
+
 def run_lines(records: Dict[str, dict], views: Dict[str, dict], ctx: dict) -> List[str]:
     if not records:
         return []
@@ -247,7 +278,7 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
             lines.append(item("Nothing waiting for your review", 0, color=GREY))
         elif style == "emoji":
             lines.append(item(LEGEND, 0, **HEADER))
-        lines.extend(pr_pages(fresh, 0, ctx))
+        lines.extend(project_sections(fresh, 0, ctx))
         if older:
             lines.append(item(f"Older than 30 days · {plural(len(older), 'PR')}", 0, sfimage="clock", color=GREY))
             lines.extend(pr_pages(older, 1, ctx))
