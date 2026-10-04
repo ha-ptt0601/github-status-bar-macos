@@ -288,3 +288,11 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 - **Projects.** Project sections carry `proj=<name>` (and `hidden=true` for hidden projects, which are still printed). Rows with `keep=toggle|all|radio|refresh` are custom views that run their command without closing the menu. Project toggles hide or show the sections at once; other changes (counts, older/approved lists) apply when the menu closes.
 - **Refresh now** (`keep=refresh`) shows a spinner and "Refreshing…", refills the open menu with `performSelector(onMainThread:…modes:)` in the event-tracking mode, then shows "✓ Up to date" for 2 s.
 - **Live search.** With `--panes`, *Search…* becomes ` | searchfield=true` (an `NSSearchField` view, focused on open). Each pane's lists are tagged `body=true`, followed by every PR of the tab as a hidden row with `searchonly=true find="<label repo title author jira reviewers>"` and a `nomatch=true` line. While the field has text, `body` items are hidden and up to 40 matching `searchonly` rows are shown.
+
+## Project review skills (v0.1.2)
+
+- `skills` defaults to `[]`; `chip install` writes only the fixed keys and each user adds their own skills.
+- `chip/project.py` finds a repo's review skill: `.claude/skills/*review*/SKILL.md` or `.claude/commands/*review*.md` (exact `review` wins). The menu knows it for repos already in the clone cache (`project.known_skills`, no scanning).
+- Buttons per PR (`swiftbar.review_buttons`): configured skills (`--skill N`), plus `Run "/<name> (project)"` (`--project`) when the repo has a skill; with no skills configured and no known repo skill, one `Run "Review"` (`--project`).
+- `chip run --project`: resolves/clones the repo, then if it has a review skill, `git fetch origin +refs/pull/N/head:refs/chip/pr-N +refs/heads/<base>:refs/remotes/origin/<base>` and `git worktree add --detach work_root/.chip-worktrees/<repo>-N refs/chip/pr-N` (a later round re-checks out the same worktree). The prompt is `/<name> {url}` plus a note that HEAD is the PR and the base is `origin/{base}`. Without a repo skill it runs the built-in `config.REVIEW_PROMPT` in the clone. Records carry `auto`, `clone` and `worktree`.
+- `runs.clean_worktrees` removes the worktree and `refs/chip/pr-N` once the round is resolved as "PR merged or closed".

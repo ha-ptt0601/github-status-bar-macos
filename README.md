@@ -20,7 +20,7 @@ MAILER-API · 2 PRs
 Older than 30 days · 11 PRs ›
 ──────────────
 Reviews by chip
-🔵 shopbox-api#272 · Full review · running 3m ›
+🔵 shopbox-api#272 · /review (project) · running 3m ›
 ──────────────
 Show approved & drafts (8) ›
 Recent notifications ›
@@ -43,7 +43,7 @@ Quit GitHubBar
 - **Status on every row:** 🟠 Re-review (new commits after your review, or you were re-requested) · 🟢 New · ⚪ Waiting on author / Commented. PRs older than 30 days go under **Older than 30 days**, and approved PRs and drafts under **Show approved & drafts**.
 - **PR submenu:**
   - the full title, status, author, age, size, base branch (flagged *stacked*), Jira key and conflict;
-  - one `Run "<skill>"` button per configured review skill;
+  - review buttons: one `Run "<skill>"` per skill in your config, plus `Run "/review (project)"` when the repo has its own review skill (see [Which review runs](#which-review-runs));
   - Open on GitHub and Copy link.
 
 ### My pull requests tab
@@ -53,7 +53,7 @@ Quit GitHubBar
 - **Re-request review** from the reviewers who have not approved yet.
 
 ### Background reviews, in rounds
-- **Run** starts `claude "<your skill prompt>" --bg` inside the PR's local clone. chip finds the clone under `work_root`, or clones the repo into `work_root/.chip-repos/`. The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
+- **Run** starts `claude "<prompt>" --bg` inside the PR's local clone. chip finds the clone under `work_root`, or clones the repo into `work_root/.chip-repos/`. A project review runs in the PR's own worktree instead (below). The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
 - **The row follows the run:** 🔵 Reviewing → 🟡 Needs you (waiting for input or permission) → ✅ Reviewed. The icon shows `🔵N` and `🟡N` badges.
 - **View session** opens the session in Terminal (`claude attach`), so you can read the report and keep talking to Claude.
 - **Round resolved.** After you post your review on GitHub, or new commits land, the round is resolved: the PR goes back to its GitHub status and leaves "Reviews by chip". Merged or closed PRs resolve on their own.
@@ -129,9 +129,7 @@ It is safe to run again, and it never overwrites files it did not create. `chip 
 ```json
 {
   "work_root": "~/work",
-  "skills": [
-    {"name": "Full review", "prompt": "Review the pull request {url}. Use gh to read its description, diff … Do not edit files, commit, push, or post anything to GitHub."}
-  ],
+  "skills": [],
   "address_skills": [
     {"name": "Address review", "prompt": "Help me address the review feedback on my pull request {url}. …"}
   ],
@@ -143,20 +141,35 @@ It is safe to run again, and it never overwrites files it did not create. `chip 
 }
 ```
 
+### Which review runs
+
+`skills` starts empty: every user adds their own. Until then, and in addition to them, each repo's own review is used:
+
+| Your `skills` | The repo has a review skill | Buttons on each PR |
+|---|---|---|
+| empty | yes | `Run "/review (project)"` |
+| empty | no | `Run "Review"`: the built-in prompt (works on any machine) |
+| yours | yes | your skills + `Run "/review (project)"` |
+| yours | no | your skills |
+
+- **A repo's review skill** is `.claude/skills/<name>/SKILL.md` or `.claude/commands/<name>.md` in the repo, with "review" in its name (one named exactly `review` wins). Committed with the repo, it is the same for everyone on the team.
+- **It runs on the PR's code.** Project skills usually review the checked-out branch (`git diff main...HEAD`), so chip fetches the PR and checks it out in its own worktree, `work_root/.chip-worktrees/<repo>-<number>`, without touching your clone. The prompt tells the skill the real base branch (`origin/<base>`). "Continue review" updates the same worktree to the new commits, and it is removed when the PR is merged or closed.
+- Until chip has cloned a repo, the button reads `Run "Review"`; it still uses the repo's skill if it finds one when the run starts.
+
 ### Plug in your own review skill
 
-The default **Full review** is a plain prompt that works on any machine. To use your own Claude Code skill, put it in `~/.claude/skills/<name>/SKILL.md` (or install it from a plugin), then point `skills` at it. You can have several; each becomes a `Run "<name>"` button on every PR:
+To use your own Claude Code skill, put it in `~/.claude/skills/<name>/SKILL.md` (or install it from a plugin), then add it to `skills`. You can have several; each becomes a `Run "<name>"` button on every PR:
 
 ```json
 "skills": [
   {"name": "My review",    "prompt": "/my-review-skill {url}"},
-  {"name": "Quick review", "prompt": "Review {url} briefly: only bugs and security issues."},
-  {"name": "Full review",  "prompt": "Review the pull request {url}. …"}
+  {"name": "Quick review", "prompt": "Review {url} briefly: only bugs and security issues."}
 ]
 ```
 
 - `prompt` is sent to `claude` as the first message, so it can call a skill (`/name …`) or be plain text.
-- Placeholders are filled per PR: `{url}`, `{repo}`, `{number}`, `{label}`, `{title}`.
+- Placeholders are filled per PR: `{url}`, `{repo}`, `{number}`, `{label}`, `{title}`, `{base}`.
+- Your skills run in your clone of the repo, which may be on another branch: have them read the PR with `gh pr diff {number}` (or the `{url}`).
 - The run is read-only (`disallowed_tools`), and "Continue review" rounds reuse the same prompt.
 - `address_skills` works the same way for the **Address review** button on your own PRs.
 - If the file is invalid, the menu shows an orange "Config: …" line and uses the defaults until you fix it.
@@ -166,7 +179,7 @@ The default **Full review** is a plain prompt that works on any machine. To use 
 | Key | Meaning |
 |---|---|
 | `work_root` | Where chip looks for your local clones (up to 3 levels deep) and where `.chip-repos/` lives |
-| `skills` | Review skills. Each one is a `Run "<name>"` button on every PR to review. Placeholders: `{url} {repo} {number} {label} {title}` |
+| `skills` | Your review skills (empty by default). Each one is a `Run "<name>"` button on every PR to review. Placeholders: `{url} {repo} {number} {label} {title} {base}` |
 | `address_skills` | Skills for your own PRs (the Address review button). Same placeholders |
 | `permission_mode`, `disallowed_tools` | Passed to `claude --bg` for every run |
 | `terminal` | `Terminal` or `iTerm`, used by View session |
@@ -180,7 +193,7 @@ The default **Full review** is a plain prompt that works on any machine. To use 
 | `chip install` / `chip uninstall` / `chip update` | Set up, remove, or pull and reinstall |
 | `chip` | fzf picker in the terminal |
 | `chip list` | Markdown table of PRs to review |
-| `chip run <label> [--skill N] [--address]` | Start a background review (or an Address review on your PR) |
+| `chip run <label> [--skill N \| --project] [--address]` | Start a background review: skill N from your config, or `--project` for the repo's own review (built-in if none); `--address` for your PR |
 | `chip attach / stop / forget <session-id>` | Open, stop or remove a chip review session |
 | `chip nudge <label>` | Re-request review on your PR |
 | `chip view review\|mine` | Switch the menu tab |
