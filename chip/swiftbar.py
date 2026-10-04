@@ -25,6 +25,14 @@ STATUS = {
     model.COMMENTED: ("Commented", "text.bubble", GREY),
     model.APPROVED: ("Approved", "checkmark.seal", GREY),
 }
+# Status styles (config `status_style`): dots (default), emoji, symbols (SF Symbols).
+SHORT = {model.REREVIEW: "Re-review", model.NEW: "New", model.WAITING: "Waiting",
+         model.COMMENTED: "Commented", model.APPROVED: "Approved"}
+DOT = {model.REREVIEW: "🟠", model.NEW: "🟢", model.WAITING: "⚪", model.COMMENTED: "⚪", model.APPROVED: "⚪"}
+EMOJI = {model.REREVIEW: "🔁", model.NEW: "🆕", model.WAITING: "⏳", model.COMMENTED: "💬", model.APPROVED: "✅"}
+LEGEND = "🔁 Re-review · 🆕 New · 💬 Commented · ⏳ Waiting on author"
+RUN_DOT = {"running": "🔵", "needs_you": "🟡", "done": "🟢", "gone": "⚪", "other": "⚪"}
+STYLES = (("dots", "Colored dots + label"), ("emoji", "Emoji"), ("symbols", "Symbols"))
 RUN_SYMBOL = {
     "running": ("circle.lefthalf.filled", "#0A84FF"),
     "needs_you": ("exclamationmark.triangle.fill", "#FFCC00"),
@@ -103,10 +111,27 @@ def _project(r: dict) -> str:
     return r["label"].split("#")[0]
 
 
-def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
+def _cut(text: str, width: int) -> str:
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def _row(r: dict, depth: int, style: str) -> str:
+    """The top-level PR line in the chosen status style; the tooltip always names the status."""
     name, sf_name, color = STATUS[r["status"]]
-    title = r["title"] if len(r["title"]) <= 44 else r["title"][:43] + "…"
-    lines = [item(f"#{r['number']:<6}{title:<45} {r['author']}", depth, **symbol(sf_name, color), **ROW_FONT)]
+    number = f"#{r['number']}"
+    if style == "dots":
+        text = f"{DOT[r['status']]} {number:<7}{SHORT[r['status']]:<11}{_cut(r['title'], 38):<39} {r['author']}"
+        return item(text, depth, tooltip=name, **ROW_FONT)
+    if style == "emoji":
+        text = f"{EMOJI[r['status']]} {number:<7}{_cut(r['title'], 44):<45} {r['author']}"
+        return item(text, depth, tooltip=name, **ROW_FONT)
+    text = f"{number:<7}{_cut(r['title'], 44):<45} {r['author']}"
+    return item(text, depth, **symbol(sf_name, color), tooltip=name, **ROW_FONT)
+
+
+def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
+    lines = [_row(r, depth, ctx["style"])]
+    name = STATUS[r["status"]][0]
     d = depth + 1
     lines.append(item(r["label"], d, disabled="true"))
     for chunk in textwrap.wrap(r["title"], 60) or [""]:
@@ -172,8 +197,12 @@ def run_lines(records: Dict[str, dict], views: Dict[str, dict], ctx: dict) -> Li
     lines = ["---", item("Reviews by chip", 0, **HEADER)]
     for key, rec in sorted(records.items(), key=lambda kv: -kv[1].get("started_at", 0)):
         view = views[key]
-        sf_name, color = RUN_SYMBOL[view["kind"]]
-        lines.append(item(f"{rec['label']} · {rec['skill']} · {view['text']}", 0, **symbol(sf_name, color)))
+        text = f"{rec['label']} · {rec['skill']} · {view['text']}"
+        if ctx["style"] == "symbols":
+            sf_name, color = RUN_SYMBOL[view["kind"]]
+            lines.append(item(text, 0, **symbol(sf_name, color)))
+        else:
+            lines.append(item(f"{RUN_DOT[view['kind']]} {text}", 0))
         if view["kind"] != "gone":
             lines.append(item("View session", 1, sfimage="eye", **action(ctx["plugin"], "attach", rec["id"], refresh=False)))
         if view["kind"] in ("running", "needs_you"):
@@ -196,7 +225,8 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     runs_by_label: Dict[str, dict] = {}
     for key, rec in records.items():
         runs_by_label.setdefault(rec["label"], {})[rec["skill"]] = (rec, views[key])
-    ctx = {"plugin": plugin, "skills": cfg["skills"], "runs_by_label": runs_by_label}
+    style = cfg.get("status_style", "dots")
+    ctx = {"plugin": plugin, "skills": cfg["skills"], "runs_by_label": runs_by_label, "style": style}
 
     title = "!" if error else (str(count) if count else "")
     lines = [item(title, 0, templateImage=icon_b64()), "---"]
@@ -215,6 +245,8 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         lines.append("---")
         if not visible:
             lines.append(item("Nothing waiting for your review", 0, color=GREY))
+        elif style == "emoji":
+            lines.append(item(LEGEND, 0, **HEADER))
         lines.extend(pr_pages(fresh, 0, ctx))
         if older:
             lines.append(item(f"Older than 30 days · {plural(len(older), 'PR')}", 0, sfimage="clock", color=GREY))
@@ -225,6 +257,10 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         lines.append(item(f"Show approved & drafts ({len(hidden)})", 0, sfimage="eye.slash"))
         lines.extend(pr_pages(hidden, 1, ctx))
     lines.append(item("Settings", 0, sfimage="gearshape"))
+    lines.append(item("Status style", 1, sfimage="paintpalette"))
+    for value, label in STYLES:
+        checked = {"checked": "true"} if value == style else {}
+        lines.append(item(label, 2, **checked, **action(plugin, "config", "set", "status_style", value)))
     lines.append(item("Open config", 1, sfimage="doc.text", **action(plugin, "config", "open", refresh=False)))
     lines.append(item("Reinstall", 1, sfimage="arrow.triangle.2.circlepath", **action(plugin, "install")))
     lines.append(item("Check for updates", 1, sfimage="arrow.down.circle", **action(plugin, "update", "--check")))

@@ -10,7 +10,8 @@ from chip.menu import assign_labels
 from tests.factory import make_node
 
 PLUGIN = "/p/chip.3m.sh"
-CFG = {"skills": [{"name": "Full review", "prompt": "x"}, {"name": "Quick", "prompt": "y"}], "errors": []}
+CFG = {"skills": [{"name": "Full review", "prompt": "x"}, {"name": "Quick", "prompt": "y"}], "errors": [],
+       "status_style": "symbols"}
 
 
 def row(i, repo="acme/api", **kw):
@@ -22,9 +23,10 @@ def row(i, repo="acme/api", **kw):
     return base
 
 
-def render(rows, records=None, views=None, **kw):
+def render(rows, records=None, views=None, style="symbols", **kw):
     inbox = {"rows": assign_labels(rows), "fetched_at": 0}
-    return swiftbar.render(inbox, records or {}, views or {}, CFG, PLUGIN, "0.1.0", now=0, **kw)
+    cfg = dict(CFG, status_style=style)
+    return swiftbar.render(inbox, records or {}, views or {}, cfg, PLUGIN, "0.1.0", now=0, **kw)
 
 
 class HelpersTest(unittest.TestCase):
@@ -59,7 +61,7 @@ class RenderTest(unittest.TestCase):
         lines = render([row(1), row(2)])
         self.assertIn("API · 2 PRs | size=11 color=#8E8E93", lines)
         pr = next(l for l in lines if l.startswith("#2001"))
-        self.assertIn(f"sfimage=sparkle sfconfig={swiftbar.sf_config('#34C759')} font=Menlo size=12", pr)
+        self.assertIn(f"sfimage=sparkle sfconfig={swiftbar.sf_config('#34C759')} tooltip=New font=Menlo size=12", pr)
         self.assertIn("--api#2001 | disabled=true", lines)
         self.assertIn("--New · by alice · opened 2 days ago | disabled=true", lines)
         self.assertIn('--Run "Full review" | sfimage=play.fill bash=/p/chip.3m.sh terminal=false '
@@ -125,6 +127,51 @@ class RenderTest(unittest.TestCase):
         self.assertFalse(any(l.startswith("Pull requests ·") for l in lines))
         self.assertTrue(any(l.startswith("Refresh now") for l in lines))
         self.assertIn("--About chip v0.1.0 | disabled=true", lines)
+
+
+class StatusStyleTest(unittest.TestCase):
+    def rows(self):
+        return [row(1, status=model.REREVIEW), row(2), row(3, status=model.COMMENTED)]
+
+    def pr_line(self, lines, number):
+        return next(l for l in lines if f"#{number}" in l.split(" | ")[0] and not l.startswith("-"))
+
+    def test_dots_show_colored_dot_and_label(self):
+        lines = render(self.rows(), style="dots")
+        line = self.pr_line(lines, 2001)
+        self.assertTrue(line.startswith("🟠 #2001  Re-review  feat: thing 1"))
+        self.assertNotIn("sfimage", line)
+        self.assertIn("tooltip=Re-review", line)
+        self.assertTrue(self.pr_line(lines, 2002).startswith("🟢 #2002  New"))
+        self.assertTrue(self.pr_line(lines, 2003).startswith("⚪ #2003  Commented"))
+
+    def test_emoji_rows_and_legend(self):
+        lines = render(self.rows(), style="emoji")
+        self.assertTrue(self.pr_line(lines, 2001).startswith("🔁 #2001  feat: thing 1"))
+        self.assertTrue(self.pr_line(lines, 2002).startswith("🆕 #2002"))
+        self.assertIn("🔁 Re-review · 🆕 New · 💬 Commented · ⏳ Waiting on author | size=11 color=#8E8E93", lines)
+
+    def test_symbols_keep_sf_images_with_tooltip(self):
+        line = self.pr_line(render(self.rows(), style="symbols"), 2001)
+        self.assertIn("sfimage=arrow.triangle.2.circlepath", line)
+        self.assertIn("tooltip=Re-review", line)
+
+    def test_runs_use_dots_outside_symbols_style(self):
+        records = {"api#2001::Full review": {"id": "ab", "label": "api#2001", "skill": "Full review",
+                                             "url": "u", "started_at": 0}}
+        views = {"api#2001::Full review": {"kind": "running", "text": "running 3m"}}
+        lines = render([row(1)], records, views, style="dots")
+        self.assertIn("🔵 api#2001 · Full review · running 3m", lines)
+
+    def test_settings_offer_styles_with_checkmark(self):
+        lines = render(self.rows(), style="emoji")
+        self.assertIn("--Status style | sfimage=paintpalette", lines)
+        self.assertIn("----Colored dots + label | bash=/p/chip.3m.sh terminal=false param1=config param2=set "
+                      "param3=status_style param4=dots refresh=true", lines)
+        self.assertIn("----Emoji | checked=true bash=/p/chip.3m.sh terminal=false param1=config param2=set "
+                      "param3=status_style param4=emoji refresh=true", lines)
+        self.assertIn("----Symbols | bash=/p/chip.3m.sh terminal=false param1=config param2=set "
+                      "param3=status_style param4=symbols refresh=true", lines)
 
 
 class BuildMenuTest(unittest.TestCase):
