@@ -407,7 +407,7 @@ def cmd_swiftbar(args, runner) -> int:
     from chip import swiftbar
     plugin = os.environ.get("CHIP_PLUGIN") or str(tui.BIN)
     print(swiftbar.build_menu(plugin, force=args.force, fetch_runner=runner, view=args.view or store.load_view(),
-                              deliver=args.deliver))
+                              deliver=args.deliver, panes=args.panes))
     return 0
 
 
@@ -480,6 +480,8 @@ def main(argv=None, runner=None) -> int:
                             help="override the remembered tab: review (default) or mine")
     p_swiftbar.add_argument("--deliver", action="store_true",
                             help="print queued notifications in the title block (GitHubBar posts them)")
+    p_swiftbar.add_argument("--panes", action="store_true",
+                            help="print both tabs, each after a pane= marker (GitHubBar switches tabs in place)")
     sub.add_parser("notifications", help="clear the Recent notifications menu").add_argument(
         "--clear", action="store_true", required=True)
     sub.add_parser("view", help="switch the menu tab: review | mine").add_argument("tab", choices=list(store.VIEWS))
