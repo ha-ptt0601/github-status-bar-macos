@@ -37,6 +37,7 @@
 - **PR submenu:**
   - the full title, status, author, age, size, base branch (flagged *stacked*), Jira key and conflict;
   - review buttons: one `Run "<skill>"` per skill in your config, plus `Run "/review (project)"` when the repo has its own review skill (see [Which review runs](#which-review-runs));
+  - **Approve…**, **Request changes…** (a reason is required) and **Comment…**, each confirmed in a small dialog;
   - Open on GitHub and Copy link.
 
 ### My pull requests tab
@@ -44,6 +45,8 @@
 - **Reviewer column:** `bob ✗ carol ✓` (✓ approved, ✗ changes requested, 💬 commented), or `→ bob, carol` while you are still waiting on requested reviewers.
 - **Address review:** runs a skill that reads every unresolved thread, then **only proposes** the code change and drafts a reply for each one. It never edits files, commits, pushes or posts. `git commit`, `git push`, `gh pr comment` and `gh pr review` are blocked for these runs.
 - **Re-request review** from the reviewers who have not approved yet.
+- **Merge…** (only once the PR is approved and CI is not failing; the repo's preferred method, squash first, branch kept), **Close PR…** and **Comment…**, confirmed in a dialog; **Mark as ready for review** / **Convert to draft** in one click.
+- After any of these, chip refetches from GitHub, so every part of the menu shows the new state (an approved PR moves to "Show approved & drafts", a merged or closed PR leaves the list, counts follow).
 
 ### Background reviews, in rounds
 - **Run** finds your clone of the repo (see [Where chip finds your repos](#where-chip-finds-your-repos)) or clones it into `~/.cache/chip/repos/`, checks the PR out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, and starts `claude "<prompt>" --bg` there. Your clone and its branch are never touched. The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
@@ -223,6 +226,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 | `chip run <label> [--skill N \| --project] [--address]` | Start a background review: skill N from your config, or `--project` for the repo's own review (built-in if none); `--address` for your PR |
 | `chip attach / stop / forget <session-id>` | Open, stop or remove a chip review session |
 | `chip nudge <label>` | Re-request review on your PR |
+| `chip act <label> approve\|request-changes\|comment\|merge\|close\|ready\|draft` | Act on a PR on GitHub (asks first in a dialog where it matters) |
 | `chip view review\|mine` | Switch the menu tab |
 | `chip notifications --clear` | Empty the Recent notifications menu |
 | `chip search [--clear]` · `chip project toggle <name>\|all` | Search and project filter |
