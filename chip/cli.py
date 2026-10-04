@@ -211,13 +211,12 @@ def cmd_repo(args) -> int:
 
 
 def _find_row(label: str) -> Optional[dict]:
-    """Row (approved/drafts included) by label from the cached inbox."""
+    """Row by label from the cached inbox: PRs to review (approved/drafts included) and the user's own PRs."""
     inbox = store.cached_all() or {}
-    return next((r for r in inbox.get("rows", []) if r.get("label") == label), None)
+    return next((r for r in inbox.get("rows", []) + inbox.get("mine", []) if r.get("label") == label), None)
 
 
-def _skill(cfg: dict, number: int) -> Optional[dict]:
-    skills = cfg["skills"]
+def _skill(skills: list, number: int) -> Optional[dict]:
     if not 1 <= number <= len(skills):
         _error(f"no skill {number} (config has {len(skills)})")
         return None
@@ -258,7 +257,7 @@ def cmd_prompt(args) -> int:
     if row is None:
         _error(f"PR {args.label} is not in the list")
         return 2
-    skill = _skill(config.load(), args.skill)
+    skill = _skill(config.load()["skills"], args.skill)
     if skill is None:
         return 2
     print(config.fill_prompt(skill, row))
@@ -271,7 +270,7 @@ def _runs_path() -> Path:
 
 def cmd_run(args, runner) -> int:
     cfg = config.load()
-    skill = _skill(cfg, args.skill)
+    skill = _skill(cfg["address_skills" if args.address else "skills"], args.skill)
     if skill is None:
         return 2
     row = _find_row(args.label)
@@ -284,7 +283,7 @@ def cmd_run(args, runner) -> int:
     cache = cache_dir() / "repos.json"
     try:
         path = repos.resolve(row["repo"], work_root(), cache) or repos.clone(row["repo"], work_root(), cache)
-        record = runs.start(row, skill, cfg, path, _runs_path())
+        record = runs.start(row, skill, cfg, path, _runs_path(), address=args.address)
     except (repos.CloneError, runs.RunError) as exc:
         notify.send([f"Could not start review for {args.label}: {exc}"])
         _error(str(exc))
@@ -336,6 +335,28 @@ def cmd_forget(args) -> int:
     subprocess.run(["claude", "rm", args.id], capture_output=True, text=True)
     del records[found[0]]
     runs.save(_runs_path(), records)
+    return 0
+
+
+def cmd_nudge(args) -> int:
+    """Re-request review from the reviewers of one of the user's PRs who have not approved it."""
+    row = _find_row(args.label)
+    if row is None or row.get("kind") != "mine":
+        _error(f"{args.label} is not one of your open PRs")
+        return 2
+    logins = [login for login, state in row["reviewers"].items() if state != "APPROVED"]
+    if not logins:
+        _error(f"nobody to re-request on {args.label}")
+        return 2
+    cmd = ["gh", "api", "-X", "POST", f"repos/{row['repo']}/pulls/{row['number']}/requested_reviewers"]
+    for login in logins:
+        cmd += ["-f", f"reviewers[]={login}"]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        notify.send([f"Could not re-request review on {args.label}"])
+        _error((proc.stderr or proc.stdout).strip())
+        return 1
+    notify.send([f"Re-requested review from {', '.join(logins)} on {args.label}"])
     return 0
 
 
@@ -408,6 +429,8 @@ def main(argv=None, runner=None) -> int:
     p_run = sub.add_parser("run", help="start a background review for a PR label")
     p_run.add_argument("label")
     p_run.add_argument("--skill", type=int, default=1)
+    p_run.add_argument("--address", action="store_true", help="run an address-review skill on your own PR")
+    sub.add_parser("nudge", help="re-request review from reviewers who have not approved").add_argument("label")
     for name in ("attach", "stop", "forget"):
         sub.add_parser(name, help=f"{name} a chip review by session id").add_argument("id")
     sub.add_parser("copy", help="copy a PR link").add_argument("label")
@@ -445,6 +468,8 @@ def main(argv=None, runner=None) -> int:
         return cmd_stop(args)
     if args.cmd == "forget":
         return cmd_forget(args)
+    if args.cmd == "nudge":
+        return cmd_nudge(args)
     if args.cmd == "copy":
         return cmd_copy(args)
     if args.cmd == "config":

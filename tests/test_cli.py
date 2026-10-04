@@ -303,7 +303,7 @@ class ConfigCliTest(CliCase):
         self.assertEqual(code, 2)
 
 
-class RunCliTest(CliCase):
+class RunCliBase(CliCase):
     def setUp(self):
         super().setUp()
         self.calls = []
@@ -327,6 +327,9 @@ class RunCliTest(CliCase):
         self.run_cli(["menu"], runner=fake_runner)
         return self.run_cli(["run", "api#274"])
 
+
+
+class RunCliTest(RunCliBase):
     def test_run_starts_background_review_and_notifies(self):
         code, out, _ = self.start()
         self.assertEqual(code, 0)
@@ -396,4 +399,39 @@ class ConfigSetCliTest(CliCase):
 
     def test_set_needs_key_and_value(self):
         code, _, err = self.run_cli(["config", "set", "status_style"])
+        self.assertEqual(code, 2)
+
+
+class MinePrCliTest(RunCliBase):
+    def mine_runner(self, search, after):
+        nodes = []
+        if search == fetch.MINE_SEARCH:
+            nodes = [make_node(id="m", number=119, url="https://github.com/acme/api/pull/119",
+                               author={"login": "me"},
+                               latestReviews={"nodes": [
+                                   {"author": {"login": "bob"}, "state": "CHANGES_REQUESTED", "submittedAt": "2026-10-01T00:00:00Z"},
+                                   {"author": {"login": "carol"}, "state": "APPROVED", "submittedAt": "2026-10-01T00:00:00Z"},
+                                   {"author": {"login": "chiennv"}, "state": "COMMENTED", "submittedAt": "2026-10-01T00:00:00Z"}]})]
+        return {"viewer": {"login": "me"},
+                "search": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes}}
+
+    def test_address_run_uses_address_skill(self):
+        self.run_cli(["menu"], runner=self.mine_runner)
+        code, _, _ = self.run_cli(["run", "api#119", "--address"])
+        self.assertEqual(code, 0)
+        bg = next(c for c in self.calls if "--bg" in c)
+        self.assertTrue(bg[1].startswith("Help me address the review feedback on my pull request "
+                                         "https://github.com/acme/api/pull/119"))
+        self.assertIn("Bash(git push:*)", bg[bg.index("--disallowedTools") + 1])
+
+    def test_nudge_rerequests_reviewers_who_did_not_approve(self):
+        self.run_cli(["menu"], runner=self.mine_runner)
+        code, _, _ = self.run_cli(["nudge", "api#119"])
+        self.assertEqual(code, 0)
+        self.assertIn(["gh", "api", "-X", "POST", "repos/acme/api/pulls/119/requested_reviewers",
+                       "-f", "reviewers[]=bob", "-f", "reviewers[]=chiennv"], self.calls)
+
+    def test_nudge_unknown_label(self):
+        self.run_cli(["menu"], runner=self.mine_runner)
+        code, _, _ = self.run_cli(["nudge", "api#1"])
         self.assertEqual(code, 2)
