@@ -128,12 +128,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             refreshing = true
             view.setBusy(true, text: "Refreshing…")
         }
+        if kind == "run" {
+            guard view.statusText == nil else { return }  // already starting
+            view.setBusy(true, text: "Starting review…")
+        }
         guard let bash = view.entry.params["bash"] else { return }
         let args = (1...20).compactMap { view.entry.params["param\($0)"] }
         queue.async { [weak self] in
             guard let self else { return }
-            _ = Self.run(bash, args)
-            if kind == "refresh" {
+            let output = Self.run(bash, args)
+            if kind == "run" {
+                // The click came from a PR submenu: say how it went on that row, and show the new state
+                // (🔵 Reviewing) when the menu closes rather than rebuilding it under the open submenu.
+                let started = output.contains("started ")
+                let parsed = MenuParser.parse(Self.run(self.chip, Self.render))
+                parsed.notifications.forEach(Self.post)
+                self.onMainDuringMenu {
+                    view.setBusy(false, text: started ? "✓ Review started" : "Could not start: see the notification")
+                    if self.menuIsOpen { self.pending = parsed } else { self.apply(parsed) }
+                }
+            } else if kind == "refresh" {
                 self.refillOpenMenu()
             } else if kind == "radio" {
                 // A new status style redraws every row. The click came from an open submenu, and replacing
@@ -146,6 +160,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             }
         }
     }
+
+    /// Runs `block` on the main thread, also while a menu is open (event-tracking run loop mode).
+    private func onMainDuringMenu(_ block: @escaping () -> Void) {
+        performSelector(onMainThread: #selector(runBlock(_:)), with: BlockBox(block), waitUntilDone: false,
+                        modes: [RunLoop.Mode.common.rawValue, RunLoop.Mode.eventTracking.rawValue])
+    }
+
+    @objc private func runBlock(_ box: BlockBox) { box.block() }
 
     /// Off the main thread: render the menu, then refill the (open) menu on the main thread. Uses
     /// performSelector with the event-tracking mode, which runs while a menu is open.
@@ -288,6 +310,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         process.waitUntilExit()
         return String(decoding: data, as: UTF8.self)
     }
+}
+
+/// Carries a closure through performSelector (which takes an object).
+final class BlockBox: NSObject {
+    let block: () -> Void
+    init(_ block: @escaping () -> Void) { self.block = block }
 }
 
 /// Carries a ParsedMenu through performSelector (which takes an object).
