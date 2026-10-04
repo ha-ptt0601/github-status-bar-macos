@@ -129,22 +129,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             view.setBusy(true, text: "Refreshing…")
         }
         if kind == "run" {
-            guard view.statusText == nil else { return }  // already starting
-            view.setBusy(true, text: "Starting review…")
+            guard view.statusText == nil else { return }  // already running
+            view.setBusy(true, text: view.entry.params["busy"] ?? view.entry.text)
         }
         guard let bash = view.entry.params["bash"] else { return }
         let args = (1...20).compactMap { view.entry.params["param\($0)"] }
         queue.async { [weak self] in
             guard let self else { return }
-            let output = Self.run(bash, args)
+            let (_, status) = Self.runWithStatus(bash, args)
             if kind == "run" {
-                // The click came from a PR submenu: say how it went on that row, and show the new state
-                // (🔵 Reviewing) when the menu closes rather than rebuilding it under the open submenu.
-                let started = output.contains("started ")
+                // The click came from a submenu: say how it went on that row, update the rows it changed in
+                // place, and apply the full new menu when it closes (never rebuild under an open submenu).
                 let parsed = MenuParser.parse(Self.run(self.chip, Self.render))
                 parsed.notifications.forEach(Self.post)
                 self.onMainDuringMenu {
-                    view.setBusy(false, text: started ? "✓ Review started" : "Could not start: see the notification")
+                    view.setBusy(false, text: status == 0 ? (view.entry.params["done"] ?? "✓ Done")
+                                                          : "Failed: see the notification")
                     if self.menuIsOpen {
                         self.pending = parsed
                         self.updateInPlace(parsed, from: view)
@@ -171,8 +171,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     /// open submenu is untouched. The rest of the new menu is applied when the menu closes.
     private func updateInPlace(_ parsed: ParsedMenu, from view: KeepOpenView) {
         setTitle(parsed.title)
-        guard let submenu = view.enclosingMenuItem?.menu,
-              let label = submenu.items.first?.title, !label.isEmpty else { return }
+        guard let submenu = view.enclosingMenuItem?.menu else { return }
+        if let menu = statusItem.menu { updateRunRows(menu, parsed) }
+        guard let label = submenu.items.first?.title, !label.isEmpty else { return }
         func entry(in entries: [MenuEntry]) -> MenuEntry? {
             for e in entries {
                 if e.children.first?.text == label { return e }
@@ -188,9 +189,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             return nil
         }
         guard let menu = statusItem.menu, let item = row(in: menu), let fresh = entry(in: parsed.items) else { return }
+        refresh(item, with: fresh)
+    }
+
+    private func refresh(_ item: NSMenuItem, with fresh: MenuEntry) {
         item.attributedTitle = MenuBuilder.attributedText(fresh)
         item.image = MenuBuilder.image(fresh, height: 16)
         item.toolTip = fresh.params["tooltip"]
+        item.representedObject = fresh
+    }
+
+    /// "Reviews by GitHubBar" rows ("<label> · <skill> · <state>") that already exist get their new state.
+    private func updateRunRows(_ menu: NSMenu, _ parsed: ParsedMenu) {
+        func key(_ text: String) -> String? {
+            guard let match = text.range(of: #"[\w.-]+#\d+ · [^·]+ · "#, options: .regularExpression) else { return nil }
+            return String(text[match])
+        }
+        var fresh: [String: MenuEntry] = [:]
+        for entry in parsed.items { if let k = key(entry.text) { fresh[k] = entry } }
+        for item in menu.items {
+            guard let old = item.representedObject as? MenuEntry, let k = key(old.text), let new = fresh[k] else { continue }
+            refresh(item, with: new)
+        }
     }
 
     private func setTitle(_ title: MenuEntry) {
@@ -334,6 +354,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     /// Runs a command and returns its stdout ("" on failure). Inherits the app's environment.
     static func run(_ executable: String, _ arguments: [String]) -> String {
+        runWithStatus(executable, arguments).0
+    }
+
+    /// Runs a command and returns its stdout and exit status (-1 if it could not start).
+    static func runWithStatus(_ executable: String, _ arguments: [String]) -> (String, Int32) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -343,11 +368,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         do {
             try process.run()
         } catch {
-            return "! | color=#FF3B30\n---\nCould not run \(executable): \(error.localizedDescription)"
+            return ("! | color=#FF3B30\n---\nCould not run \(executable): \(error.localizedDescription)", -1)
         }
         let data = stdout.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        return String(decoding: data, as: UTF8.self)
+        return (String(decoding: data, as: UTF8.self), process.terminationStatus)
     }
 }
 
