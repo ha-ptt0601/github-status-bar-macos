@@ -62,7 +62,7 @@ class HandleTest(unittest.TestCase):
         contents = self.call("resources/read", {"uri": uri})["result"]["contents"]
         self.assertEqual(contents[0]["uri"], uri)
         self.assertIn("https://github.com/acme/api/pull/275", contents[0]["text"])
-        self.assertIn("/my-review-skill", contents[0]["text"])
+        self.assertIn("Review the pull request https://github.com/acme/api/pull/275", contents[0]["text"])
 
     def test_read_unknown(self):
         self.assertIn("error", self.call("resources/read", {"uri": "pr://nope/1-x"}))

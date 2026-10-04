@@ -11,6 +11,13 @@ PLACEHOLDERS = {"url", "repo", "number", "label", "title"}
 TERMINALS = ("Terminal", "iTerm")
 STATUS_STYLES = ("dots", "emoji", "symbols")
 SETTABLE = {"status_style": STATUS_STYLES, "terminal": TERMINALS}
+# The default review works on any machine; point `skills` at your own skill (e.g. "/my-review {url}").
+REVIEW_PROMPT = (
+    "Review the pull request {url}. Use gh to read its description, diff and existing review comments, and read "
+    "the surrounding code in this repository. Report findings ordered by severity (bugs, security, data loss, "
+    "performance, missing tests, readability), each with a file:line reference and a suggested fix, then give an "
+    "overall verdict. Do not edit files, commit, push, or post anything to GitHub."
+)
 ADDRESS_PROMPT = (
     "Help me address the review feedback on my pull request {url}. Use gh to read every unresolved review thread "
     "and review comment. For each one: quote it, propose the exact code change as a diff, and draft a short reply "
@@ -18,7 +25,7 @@ ADDRESS_PROMPT = (
 )
 DEFAULT = {
     "work_root": "~/work",
-    "skills": [{"name": "Full review", "prompt": "/my-review-skill {url}"}],
+    "skills": [{"name": "Full review", "prompt": REVIEW_PROMPT}],
     "address_skills": [{"name": "Address review", "prompt": ADDRESS_PROMPT}],
     "permission_mode": "auto",
     "disallowed_tools": ["Edit", "Write", "NotebookEdit"],

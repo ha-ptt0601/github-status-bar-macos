@@ -295,7 +295,7 @@ class ConfigCliTest(CliCase):
     def test_prompt_for_label(self):
         self.run_cli(["menu"], runner=fake_runner)
         code, out, _ = self.run_cli(["prompt", "api#274"])
-        self.assertEqual((code, out.strip()), (0, "/my-review-skill https://github.com/acme/api/pull/1"))
+        self.assertEqual((code, out.strip()), (0, config.REVIEW_PROMPT.format(url="https://github.com/acme/api/pull/1")))
 
     def test_prompt_unknown(self):
         self.run_cli(["menu"], runner=fake_runner)
@@ -334,7 +334,7 @@ class RunCliTest(RunCliBase):
         code, out, _ = self.start()
         self.assertEqual(code, 0)
         bg = next(c for c in self.calls if "--bg" in c)
-        self.assertEqual(bg[1], "/my-review-skill https://github.com/acme/api/pull/1")
+        self.assertEqual(bg[1], config.REVIEW_PROMPT.format(url="https://github.com/acme/api/pull/1"))
         self.assertTrue(any(c[0] == "osascript" for c in self.calls))
         self.assertIn("ab12cd34", out)
         self.assertIn("api#274::Full review", runs.load(self.runs_path()))

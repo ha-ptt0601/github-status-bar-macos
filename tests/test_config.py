@@ -20,7 +20,8 @@ class ConfigTest(unittest.TestCase):
 
     def test_defaults_when_missing(self):
         cfg = config.load(self.path)
-        self.assertEqual(cfg["skills"], [{"name": "Full review", "prompt": "/my-review-skill {url}"}])
+        self.assertEqual(cfg["skills"], [{"name": "Full review", "prompt": config.REVIEW_PROMPT}])
+        self.assertNotIn("me", json.dumps(config.DEFAULT))  # no personal skill in the shared default
         self.assertEqual(cfg["errors"], [])
         self.assertEqual(cfg["work_root"], os.path.expanduser("~/work"))
         self.assertEqual(cfg["permission_mode"], "auto")

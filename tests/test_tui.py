@@ -3,8 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from chip import model, tui
+from chip import config, model, tui
 from chip.menu import assign_labels
+
+
+def review(url):
+    return config.REVIEW_PROMPT.format(url=url)
 
 
 def row(i, repo="acme/shopbox-api", **overrides):
@@ -128,13 +132,13 @@ class RunUiTest(unittest.TestCase):
             ("prs", 0, "3\tx\n", [1, 3]),
         ], answers=[""])
         self.assertEqual(self.claude_calls, [
-            ("/my-review-skill https://github.com/acme/shopbox-api/pull/101", "/src/acme/shopbox-api"),
-            ("/my-review-skill https://github.com/acme/shopbox-api/pull/103", "/src/acme/shopbox-api"),
+            (review("https://github.com/acme/shopbox-api/pull/101"), "/src/acme/shopbox-api"),
+            (review("https://github.com/acme/shopbox-api/pull/103"), "/src/acme/shopbox-api"),
         ])
 
     def test_enter_without_ticks_reviews_current_line(self):
         self.run_ui([("repos", 0, "*\tx\n", []), ("prs", 0, "2\tx\n", [])])
-        self.assertEqual([c[0] for c in self.claude_calls], ["/my-review-skill https://github.com/acme/api/pull/102"])
+        self.assertEqual([c[0] for c in self.claude_calls], [review("https://github.com/acme/api/pull/102")])
 
     def test_escape_in_prs_goes_back_to_repos(self):
         self.run_ui([
