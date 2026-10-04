@@ -31,10 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
-        // Open at login by default, once; afterwards the menu toggle decides.
-        if !UserDefaults.standard.bool(forKey: "loginItemConfigured") {
+        // Open at login unless the user turned it off in the menu. Checked on every launch, because
+        // reinstalling the app (or moving it) drops its login item.
+        if !UserDefaults.standard.bool(forKey: "loginItemOff"), SMAppService.mainApp.status != .enabled {
             try? SMAppService.mainApp.register()
-            UserDefaults.standard.set(true, forKey: "loginItemConfigured")
         }
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refresh() }
@@ -208,6 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         } else {
             try? SMAppService.mainApp.register()
         }
+        UserDefaults.standard.set(SMAppService.mainApp.status != .enabled, forKey: "loginItemOff")
         sender.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
 
