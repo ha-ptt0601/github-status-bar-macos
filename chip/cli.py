@@ -302,9 +302,18 @@ def _known_run(run_id: str) -> bool:
 
 
 def cmd_attach(args) -> int:
-    if not _known_run(args.id):
+    """Open the review session: attach while it runs in the background, else resume it in its repo."""
+    found = runs.find_by_id(runs.load(_runs_path()), args.id)
+    if found is None:
+        _error(f"no chip run {args.id}")
         return 2
-    ok, message = terminal.open_command(f"claude attach {args.id}", terminal.pick_app(config.load()["terminal"]))
+    record = found[1]
+    if args.id in runs.fetch_agents() or not record.get("session_id"):
+        command = f"claude attach {args.id}"
+    else:
+        cwd = record.get("cwd") or str(Path.home())
+        command = f"cd {shlex.quote(cwd)} && claude --resume {shlex.quote(record['session_id'])}"
+    ok, message = terminal.open_command(command, terminal.pick_app(config.load()["terminal"]))
     if not ok:
         _error(message or "osascript failed")
         return 1

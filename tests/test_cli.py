@@ -358,6 +358,17 @@ class RunCliTest(CliCase):
         self.assertIn(["claude", "rm", "ab12cd34"], self.calls)
         self.assertEqual(runs.load(self.runs_path()), {})
 
+    def test_attach_falls_back_to_resume_when_background_session_is_gone(self):
+        self.start()
+        records = runs.load(self.runs_path())
+        records["api#274::Full review"]["session_id"] = "ab12cd34-full"
+        runs.save(self.runs_path(), records)
+        self.calls.clear()
+        self.run_cli(["attach", "ab12cd34"])
+        script = next(c[2] for c in self.calls if c[0] == "osascript")
+        self.assertIn("claude --resume ab12cd34-full", script)
+        self.assertIn("cd /src/acme/api", script)
+
     def test_unknown_run_id(self):
         code, _, _ = self.run_cli(["stop", "zzzz"])
         self.assertEqual(code, 2)
