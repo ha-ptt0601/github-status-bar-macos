@@ -95,7 +95,6 @@ chip has no login of its own: every request goes through `gh` with **your** toke
 
 ### Get it
 
-
 ```sh
 git clone https://github.com/ha-ptt0601/github-status-bar-macos.git ~/work/github-status-bar-macos
 ~/work/github-status-bar-macos/bin/chip install
