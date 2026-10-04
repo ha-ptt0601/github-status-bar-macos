@@ -30,9 +30,12 @@ Edit `~/.config/chip/config.json` (`chip config open`), then check it with `chip
   ],
   "permission_mode": "auto",
   "disallowed_tools": ["Edit", "Write", "NotebookEdit"],
-  "terminal": "Terminal"
+  "terminal": "Terminal",
+  "status_style": "dots"
 }
 ```
+
+`status_style` picks how PR status is shown in the menu: `dots` (🟠 Re-review · 🟢 New · ⚪ Commented/Waiting, with the label), `emoji` (🔁 🆕 💬 ⏳ with a legend) or `symbols` (SF Symbols). Switch it from the menu under **Settings → Status style**, or with `chip config set status_style emoji`.
 
 Each skill becomes a `Run "<name>"` button on every PR. Placeholders: `{url} {repo} {number} {label} {title}`. Reviews run in a background Claude Code session (`claude --bg`) inside the PR's local clone (found under `work_root`, or cloned into `work_root/.chip-repos/`).
 
