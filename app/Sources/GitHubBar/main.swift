@@ -1,5 +1,6 @@
 import AppKit
 import GitHubBarCore
+import ServiceManagement
 
 /// GitHubBar: shows `chip swiftbar` as a menu bar menu and runs the menu's actions.
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -17,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem.button?.title = "…"
+        // Open at login by default, once; afterwards the menu toggle decides.
+        if !UserDefaults.standard.bool(forKey: "loginItemConfigured") {
+            try? SMAppService.mainApp.register()
+            UserDefaults.standard.set(true, forKey: "loginItemConfigured")
+        }
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refresh() }
     }
@@ -44,6 +50,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let menu = MenuBuilder.menu(parsed.items, target: self, action: #selector(runEntry(_:)))
         menu.addItem(NSMenuItem.separator())
+        let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem(_:)), keyEquivalent: "")
+        login.target = self
+        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(login)
         menu.addItem(NSMenuItem(title: "Quit GitHubBar", action: #selector(NSApplication.terminate(_:)),
                                 keyEquivalent: "q"))
         menu.delegate = self
@@ -58,6 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             pending = nil
             apply(menu)
         }
+    }
+
+    @objc func toggleLoginItem(_ sender: NSMenuItem) {
+        if SMAppService.mainApp.status == .enabled {
+            try? SMAppService.mainApp.unregister()
+        } else {
+            try? SMAppService.mainApp.register()
+        }
+        sender.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
 
     @objc func runEntry(_ sender: NSMenuItem) {
