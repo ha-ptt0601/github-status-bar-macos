@@ -126,6 +126,7 @@ A chip review of a PR is a **round**. The record for `<label>::<skill>` keeps th
   Rows carry `my_review_at` and `last_commit_at` for this check. The row then shows its GitHub status again, for example Waiting, then Re-review after the author pushes.
 - **The PR remembers its session.** The PR submenu always shows `Last chip review · round N · HH:MM · <running | needs you | done | resolved (…)>` with **Open last session**. That runs `claude attach <id>` while the background session exists, and otherwise `claude --resume <session_id>` in the repo folder.
 - **Round N+1 continues the same session.** The button is **Continue review (round N+1)**. It runs `claude stop <id>`, then `claude "<skill prompt> — round N+1: …" --resume <session_id> --bg` with **no other flags**: the session keeps its saved name, permission mode and disallowed tools (verified; extra flags would fork a copy). The note asks the skill to check whether each finding of the previous round was addressed, then review only what changed.
+- **Merged or closed PRs** drop out of every list on the next fetch, because all searches use `is:open`. Any round whose PR is missing from a *successful* fetch is resolved as `PR merged or closed`, so it leaves "Reviews by chip". A failed fetch never resolves anything.
 - **Remove** deletes the record and its session (history included).
 
 ## My pull requests (PRs the user authored)
