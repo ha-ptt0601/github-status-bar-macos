@@ -160,8 +160,8 @@ PR worktrees for project review skills go in `~/.cache/chip/worktrees/`. If you 
 |---|---|---|
 | empty | yes | `Run "/review (project)"` |
 | empty | no | `Run "Review"`: the built-in prompt (works on any machine) |
-| yours | yes | your skills + `Run "/review (project)"` |
-| yours | no | your skills |
+| yours | yes | your skills that match the PR + `Run "/review (project)"` |
+| yours | no | your skills that match the PR (none match: `Run "Review"`) |
 
 - **A repo's review skill** is `.claude/skills/<name>/SKILL.md` or `.claude/commands/<name>.md` in the repo, with "review" in its name (one named exactly `review` wins). Committed with the repo, it is the same for everyone on the team.
 - **It runs on the PR's code.** Project skills usually review the checked-out branch (`git diff main...HEAD`), so chip fetches the PR and checks it out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, without touching your clone. The prompt tells the skill the real base branch (`origin/<base>`). "Continue review" updates the same worktree to the new commits, and it is removed when the PR is merged or closed.
@@ -180,6 +180,22 @@ To use your own Claude Code skill, put it in `~/.claude/skills/<name>/SKILL.md` 
 
 - `prompt` is sent to `claude` as the first message, so it can call a skill (`/name …`) or be plain text.
 - Placeholders are filled per PR: `{url}`, `{repo}`, `{number}`, `{label}`, `{title}`, `{base}`.
+
+### A different skill per repo or language
+
+Give a skill `repos` and/or `languages` to offer it only on matching PRs. `repos` takes `owner/repo`, a bare repo name, or `*` patterns; `languages` is the repo's main language as GitHub reports it (`PHP`, `Swift`, `TypeScript`, `Vue`, `Kotlin`…). Both must match when both are set; a skill without them is offered on every PR.
+
+```json
+"skills": [
+  {"name": "Laravel review", "prompt": "/review-laravel {url}",   "languages": ["PHP"]},
+  {"name": "Front-end",      "prompt": "/review-frontend {url}",  "languages": ["TypeScript", "Vue", "JavaScript"]},
+  {"name": "iOS review",     "prompt": "/review-ios {url}",       "repos": ["acme/*-ios"]},
+  {"name": "Mailer",        "prompt": "/review-mailer {url}",   "repos": ["acme/mailer-*"]},
+  {"name": "Quick review",   "prompt": "Review {url} briefly: only bugs and security issues."}
+]
+```
+
+A PR gets the skills that match it, plus the repo's own review skill. If none of your skills matches and the repo has no skill of its own, it gets the built-in **Review**. `address_skills` accept `repos` and `languages` too.
 - Your skills run in your clone of the repo, which may be on another branch: have them read the PR with `gh pr diff {number}` (or the `{url}`).
 - The run is read-only (`disallowed_tools`), and "Continue review" rounds reuse the same prompt.
 - `address_skills` works the same way for the **Address review** button on your own PRs.
@@ -191,7 +207,7 @@ To use your own Claude Code skill, put it in `~/.claude/skills/<name>/SKILL.md` 
 |---|---|
 | `work_roots` | Folders where chip looks for your clones (3 levels deep). Empty: the usual code folders that exist (`~/work`, `~/code`, `~/Projects`, `~/Developer`, `~/src`, `~/repos`, `~/git`, `~/dev`, `~/Documents/GitHub`…). The older single `work_root` key still works |
 | `clone_root` | Where chip clones repos it cannot find. Empty: `~/.cache/chip/repos` |
-| `skills` | Your review skills (empty by default). Each one is a `Run "<name>"` button on every PR to review. Placeholders: `{url} {repo} {number} {label} {title} {base}` |
+| `skills` | Your review skills (empty by default). Each one is a `Run "<name>"` button on the PRs it applies to (optional `repos`, `languages`). Placeholders: `{url} {repo} {number} {label} {title} {base}` |
 | `address_skills` | Skills for your own PRs (the Address review button). Same placeholders |
 | `permission_mode`, `disallowed_tools` | Passed to `claude --bg` for every run |
 | `terminal` | `Terminal` or `iTerm`, used by View session |

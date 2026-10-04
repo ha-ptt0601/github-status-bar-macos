@@ -303,3 +303,9 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 - `repos.resolve(slug, roots, cache, clone_root)`: remembered path in `repos.json`, else a scan of every root, else `clone_root/<repo>` or a legacy `<root>/.chip-repos/<repo>`. Everything found is remembered.
 - `repos.clone` targets `clone_root` (`config.clone_root` or `~/.cache/chip/repos`), so chip never creates folders in the user's home. Worktrees live in `~/.cache/chip/worktrees`.
 - `chip install` prints the folders it searches and where it clones.
+
+## Skills per repo or language (v0.1.2)
+
+- The fetch query adds `repository.primaryLanguage.name`; rows carry `language`.
+- A skill (review or address) may have `repos` (fnmatch patterns, case-insensitive, matched against `owner/repo` and the bare repo name) and `languages` (case-insensitive). `config.applies(skill, row)` requires both when set.
+- `swiftbar.review_buttons` keeps the matching skills with their config index (`--skill N` still indexes the full list), adds the repo's own skill, and falls back to the built-in Review when nothing matches. The TUI and MCP picker use `config.skills_for(cfg, row)[0]`.
