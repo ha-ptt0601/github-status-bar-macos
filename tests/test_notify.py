@@ -97,3 +97,40 @@ class MineNotifyTest(unittest.TestCase):
         old = notify.snapshot(ROWS, {}, None)
         del old["mine"]
         self.assertEqual(notify.diff(old, cur, ROWS, {}), [])
+
+
+class EventsTest(unittest.TestCase):
+    def test_events_carry_links(self):
+        rows = [dict(r, url=f"https://x/{r['label']}") for r in ROWS]
+        prev = notify.snapshot([], {KEY: {"kind": "running"}}, None)
+        cur = notify.snapshot(rows, {KEY: {"kind": "done"}}, "0.2.0")
+        records = {KEY: dict(RECORDS[KEY], id="ab")}
+        found = notify.events(prev, cur, rows, records)
+        self.assertEqual(found[0], {"text": "New review request: api#1 — t1 by alice", "href": "https://x/api#1"})
+        self.assertEqual(found[2], {"text": "Review finished: api#1 (Full review)", "run": "ab"})
+        self.assertEqual(found[3]["href"], notify.RELEASES_URL)
+
+    def test_cap_events(self):
+        self.assertEqual(notify.cap([{"text": str(i)} for i in range(5)], 2)[-1], {"text": "+3 more"})
+
+
+class StorageTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_history_is_newest_first_and_capped(self):
+        path = self.dir / "history.json"
+        notify.remember(path, [{"text": "a"}], 1, limit=2)
+        notify.remember(path, [{"text": "b"}, {"text": "c"}], 2, limit=2)
+        self.assertEqual(notify.load_list(path), [{"text": "b", "at": 2}, {"text": "c", "at": 2}])
+
+    def test_outbox_queue_and_drain(self):
+        path = self.dir / "outbox.json"
+        notify.queue(path, [{"text": "a"}])
+        notify.queue(path, [{"text": "b"}])
+        self.assertEqual(notify.drain(path), [{"text": "a"}, {"text": "b"}])
+        self.assertEqual(notify.drain(path), [])
