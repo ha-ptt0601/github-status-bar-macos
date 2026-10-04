@@ -46,6 +46,12 @@ def _last_commit(node: dict) -> dict:
     return (commits[-1].get("commit") or {}) if commits else {}
 
 
+def _my_review_at(node: dict, viewer: str) -> Optional[str]:
+    times = [r["submittedAt"] for r in _nodes(node, "latestReviews")
+             if _login(r.get("author")) == viewer and r.get("submittedAt")]
+    return max(times, key=parse_ts) if times else None
+
+
 def my_status(node: dict, viewer: str) -> str:
     mine = [
         r for r in _nodes(node, "latestReviews")
@@ -100,6 +106,8 @@ def build_row(node: dict, viewer: str, now: datetime) -> dict:
         "stacked": base != default_branch and base not in TRUNK_BRANCHES,
         "jira": jira.group(0) if jira else "",
         "draft": bool(node.get("isDraft")),
+        "last_commit_at": _last_commit(node).get("committedDate"),
+        "my_review_at": _my_review_at(node, viewer),
     }
 
 

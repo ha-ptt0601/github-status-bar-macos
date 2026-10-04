@@ -134,3 +134,16 @@ class StaleOrderTest(unittest.TestCase):
         inbox = model.build_inbox(nodes, "me", NOW)
         self.assertEqual([r["number"] for r in inbox["rows"]], [5, 2, 4, 1, 3])
         self.assertEqual([r["stale"] for r in inbox["rows"]], [True, False, False, True, True])
+
+
+class ReviewTimesTest(unittest.TestCase):
+    def test_last_commit_and_my_latest_review(self):
+        node = make_node(commits=commits_at("2026-09-30T01:00:00Z"),
+                         latestReviews=reviews(review("me", "COMMENTED", MINE_AT),
+                                               review("bob", "APPROVED", "2026-09-30T02:00:00Z")))
+        row = model.build_row(node, "me", NOW)
+        self.assertEqual(row["last_commit_at"], "2026-09-30T01:00:00Z")
+        self.assertEqual(row["my_review_at"], MINE_AT)
+
+    def test_no_review(self):
+        self.assertIsNone(model.build_row(make_node(), "me", NOW)["my_review_at"])
