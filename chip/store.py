@@ -39,15 +39,18 @@ def load_all(runner, force: bool = False) -> Tuple[Optional[dict], Optional[str]
     """All rows, approved and drafts included. Reuses a fetch younger than CACHE_TTL_SECONDS
     unless `force`. On a fetch error, returns the stale cache (or None) and the error text."""
     cached = cached_all()
-    fresh = cached and cached.get("all_rows") and time.time() - cached.get("fetched_at", 0) < CACHE_TTL_SECONDS
+    fresh = (cached and cached.get("all_rows") and "mine" in cached
+             and time.time() - cached.get("fetched_at", 0) < CACHE_TTL_SECONDS)
     if not force and fresh:
         return cached, None
     try:
-        viewer, nodes = fetch.fetch_inbox_nodes(runner)
+        viewer, nodes, mine_nodes = fetch.fetch_all(runner)
     except fetch.FetchError as exc:
         return (cached if cached and cached.get("all_rows") else None), str(exc)
-    inbox = model.build_inbox(nodes, viewer, datetime.now(timezone.utc), show_all=True)
+    now = datetime.now(timezone.utc)
+    inbox = model.build_inbox(nodes, viewer, now, show_all=True)
     menu.assign_labels(inbox["rows"])
+    inbox["mine"] = menu.assign_labels(model.build_mine_rows(mine_nodes, viewer, now))
     inbox["fetched_at"] = time.time()
     inbox["all_rows"] = True
     cache_dir().mkdir(parents=True, exist_ok=True)

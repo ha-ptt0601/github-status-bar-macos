@@ -21,7 +21,12 @@ def page(nodes):
             "search": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes}}
 
 
+MINE = [make_node(id="m", number=7, author={"login": "me"})]
+
+
 def runner(search, after):
+    if search == fetch.MINE_SEARCH:
+        return page(MINE)
     return page(NODES if search == fetch.SEARCHES[0] else [])
 
 
@@ -48,6 +53,10 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(sorted(r["number"] for r in inbox["rows"]), [1, 2, 3])
         self.assertTrue(all("label" in r for r in inbox["rows"]))
         self.assertTrue(inbox["all_rows"])
+
+    def test_load_all_keeps_my_prs_labelled(self):
+        inbox, _ = store.load_all(runner)
+        self.assertEqual([(r["number"], r["label"], r["kind"]) for r in inbox["mine"]], [(7, "api#7", "mine")])
 
     def test_reuses_recent_fetch(self):
         store.load_all(runner)
