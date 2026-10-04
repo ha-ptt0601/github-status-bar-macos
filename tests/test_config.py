@@ -191,6 +191,15 @@ class AppliesTest(unittest.TestCase):
         self.assertEqual([s["name"] for s in config.skills_for(cfg, self.PHP)], ["Laravel"])
         self.assertEqual(config.skills_for(cfg, self.SWIFT), [config.DEFAULT_SKILL])
 
+    def test_menu_bar_switches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "c.json"
+            self.assertEqual(config.set_value("menu_bar_counts", "off", path), [])
+            self.assertIs(json.loads(path.read_text())["menu_bar_counts"], False)
+            self.assertIs(config.load(path)["menu_bar_counts"], False)
+            self.assertIn("must be one of", config.set_value("menu_bar_badges", "maybe", path)[0])
+        self.assertIn("true or false", config.validate({"menu_bar_animate": "yes"})[0])
+
     def test_scope_validation(self):
         self.assertIn("repos must be a list", config.validate({"skills": [{"name": "A", "prompt": "x", "repos": "api"}]})[0])
         self.assertEqual(config.validate({"skills": [{"name": "A", "prompt": "x", "languages": ["Swift"]}]}), [])

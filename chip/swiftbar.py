@@ -458,11 +458,22 @@ def recent_lines(plugin: str, history: List[dict], now: float) -> List[str]:
     return lines
 
 
-def _settings(plugin: str, style: str, version: str) -> List[str]:
+MENU_BAR_OPTIONS = (("menu_bar_counts", "Show counts", True), ("menu_bar_badges", "Show review badges", False),
+                    ("menu_bar_animate", "Animate while reviewing", True))
+
+
+def _settings(plugin: str, style: str, version: str, cfg: Optional[dict] = None) -> List[str]:
+    cfg = cfg or {}
     lines = [item("Settings", 0, sfimage="gearshape"), item("Status style", 1, sfimage="paintpalette")]
     for value, label in STYLES:
         checked = {"checked": "true"} if value == style else {}
         lines.append(item(label, 2, keep="radio", **checked, **action(plugin, "config", "set", "status_style", value)))
+    lines.append(item("Menu bar", 1, sfimage="menubar.rectangle"))
+    for key, label, default in MENU_BAR_OPTIONS:
+        on = cfg.get(key, default)
+        checked = {"checked": "true"} if on else {}
+        lines.append(item(label, 2, keep="setting", **checked,
+                          **action(plugin, "config", "set", key, "off" if on else "on")))
     lines += [
         item("Open config", 1, sfimage="doc.text", **action(plugin, "config", "open", refresh=False)),
         item("Reinstall", 1, sfimage="arrow.triangle.2.circlepath", **action(plugin, "install")),
@@ -494,10 +505,20 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     active = [v["kind"] for v in views.values()]
     todo = ([str(count)] if count else []) + ([f"⚠{mine_todo}"] if mine_todo else [])
     running = [f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
-    tip = (f"{plural(count, 'PR')} to review · {mine_todo} of your PRs need you"
+    reviews = [f"{active.count('running')} running"] * ("running" in active) + \
+              [f"{active.count('needs_you')} need you"] * ("needs_you" in active)
+    tip = (" · ".join([f"{plural(count, 'PR')} to review", f"{mine_todo} of your PRs need you"]
+                      + [f"reviews: {', '.join(reviews)}"] * bool(reviews))
            if not error else f"Could not refresh: {error[:120]}")
-    title = " ".join(filter(None, [" · ".join(todo)] + running))  # e.g. "19 · ⚠8 🔵1"
-    lines = [item("!" if error else title, 0, templateImage=icon_b64(), tooltip=tip)]
+    # Settings › Menu bar: counts and badges are optional; GitHubBar draws `animate` (a spinning ring while
+    # a review runs) and `attention` (a yellow dot when one needs you) on the icon itself.
+    shown = ([" · ".join(todo)] if cfg.get("menu_bar_counts", True) else []) + \
+            (running if cfg.get("menu_bar_badges", False) else [])
+    title = " ".join(filter(None, shown))  # e.g. "19 · ⚠8 🔵1"
+    marks = {}
+    if cfg.get("menu_bar_animate", True) and not cfg.get("menu_bar_badges", False):
+        marks = {k: "true" for k, kind in (("animate", "running"), ("attention", "needs_you")) if kind in active}
+    lines = [item("!" if error else title, 0, templateImage=icon_b64(), tooltip=tip, **marks)]
     lines += [item(event["text"], 0, notify="true", **event_params(plugin, event)) for event in deliver or []]
     lines.append("---")
 
@@ -566,7 +587,7 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         lines.append(item(f"Show approved & drafts ({len(hidden)})", 0, sfimage="eye.slash"))
         lines.extend(pr_pages(hidden, 1, ctx))
     lines.extend(recent_lines(plugin, history or [], now))
-    lines.extend(_settings(plugin, style, version))
+    lines.extend(_settings(plugin, style, version, cfg))
     return lines
 
 

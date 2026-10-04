@@ -23,9 +23,9 @@ def row(i, repo="acme/api", **kw):
     return base
 
 
-def render(rows, records=None, views=None, style="symbols", **kw):
+def render(rows, records=None, views=None, style="symbols", cfg_extra=None, **kw):
     inbox = {"rows": assign_labels(rows), "fetched_at": 0}
-    cfg = dict(CFG, status_style=style)
+    cfg = dict(CFG, status_style=style, **(cfg_extra or {}))
     return swiftbar.render(inbox, records or {}, views or {}, cfg, PLUGIN, "0.1.0", now=0, **kw)
 
 
@@ -186,10 +186,10 @@ class StatusStyleTest(unittest.TestCase):
 class RunOnRowTest(unittest.TestCase):
     KEY = "api#2001::Full review"
 
-    def lines(self, kind, text, style="dots", started=0):
+    def lines(self, kind, text, style="dots", started=0, **cfg):
         records = {self.KEY: {"id": "ab", "label": "api#2001", "skill": "Full review", "url": "u", "started_at": started}}
         views = {self.KEY: {"kind": kind, "text": text}}
-        return render([row(1), row(2)], records, views, style=style)
+        return render([row(1), row(2)], records, views, style=style, cfg_extra=cfg)
 
     def pr_line(self, lines, number):
         return next(l for l in lines if f"#{number}" in l.split(" | ")[0] and not l.startswith("-"))
@@ -212,9 +212,29 @@ class RunOnRowTest(unittest.TestCase):
         self.assertIn("sfimage=circle.lefthalf.filled", self.pr_line(self.lines("running", "running 3m", "symbols"), 2001))
 
     def test_title_counts_active_reviews(self):
-        self.assertTrue(self.lines("running", "running 3m")[0].startswith("2 🔵1 | templateImage="))
-        self.assertTrue(self.lines("needs_you", "needs you")[0].startswith("2 🟡1 | templateImage="))
-        self.assertTrue(self.lines("done", "done 11:40")[0].startswith("2 | templateImage="))
+        # Default: counts, no badges; the icon animates while running and gets a dot when one needs you.
+        running = self.lines("running", "running 3m")[0]
+        self.assertTrue(running.startswith("2 | templateImage="))
+        self.assertIn("reviews: 1 running", running)
+        self.assertTrue(running.endswith("animate=true"))
+        self.assertTrue(self.lines("needs_you", "needs you")[0].endswith("attention=true"))
+        done = self.lines("done", "done 11:40")[0]
+        self.assertNotIn("animate", done)
+        self.assertNotIn("attention", done)
+
+    def test_menu_bar_options(self):
+        badges = self.lines("running", "running 3m", menu_bar_badges=True)[0]
+        self.assertTrue(badges.startswith("2 🔵1 | templateImage="))
+        self.assertNotIn("animate", badges)  # badges replace the animation
+        bare = self.lines("running", "running 3m", menu_bar_counts=False, menu_bar_animate=False)[0]
+        self.assertTrue(bare.startswith(" | templateImage="))
+        self.assertNotIn("animate", bare)
+        settings = self.lines("done", "done", menu_bar_counts=False)
+        self.assertIn("--Menu bar | sfimage=menubar.rectangle", settings)
+        self.assertIn("----Show counts | keep=setting bash=/p/chip.3m.sh terminal=false param1=config param2=set "
+                      "param3=menu_bar_counts param4=on refresh=true", settings)
+        self.assertIn("----Animate while reviewing | keep=setting checked=true bash=/p/chip.3m.sh terminal=false "
+                      "param1=config param2=set param3=menu_bar_animate param4=off refresh=true", settings)
 
 
 class RoundMenuTest(unittest.TestCase):
@@ -368,7 +388,8 @@ class MineSectionTest(unittest.TestCase):
         self.assertTrue(any(l.startswith("🔵 api#2001") for l in review))
         self.assertFalse(any(l.startswith("🔵 api#2119") for l in review))
         self.assertTrue(any(l.startswith("🔵 api#2119") for l in own))
-        self.assertTrue(own[0].startswith("1 · ⚠1 🔵2 | templateImage="))
+        self.assertTrue(own[0].startswith("1 · ⚠1 | templateImage="))
+        self.assertIn("reviews: 2 running", own[0])
 
 
 class RecentNotificationsTest(unittest.TestCase):

@@ -11,7 +11,9 @@ from typing import List, Optional
 PLACEHOLDERS = {"url", "repo", "number", "label", "title", "base"}
 TERMINALS = ("Terminal", "iTerm")
 STATUS_STYLES = ("dots", "emoji", "symbols")
-SETTABLE = {"status_style": STATUS_STYLES, "terminal": TERMINALS}
+# Menu bar switches (true/false), set from Settings › Menu bar as "on" / "off".
+MENU_BAR = ("menu_bar_counts", "menu_bar_badges", "menu_bar_animate")
+SETTABLE = {"status_style": STATUS_STYLES, "terminal": TERMINALS, **{key: ("on", "off") for key in MENU_BAR}}
 # Used when `skills` is empty and the repo has no review skill of its own (see chip/project.py).
 REVIEW_PROMPT = (
     "Review the pull request {url}. Use gh to read its description, diff and existing review comments, and read "
@@ -39,6 +41,11 @@ DEFAULT = {
     "worktree_links": [".env", "vendor", "node_modules"],
     "terminal": "Terminal",
     "status_style": "dots",
+    # Menu bar: the "22 · ⚠8" counts, the 🔵1 🟡1 review badges, and a spinning ring around the icon
+    # while a review runs (a yellow dot when one needs you).
+    "menu_bar_counts": True,
+    "menu_bar_badges": False,
+    "menu_bar_animate": True,
     "hidden_projects": [],
 }
 
@@ -104,6 +111,9 @@ def validate(data) -> List[str]:
     hidden = data.get("hidden_projects", DEFAULT["hidden_projects"])
     if not isinstance(hidden, list) or not all(isinstance(p, str) for p in hidden):
         errors.append("hidden_projects must be a list of project names")
+    for key in MENU_BAR:
+        if not isinstance(data.get(key, DEFAULT[key]), bool):
+            errors.append(f"{key} must be true or false")
     if data.get("status_style", DEFAULT["status_style"]) not in STATUS_STYLES:
         errors.append(f"status_style must be one of {', '.join(STATUS_STYLES)}")
     return errors
@@ -223,7 +233,7 @@ def set_value(key: str, value: str, path: Optional[Path] = None) -> List[str]:
             data = json.loads(path.read_text())
         except ValueError as exc:
             return [f"{path}: invalid JSON ({exc})"]
-    data[key] = value
+    data[key] = value == "on" if key in MENU_BAR else value
     errors = validate(data)
     if errors:
         return errors
