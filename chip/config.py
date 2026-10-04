@@ -24,6 +24,7 @@ DEFAULT = {
     "disallowed_tools": ["Edit", "Write", "NotebookEdit"],
     "terminal": "Terminal",
     "status_style": "dots",
+    "hidden_projects": [],
 }
 
 
@@ -72,6 +73,9 @@ def validate(data) -> List[str]:
         errors.append("disallowed_tools must be a list of strings")
     if data.get("terminal", DEFAULT["terminal"]) not in TERMINALS:
         errors.append(f"terminal must be one of {', '.join(TERMINALS)}")
+    hidden = data.get("hidden_projects", DEFAULT["hidden_projects"])
+    if not isinstance(hidden, list) or not all(isinstance(p, str) for p in hidden):
+        errors.append("hidden_projects must be a list of project names")
     if data.get("status_style", DEFAULT["status_style"]) not in STATUS_STYLES:
         errors.append(f"status_style must be one of {', '.join(STATUS_STYLES)}")
     return errors
@@ -136,3 +140,25 @@ def set_value(key: str, value: str, path: Optional[Path] = None) -> List[str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
     return []
+
+
+def _update(path: Optional[Path], change) -> None:
+    path = Path(path) if path else config_path()
+    data = json.loads(path.read_text()) if path.exists() else {}
+    change(data)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+
+def toggle_project(name: str, path: Optional[Path] = None) -> None:
+    """Hide a project in the menu, or show it again if it is hidden."""
+    def change(data):
+        hidden = [p for p in data.get("hidden_projects", []) if p != name]
+        if len(hidden) == len(data.get("hidden_projects", [])):
+            hidden.append(name)
+        data["hidden_projects"] = hidden
+    _update(path, change)
+
+
+def show_all_projects(path: Optional[Path] = None) -> None:
+    _update(path, lambda data: data.__setitem__("hidden_projects", []))

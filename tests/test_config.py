@@ -125,3 +125,28 @@ class AddressSkillsTest(unittest.TestCase):
     def test_custom_address_skill(self):
         self.path.write_text(json.dumps({"address_skills": [{"name": "Fix plan", "prompt": "/my-fix {url}"}]}))
         self.assertEqual(config.load(self.path)["address_skills"], [{"name": "Fix plan", "prompt": "/my-fix {url}"}])
+
+
+class HiddenProjectsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "config.json"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_default_and_validation(self):
+        self.assertEqual(config.load(self.path)["hidden_projects"], [])
+        self.path.write_text(json.dumps({"hidden_projects": "loyalty"}))
+        self.assertIn("hidden_projects", config.load(self.path)["errors"][0])
+
+    def test_toggle_and_show_all(self):
+        self.path.write_text(json.dumps({"work_root": "~/src"}))
+        config.toggle_project("loyalty-partners", self.path)
+        config.toggle_project("api", self.path)
+        self.assertEqual(config.load(self.path)["hidden_projects"], ["loyalty-partners", "api"])
+        config.toggle_project("loyalty-partners", self.path)
+        self.assertEqual(config.load(self.path)["hidden_projects"], ["api"])
+        config.show_all_projects(self.path)
+        data = json.loads(self.path.read_text())
+        self.assertEqual((data["hidden_projects"], data["work_root"]), ([], "~/src"))
