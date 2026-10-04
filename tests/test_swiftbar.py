@@ -284,14 +284,14 @@ class MineSectionTest(unittest.TestCase):
         mine = [self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})]
         review = self.render(mine, view="review")
         self.assertTrue(review[0].startswith("1 🔴1 | templateImage="))
-        self.assertIn("Review requests · 1 | checked=true bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertIn("Review requests · 1 | tab=review checked=true bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=review refresh=true", review)
-        self.assertIn("My pull requests · 1 · 🔴1 | bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertIn("My pull requests · 1 · 🔴1 | tab=mine bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=mine refresh=true", review)
         self.assertFalse(any(l.startswith("🔴 #2119") for l in review))
         own = self.render(mine)
         self.assertTrue(own[0].startswith("1 🔴1 | templateImage="))
-        self.assertIn("My pull requests · 1 · 🔴1 | checked=true bash=/p/chip.3m.sh terminal=false param1=view "
+        self.assertIn("My pull requests · 1 · 🔴1 | tab=mine checked=true bash=/p/chip.3m.sh terminal=false param1=view "
                       "param2=mine refresh=true", own)
         self.assertTrue(any(l.startswith("🔴 #2119") for l in own))
         self.assertFalse(any(l.startswith("🟢 #2001") for l in own))

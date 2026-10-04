@@ -467,11 +467,11 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         visible = [r for r in rows if not r["draft"] and r["status"] != model.APPROVED]
         hidden = [r for r in rows if r["draft"] or r["status"] == model.APPROVED]
     if inbox_all is not None:
-        # Tabs: clicking the other one switches the menu (it closes; reopen to see the other tab).
+        # Tabs: GitHubBar shows `tab=` items as one segmented control that switches without closing the menu.
         mine_text = f"My pull requests · {len(mine_shown)}" + (f" · 🔴{changes}" if changes else "")
         for name, text in (("review", f"Review requests · {len(review_open)}"), ("mine", mine_text)):
             checked = {"checked": "true"} if name == view else {}
-            lines.append(item(text, 0, **checked, **action(plugin, "view", name)))
+            lines.append(item(text, 0, tab=name, **checked, **action(plugin, "view", name)))
         updated = datetime.fromtimestamp(inbox_all.get("fetched_at", now)).strftime("%H:%M")
         lines.append(item(f"Updated {updated}", 0, color=GREY, size="12"))
     lines.append(item("Refresh now", 0, sfimage="arrow.clockwise", **action(plugin, "swiftbar", "--force")))
