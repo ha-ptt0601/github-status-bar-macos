@@ -279,3 +279,12 @@ People who install chip should see an app named **GitHubBar** with the GitHub ic
 
   It then launches the app. On first launch the app registers itself as a login item with `SMAppService.mainApp` (macOS 13+). The System Events route was dropped because it needs an Apple-events permission (`-1743`). The menu gets **Open at Login** (toggle) and **Quit GitHubBar**. It also removes chip's SwiftBar plugin. It does not uninstall SwiftBar itself, which the user may use for other plugins. `chip uninstall` quits the app, removes the bundle and removes the Login Item.
 - **Later (not now):** native notifications through the app, so that clicking one opens the PR or session.
+
+## In-place menu (GitHubBar, v0.1.1)
+
+AppKit closes a menu after a click on a plain item, so GitHubBar changes the open menu in place instead:
+
+- **Panes.** The app runs `chip swiftbar --deliver --panes`. Both tabs are printed, each after a ` | pane=<tab>` marker (`active=true` on the remembered one). Tab items carry `tab=<name>` and become one segmented control. Switching hides the other pane's items and runs `chip view <tab>` in the background. The menu's minimum width is measured with both panes shown.
+- **Projects.** Project sections carry `proj=<name>` (and `hidden=true` for hidden projects, which are still printed). Rows with `keep=toggle|all|radio|refresh` are custom views that run their command without closing the menu. Project toggles hide or show the sections at once; other changes (counts, older/approved lists) apply when the menu closes.
+- **Refresh now** (`keep=refresh`) shows a spinner and "Refreshing…", refills the open menu with `performSelector(onMainThread:…modes:)` in the event-tracking mode, then shows "✓ Up to date" for 2 s.
+- **Live search.** With `--panes`, *Search…* becomes ` | searchfield=true` (an `NSSearchField` view, focused on open). Each pane's lists are tagged `body=true`, followed by every PR of the tab as a hidden row with `searchonly=true find="<label repo title author jira reviewers>"` and a `nomatch=true` line. While the field has text, `body` items are hidden and up to 40 matching `searchonly` rows are shown.
