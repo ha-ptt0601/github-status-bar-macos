@@ -89,9 +89,21 @@ GitHubBar checks this repo's GitHub releases every 6 hours. When a newer version
 - macOS 13 or later;
 - Python 3.9 or later;
 - Command Line Tools (`xcode-select --install`), which provide git and Swift;
-- [GitHub CLI](https://cli.github.com), logged in with `gh auth login`;
+- [GitHub CLI](https://cli.github.com) (`brew install gh`), logged in with `gh auth login` (see [Your GitHub account](#your-github-account));
 - [Claude Code](https://claude.com/claude-code);
 - optional: `brew install fzf` for the terminal picker.
+
+### Your GitHub account
+
+chip has no login of its own: every request goes through `gh` with **your** token, which `gh` keeps in the macOS Keychain. The searches use `@me` (`review-requested:@me`, `reviewed-by:@me`, `author:@me`), so each person sees their own PRs.
+
+- Check which account is used: `gh auth status` (the line `Active account: true`).
+- Several accounts: `gh auth login` adds another one; `gh auth switch` changes the active one. GitHubBar follows the active github.com account, at the next refresh or **Refresh now**. Note that this also switches the account for every other `gh` command on the machine.
+- Organizations with SAML SSO: authorize the `gh` token for the organization (GitHub → Settings → Applications → GitHub CLI, or follow the link `gh` prints). Otherwise that organization's PRs do not appear.
+- Only github.com is supported, not GitHub Enterprise Server.
+- Updates come from this private repository's releases, so your account needs access to it.
+
+### Get it
 
 The repository is private. Ask for access, then:
 
