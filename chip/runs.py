@@ -54,25 +54,31 @@ def parse_bg_id(stdout: str) -> Optional[str]:
 
 
 def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
-          now: Callable[[], float] = time.time, address: bool = False, extra: Optional[dict] = None) -> dict:
-    """Round 1 starts a new background session; later rounds continue the same session."""
+          now: Callable[[], float] = time.time, address: bool = False, extra: Optional[dict] = None,
+          resume: Optional[str] = None) -> dict:
+    """Round 1 starts a new background session, or continues the session `resume` (e.g. the one where the
+    feature was built); later rounds continue the same session."""
     runner = runner or subprocess.run
     key = run_key(row["label"], skill["name"])
     records = load(path)
     previous = records.get(key)
     prompt = config.fill_prompt(skill, row)
-    if previous and previous.get("session_id"):
-        number = previous.get("round", 1) + 1
-        runner(["claude", "stop", previous["id"]], capture_output=True, text=True)
+    if (previous and previous.get("session_id")) or resume:
+        previous = previous if previous and previous.get("session_id") else None
+        number = previous.get("round", 1) + 1 if previous else 1
+        if previous is None:
+            previous = {"session_id": resume, "id": "", "round": 0, "started_at": now()}
+        if previous["id"]:
+            runner(["claude", "stop", previous["id"]], capture_output=True, text=True)
         # No other flags: a background session keeps its saved name, permission mode and disallowed tools;
         # passing flags would fork a copy instead of continuing it.
-        cmd = ["claude", prompt + ROUND_NOTE.format(n=number, prev=number - 1),
-               "--resume", previous["session_id"], "--bg"]
-        history = previous.get("history", []) + [{
+        note = ROUND_NOTE.format(n=number, prev=number - 1) if number > 1 else ""
+        cmd = ["claude", prompt + note, "--resume", previous["session_id"], "--bg"]
+        history = previous.get("history", []) + ([{
             "round": previous.get("round", 1), "started_at": previous["started_at"],
             "done_at": previous.get("done_at"), "resolved_at": previous.get("resolved_at"),
             "resolved_by": previous.get("resolved_by"),
-        }]
+        }] if number > 1 else [])
     else:
         number, history = 1, []
         if address:
@@ -82,7 +88,7 @@ def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
     run_id = parse_bg_id(proc.stdout)
     if proc.returncode != 0 or not run_id:
         raise RunError((proc.stderr or proc.stdout or "claude --bg failed").strip())
-    record = {"id": run_id, "session_id": previous.get("session_id") if number > 1 else None,
+    record = {"id": run_id, "session_id": previous.get("session_id") if previous else None,
               "label": row["label"], "title": row["title"], "url": row["url"], "repo": row["repo"],
               "skill": skill["name"], "kind": "address" if address else "review", "cwd": cwd,
               "round": number, "history": history, "started_at": now(), **(extra or {})}
