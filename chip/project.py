@@ -6,6 +6,7 @@ Repo skills such as `.claude/skills/review` review the checked-out branch, which
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Dict, Iterable, Optional
@@ -72,8 +73,28 @@ def _git(args, runner, cwd=None) -> subprocess.CompletedProcess:
     return proc
 
 
-def checkout(clone, row: dict, root, runner=None) -> str:
-    """Fetch the PR head and its base, then (re)check the PR out, detached, in its own worktree."""
+# Copied (not linked) from the clone: it enables the repo's MCP servers and holds the user's permissions.
+LOCAL_SETTINGS = ".claude/settings.local.json"
+
+
+def prepare(clone, worktree, links=()) -> None:
+    """Give the worktree what git does not: the clone's local Claude settings (copied) and `links`
+    (e.g. .env, vendor, node_modules) as symlinks to the clone. Missing sources and paths the
+    worktree already has are skipped."""
+    clone, worktree = Path(clone), Path(worktree)
+    settings = clone / LOCAL_SETTINGS
+    if settings.is_file():
+        (worktree / LOCAL_SETTINGS).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(settings, worktree / LOCAL_SETTINGS)
+    for name in links:
+        source, target = clone / name, worktree / name
+        if source.exists() and not (target.exists() or target.is_symlink()):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.symlink_to(source)
+
+
+def checkout(clone, row: dict, root, runner=None, links=()) -> str:
+    """Fetch the PR head and its base, (re)check the PR out, detached, in its own worktree, and prepare it."""
     runner = runner or subprocess.run
     ref = f"refs/chip/pr-{row['number']}"
     _git(["-C", str(clone), "fetch", "--quiet", "origin", f"+refs/pull/{row['number']}/head:{ref}",
@@ -84,6 +105,7 @@ def checkout(clone, row: dict, root, runner=None) -> str:
     else:
         target.parent.mkdir(parents=True, exist_ok=True)
         _git(["-C", str(clone), "worktree", "add", "--quiet", "--detach", str(target), ref], runner)
+    prepare(clone, target, links)
     return str(target)
 
 

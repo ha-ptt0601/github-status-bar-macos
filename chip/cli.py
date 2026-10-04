@@ -295,7 +295,7 @@ def cmd_run(args, runner) -> int:
         extra = {}
         if args.project:
             skill, extra = _project_skill(clone), {"auto": True}
-        worktree = project.checkout(clone, row, store.worktree_root())
+        worktree = project.checkout(clone, row, store.worktree_root(), links=cfg["worktree_links"])
         extra.update(clone=clone, worktree=worktree)
         record = runs.start(row, project.in_worktree(skill), cfg, worktree, _runs_path(), address=args.address,
                             extra=extra)

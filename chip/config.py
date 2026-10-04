@@ -35,6 +35,8 @@ DEFAULT = {
     "address_skills": [{"name": "Address review", "prompt": ADDRESS_PROMPT}],
     "permission_mode": "auto",
     "disallowed_tools": ["Edit", "Write", "NotebookEdit"],
+    # Linked from your clone into each PR worktree, so tools such as Laravel Boost (MCP) work there.
+    "worktree_links": [".env", "vendor", "node_modules"],
     "terminal": "Terminal",
     "status_style": "dots",
     "hidden_projects": [],
@@ -87,6 +89,10 @@ def validate(data) -> List[str]:
             errors.append(f"{key} must be a string")
     if not isinstance(data.get("work_root", ""), str):
         errors.append("work_root must be a string")
+    links = data.get("worktree_links", DEFAULT["worktree_links"])
+    if not isinstance(links, list) or not all(
+            isinstance(l, str) and l.strip() and not l.startswith("/") and ".." not in Path(l).parts for l in links):
+        errors.append("worktree_links must be a list of paths inside the repo")
     roots = data.get("work_roots", DEFAULT["work_roots"])
     if not isinstance(roots, list) or not all(isinstance(r, str) for r in roots):
         errors.append("work_roots must be a list of folders")

@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -105,3 +106,35 @@ class CleanupTest(unittest.TestCase):
         self.assertNotIn("worktree", records["k"])
         self.assertIn("worktree", records["j"])
         self.assertFalse(runs.clean_worktrees(records, runner))
+
+
+class PrepareTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.clone, self.worktree = Path(self.tmp.name) / "clone", Path(self.tmp.name) / "wt"
+        (self.clone / ".claude").mkdir(parents=True)
+        (self.clone / ".claude" / "settings.local.json").write_text('{"enableAllProjectMcpServers": true}')
+        (self.clone / ".env").write_text("DB=x")
+        (self.clone / "vendor").mkdir()
+        self.worktree.mkdir()
+        (self.worktree / "node_modules").mkdir()  # already there: left alone
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_copies_local_settings_and_links_the_rest(self):
+        project.prepare(self.clone, self.worktree, [".env", "vendor", "node_modules", "missing"])
+        settings = self.worktree / ".claude" / "settings.local.json"
+        self.assertFalse(settings.is_symlink())
+        self.assertIn("enableAllProjectMcpServers", settings.read_text())
+        self.assertEqual(os.readlink(self.worktree / ".env"), str(self.clone / ".env"))
+        self.assertEqual(os.readlink(self.worktree / "vendor"), str(self.clone / "vendor"))
+        self.assertFalse((self.worktree / "node_modules").is_symlink())
+        self.assertFalse((self.worktree / "missing").exists())
+        project.prepare(self.clone, self.worktree, [".env"])  # round 2: no error, still linked
+        self.assertTrue((self.worktree / ".env").is_symlink())
+
+    def test_links_validation(self):
+        self.assertEqual(config.validate({"worktree_links": [".env", "storage/app"]}), [])
+        self.assertIn("worktree_links", config.validate({"worktree_links": ["../secret"]})[0])
+        self.assertIn("worktree_links", config.validate({"worktree_links": "vendor"})[0])

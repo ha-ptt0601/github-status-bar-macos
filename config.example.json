@@ -49,6 +49,11 @@
     "Write",
     "NotebookEdit"
   ],
+  "worktree_links": [
+    ".env",
+    "vendor",
+    "node_modules"
+  ],
   "terminal": "Terminal",
   "status_style": "dots",
   "hidden_projects": []
