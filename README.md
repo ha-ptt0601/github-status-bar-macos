@@ -2,21 +2,21 @@
 
 chip lists the GitHub pull requests waiting for **your** review and runs your review skill on the ones you pick.
 
-- **Menu bar** (SwiftBar): GitHub icon with a count, PRs grouped by project, a `Run "<skill>"` button per PR, live status of background reviews (View / Stop / Remove), and notifications for new PRs, re-reviews, finished reviews and new chip versions.
+- **Menu bar** (the GitHubBar app): GitHub icon with a count, PRs grouped by project, a `Run "<skill>"` button per PR, live status of background reviews (View / Stop / Remove), and notifications for new PRs, re-reviews, finished reviews and new chip versions.
 - **Two tabs in one menu**: *Review requests* (default) lists PRs waiting for your review; *My pull requests* lists your own PRs (status, reviewers, unresolved threads, an "Address review" skill that only drafts fixes and replies, and Re-request review). Both have **Search…** and a **Projects** filter.
 - **Prompt bar**: type `/chip @` in Claude Code and pick PRs from the `@` autocomplete.
 - **In chat**: `/chip menu` (pick from menus). **In a shell**: `chip` (fzf picker, Tab to tick).
 
 ## Install
 
-Prerequisites: macOS, Python 3.9+, [`gh`](https://cli.github.com) (logged in), [Claude Code](https://claude.com/claude-code). Optional: `brew install swiftbar fzf`.
+Prerequisites: macOS 13+, Python 3.9+, Command Line Tools (`xcode-select --install`, provides Swift), [`gh`](https://cli.github.com) (logged in), [Claude Code](https://claude.com/claude-code). Optional: `brew install fzf`.
 
 ```sh
 git clone git@github.com:ha-ptt0601/chip.git ~/work/chip
 ~/work/chip/bin/chip install
 ```
 
-`chip install` links `~/.local/bin/chip`, installs the `/chip` skill, registers the `chip` MCP server, adds the SwiftBar plugin and writes a default config. Running it again is safe. `chip uninstall` removes exactly what it added.
+`chip install` links `~/.local/bin/chip`, installs the `/chip` skill, registers the `chip` MCP server, builds **GitHubBar.app** into `~/Applications` (it opens at login; toggle *Open at Login* in its menu) and writes a default config. Running it again is safe. `chip uninstall` removes exactly what it added.
 
 ## Plug in your own review skill
 

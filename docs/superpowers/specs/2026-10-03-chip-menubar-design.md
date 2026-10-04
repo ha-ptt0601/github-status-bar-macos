@@ -271,5 +271,5 @@ People who install chip should see an app named **GitHubBar** with the GitHub ic
   - an `.icns` made from the GitHub mark with `sips` and `iconutil`;
   - an ad-hoc signature (`codesign -s -`) and the quarantine flag cleared.
 
-  It then adds a Login Item through System Events and launches the app. It also removes chip's SwiftBar plugin. It does not uninstall SwiftBar itself, which the user may use for other plugins. `chip uninstall` quits the app, removes the bundle and removes the Login Item.
+  It then launches the app. On first launch the app registers itself as a login item with `SMAppService.mainApp` (macOS 13+). The System Events route was dropped because it needs an Apple-events permission (`-1743`). The menu gets **Open at Login** (toggle) and **Quit GitHubBar**. It also removes chip's SwiftBar plugin. It does not uninstall SwiftBar itself, which the user may use for other plugins. `chip uninstall` quits the app, removes the bundle and removes the Login Item.
 - **Later (not now):** native notifications through the app, so that clicking one opens the PR or session.
