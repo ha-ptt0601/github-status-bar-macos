@@ -1,67 +1,54 @@
-"""`chip install` / `chip uninstall`: wire this clone into ~/.local/bin, Claude Code and SwiftBar."""
+"""`chip install` / `chip uninstall`: wire this clone into ~/.local/bin, Claude Code and the GitHubBar app."""
 from __future__ import annotations
 
 import os
+import plistlib
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Optional, Tuple
+from typing import Callable, List, Mapping, Optional
 
-from chip import config
+from chip import __version__, config
 
 REPO_DIR = Path(__file__).resolve().parents[1]
 MARKER = "installed by chip"
+APP_NAME = "GitHubBar"
+BUNDLE_ID = "com.ha-ptt0601.githubbar"
 SWIFTBAR_DOMAIN = "com.ameba.SwiftBar"
-PLUGIN_NAME = "chip.1m.sh"  # menu refresh every minute; GitHub is still fetched at most every 3 minutes
-PLUGINS = ((PLUGIN_NAME, ""),)
-LEGACY_PLUGIN_NAMES = ("chip.3m.sh", "chip-mine.1m.sh")  # chip-mine: the short-lived second icon
-SWIFTBAR_APP = Path("/Applications/SwiftBar.app")
+# SwiftBar plugins earlier chip versions installed; GitHubBar replaces them.
+OLD_PLUGIN_NAMES = ("chip.1m.sh", "chip.3m.sh", "chip-mine.1m.sh")
 REQUIRED = (("gh", "brew install gh"), ("claude", "see https://claude.com/claude-code"),
             ("git", "xcode-select --install"))
-
-
-def plugin_script(chip_bin: Path, path_dirs: Iterable[str], view_args: str = "") -> str:
-    path = ":".join(dict.fromkeys(path_dirs))
-    return f"""#!/bin/bash
-# <swiftbar.title>chip</swiftbar.title>
-# <swiftbar.hideAbout>true</swiftbar.hideAbout>
-# <swiftbar.hideRunInTerminal>true</swiftbar.hideRunInTerminal>
-# <swiftbar.hideLastUpdated>true</swiftbar.hideLastUpdated>
-# <swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>
-# <swiftbar.hideSwiftBar>true</swiftbar.hideSwiftBar>
-# {MARKER} — regenerate with `chip install`
-export PATH="{path}:$PATH"
-export CHIP_PLUGIN="$0"
-if [ $# -eq 0 ]; then exec "{chip_bin}" swiftbar{view_args}; fi
-exec "{chip_bin}" "$@"
-"""
+LSREGISTER = ("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework"
+              "/Support/lsregister")
+ICON_SIZES = (16, 32, 128, 256, 512)
 
 
 def render_skill(template: str, chip_bin: Path) -> str:
     return template.replace("{{CHIP}}", str(chip_bin)) + f"\n<!-- {MARKER} -->\n"
 
 
-def _swiftbar_data_dir(home: Path) -> Path:
-    """Where SwiftBar keeps per-plugin data folders; never use it as the plugin folder."""
-    return home / "Library" / "Application Support" / "SwiftBar" / "Plugins"
+def app_path(home: Path) -> Path:
+    return home / "Applications" / f"{APP_NAME}.app"
 
 
-def _read_plugin_dir(runner) -> Optional[Path]:
-    proc = runner(["defaults", "read", SWIFTBAR_DOMAIN, "PluginDirectory"], capture_output=True, text=True)
-    if proc.returncode == 0 and proc.stdout.strip():
-        return Path(os.path.expanduser(proc.stdout.strip()))
-    return None
-
-
-def swiftbar_plugin_dir(runner, home: Path) -> Tuple[Path, Optional[Path]]:
-    """(plugin folder to use, previous folder if we moved off SwiftBar's own data folder)."""
-    current = _read_plugin_dir(runner)
-    if current is not None and current != _swiftbar_data_dir(home):
-        return current, None
-    target = home / ".swiftbar"
-    runner(["defaults", "write", SWIFTBAR_DOMAIN, "PluginDirectory", str(target)], capture_output=True, text=True)
-    return target, current
+def info_plist(chip_bin: Path, path_dirs: List[str]) -> dict:
+    """The bundle's Info.plist: name, menu-bar-only, and the environment GitHubBar passes to chip."""
+    path = ":".join(dict.fromkeys(path_dirs + ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]))
+    return {
+        "CFBundleName": APP_NAME,
+        "CFBundleDisplayName": APP_NAME,
+        "CFBundleIdentifier": BUNDLE_ID,
+        "CFBundleExecutable": APP_NAME,
+        "CFBundlePackageType": "APPL",
+        "CFBundleIconFile": APP_NAME,
+        "CFBundleShortVersionString": __version__,
+        "CFBundleVersion": __version__,
+        "LSMinimumSystemVersion": "13.0",
+        "LSUIElement": True,
+        "LSEnvironment": {"PATH": path, "CHIP_PLUGIN": str(chip_bin)},
+    }
 
 
 def _link(dst: Path, target: Path, out) -> None:
@@ -109,44 +96,79 @@ def _install_mcp(chip_bin: Path, runner, out) -> None:
     out("mcp   chip (user scope)")
 
 
-def _install_plugin(chip_bin: Path, runner, which, out, swiftbar_app: Path, home: Path) -> None:
-    plugin_dir, moved_from = swiftbar_plugin_dir(runner, home)
-    plugin_dir.mkdir(parents=True, exist_ok=True)
-    if moved_from:
-        out(f"note  SwiftBar plugin folder moved to {plugin_dir} (was SwiftBar's own data folder)")
-    stale = [plugin_dir / name for name in LEGACY_PLUGIN_NAMES]
-    if moved_from:
-        stale += [moved_from / name for name in (PLUGIN_NAME,) + LEGACY_PLUGIN_NAMES]
-    for old in stale:
-        if old.is_file() and MARKER in old.read_text():
-            old.unlink()
-            out(f"rm    {old} (replaced by {plugin_dir / PLUGIN_NAME})")
+def _swiftbar_folders(runner, home: Path) -> List[Path]:
+    folders = [home / ".swiftbar", home / "Library" / "Application Support" / "SwiftBar" / "Plugins"]
+    proc = runner(["defaults", "read", SWIFTBAR_DOMAIN, "PluginDirectory"], capture_output=True, text=True)
+    if proc.returncode == 0 and proc.stdout.strip():
+        folders.insert(0, Path(os.path.expanduser(proc.stdout.strip())))
+    return list(dict.fromkeys(folders))
+
+
+def _remove_old_plugins(runner, home: Path, out) -> None:
+    """Remove the SwiftBar plugins earlier chip versions wrote (only files carrying chip's marker)."""
+    for folder in _swiftbar_folders(runner, home):
+        for name in OLD_PLUGIN_NAMES:
+            plugin = folder / name
+            if plugin.is_file() and MARKER in plugin.read_text():
+                plugin.unlink()
+                out(f"rm    {plugin} (GitHubBar replaces the SwiftBar plugin)")
+
+
+def _make_icon(repo: Path, resources: Path, runner) -> None:
+    svg = repo / "chip" / "assets" / "github-mark.svg"
+    iconset = resources / f"{APP_NAME}.iconset"
+    iconset.mkdir(parents=True, exist_ok=True)
+    for size in ICON_SIZES:
+        for scale in (1, 2):
+            name = f"icon_{size}x{size}{'@2x' if scale == 2 else ''}.png"
+            runner(["sips", "-s", "format", "png", "-z", str(size * scale), str(size * scale), str(svg),
+                    "--out", str(iconset / name)], capture_output=True, text=True)
+    runner(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / f"{APP_NAME}.icns")],
+           capture_output=True, text=True)
+    shutil.rmtree(iconset, ignore_errors=True)
+
+
+def _install_app(repo: Path, home: Path, chip_bin: Path, runner, which, out) -> bool:
+    """Build GitHubBar, assemble the .app, sign it ad hoc, add a Login Item and launch it. False on failure."""
+    if not which("swift"):
+        out("note  GitHubBar needs Swift from the Command Line Tools: xcode-select --install")
+        return True
+    build = runner(["swift", "build", "-c", "release", "--package-path", str(repo / "app")],
+                   capture_output=True, text=True)
+    binary = repo / "app" / ".build" / "release" / APP_NAME
+    if build.returncode != 0 or not binary.exists():
+        out(f"error GitHubBar build failed: {(build.stderr or build.stdout).strip()[-400:]}")
+        return False
+    app = app_path(home)
+    runner(["osascript", "-e", f'quit app "{APP_NAME}"'], capture_output=True, text=True)
+    contents = app / "Contents"
+    (contents / "MacOS").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(binary, contents / "MacOS" / APP_NAME)
+    (contents / "MacOS" / APP_NAME).chmod(0o755)
     path_dirs = [str(Path(p).parent) for p in (which(t) for t in ("gh", "claude", "git", "python3")) if p]
-    for name, view_args in PLUGINS:
-        plugin = plugin_dir / name
-        if plugin.exists() and MARKER not in plugin.read_text():
-            out(f"skip  {plugin} was not installed by chip")
-            continue
-        plugin.write_text(plugin_script(chip_bin, path_dirs, view_args))
-        plugin.chmod(0o755)
-        out(f"menu  {plugin}")
-    if swiftbar_app.exists():
-        if moved_from is not None:  # SwiftBar reads PluginDirectory at launch
-            runner(["killall", "SwiftBar"], capture_output=True, text=True)
-        runner(["open", "-a", "SwiftBar"], capture_output=True, text=True)
-    else:
-        out("note  SwiftBar is not installed: brew install swiftbar")
+    (contents / "Info.plist").write_bytes(plistlib.dumps(info_plist(chip_bin, path_dirs)))
+    _make_icon(repo, contents / "Resources", runner)
+    for cmd in (["codesign", "--force", "--sign", "-", str(app)],
+                ["xattr", "-dr", "com.apple.quarantine", str(app)],
+                [LSREGISTER, "-f", str(app)]):
+        runner(cmd, capture_output=True, text=True)
+    login = (f'tell application "System Events" to if not (exists login item "{APP_NAME}") then '
+             f'make login item at end with properties {{path:"{app}", hidden:false}}')
+    runner(["osascript", "-e", login], capture_output=True, text=True)
+    runner(["open", str(app)], capture_output=True, text=True)
+    out(f"app   {app} (opens at login)")
+    return True
 
 
 def install(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None,
             which: Optional[Callable[[str], Optional[str]]] = None, out=print,
-            env: Optional[Mapping[str, str]] = None, swiftbar_app: Path = SWIFTBAR_APP,
-            config_file: Optional[Path] = None) -> int:
+            env: Optional[Mapping[str, str]] = None, config_file: Optional[Path] = None) -> int:
     runner = runner or subprocess.run
     which = which or shutil.which
     home = home or Path.home()
     env = os.environ if env is None else env
-    chip_bin = Path(repo) / "bin" / "chip"
+    repo = Path(repo)
+    chip_bin = repo / "bin" / "chip"
 
     problems = []
     if sys.version_info < (3, 9):
@@ -167,13 +189,14 @@ def install(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None,
     _link(link, chip_bin, out)
     if str(link.parent) not in env.get("PATH", "").split(":"):
         out(f"note  add {link.parent} to PATH to use `chip` in a shell")
-    _install_skill(Path(repo), home, chip_bin, out)
+    _install_skill(repo, home, chip_bin, out)
     _install_mcp(chip_bin, runner, out)
-    _install_plugin(chip_bin, runner, which, out, swiftbar_app, home)
+    _remove_old_plugins(runner, home, out)
+    app_ok = _install_app(repo, home, chip_bin, runner, which, out)
     if config.init(config_file):
         out(f"conf  {config_file or config.config_path()}")
-    out("done  chip is installed")
-    return 0
+    out("done  chip is installed" if app_ok else "done  chip is installed, but GitHubBar is not")
+    return 0 if app_ok else 1
 
 
 def uninstall(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None, out=print) -> int:
@@ -193,10 +216,14 @@ def uninstall(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None, o
     if got.returncode == 0 and str(chip_bin) in got.stdout:
         runner(["claude", "mcp", "remove", "chip", "--scope", "user"], capture_output=True, text=True)
         out("rm    MCP server chip")
-    folders = {_read_plugin_dir(runner), home / ".swiftbar", _swiftbar_data_dir(home)}
-    for plugin in (folder / name for folder in folders if folder for name in (PLUGIN_NAME,) + LEGACY_PLUGIN_NAMES):
-        if plugin.is_file() and MARKER in plugin.read_text():
-            plugin.unlink()
-            out(f"rm    {plugin}")
+    _remove_old_plugins(runner, home, out)
+    app = app_path(home)
+    info = app / "Contents" / "Info.plist"
+    if info.exists() and plistlib.loads(info.read_bytes()).get("CFBundleIdentifier") == BUNDLE_ID:
+        runner(["osascript", "-e", f'quit app "{APP_NAME}"'], capture_output=True, text=True)
+        runner(["osascript", "-e", f'tell application "System Events" to delete login item "{APP_NAME}"'],
+               capture_output=True, text=True)
+        shutil.rmtree(app)
+        out(f"rm    {app}")
     out("done  config and cache are kept (~/.config/chip, ~/.cache/chip)")
     return 0

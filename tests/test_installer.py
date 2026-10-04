@@ -1,4 +1,5 @@
 import os
+import plistlib
 import stat
 import subprocess
 import tempfile
@@ -17,12 +18,15 @@ class InstallTest(unittest.TestCase):
         (self.repo / "bin" / "chip").write_text("#!/usr/bin/env python3\n")
         (self.repo / "skill").mkdir()
         (self.repo / "skill" / "SKILL.md").write_text("---\nname: chip\n---\nrun `{{CHIP}} menu`\n")
-        self.app = tmp / "SwiftBar.app"
+        (self.repo / "app").mkdir()
+        (self.repo / "chip" / "assets").mkdir(parents=True)
+        (self.repo / "chip" / "assets" / "github-mark.svg").write_text("<svg/>")
         self.config = tmp / "config.json"
         self.calls, self.out = [], []
         self.mcp_registered = ""
-        self.tools = {"gh", "claude", "git", "python3", "fzf"}
+        self.tools = {"gh", "claude", "git", "python3", "fzf", "swift"}
         self.defaults_dir = self.plugin_dir
+        self.build_fails = False
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -30,6 +34,10 @@ class InstallTest(unittest.TestCase):
     @property
     def chip_bin(self):
         return self.repo / "bin" / "chip"
+
+    @property
+    def app(self):
+        return self.home / "Applications" / "GitHubBar.app"
 
     def runner(self, cmd, **kw):
         self.calls.append(cmd)
@@ -40,6 +48,12 @@ class InstallTest(unittest.TestCase):
         if cmd[:3] == ["claude", "mcp", "get"]:
             code = 0 if self.mcp_registered else 1
             return subprocess.CompletedProcess(cmd, code, self.mcp_registered, "")
+        if cmd[:2] == ["swift", "build"]:
+            if self.build_fails:
+                return subprocess.CompletedProcess(cmd, 1, "", "error: boom")
+            binary = self.repo / "app" / ".build" / "release" / "GitHubBar"
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_text("binary")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     def which(self, name):
@@ -48,23 +62,57 @@ class InstallTest(unittest.TestCase):
     def install(self):
         return installer.install(self.repo, self.home, runner=self.runner, which=self.which,
                                  out=self.out.append, env={"PATH": str(self.home / ".local" / "bin")},
-                                 swiftbar_app=self.app, config_file=self.config)
+                                 config_file=self.config)
 
-    def test_installs_everything(self):
+    def test_installs_link_skill_mcp_config(self):
         self.assertEqual(self.install(), 0)
-        link = self.home / ".local" / "bin" / "chip"
-        self.assertEqual(link.resolve(), self.chip_bin.resolve())
+        self.assertEqual((self.home / ".local" / "bin" / "chip").resolve(), self.chip_bin.resolve())
         skill = (self.home / ".claude" / "skills" / "chip" / "SKILL.md").read_text()
         self.assertIn(f"run `{self.chip_bin} menu`", skill)
         self.assertIn(installer.MARKER, skill)
         self.assertIn(["claude", "mcp", "add", "--scope", "user", "chip", "--", str(self.chip_bin), "mcp"],
                       self.calls)
-        plugin = self.plugin_dir / installer.PLUGIN_NAME
-        text = plugin.read_text()
-        self.assertIn(f'exec "{self.chip_bin}" swiftbar', text)
-        self.assertIn("/opt/bin", text)
-        self.assertTrue(plugin.stat().st_mode & stat.S_IXUSR)
         self.assertTrue(self.config.exists())
+
+    def test_builds_and_bundles_githubbar(self):
+        self.install()
+        self.assertIn(["swift", "build", "-c", "release", "--package-path", str(self.repo / "app")], self.calls)
+        binary = self.app / "Contents" / "MacOS" / "GitHubBar"
+        self.assertEqual(binary.read_text(), "binary")
+        self.assertTrue(binary.stat().st_mode & stat.S_IXUSR)
+        info = plistlib.loads((self.app / "Contents" / "Info.plist").read_bytes())
+        self.assertEqual((info["CFBundleName"], info["CFBundleDisplayName"]), ("GitHubBar", "GitHubBar"))
+        self.assertEqual(info["CFBundleIdentifier"], installer.BUNDLE_ID)
+        self.assertTrue(info["LSUIElement"])
+        self.assertEqual(info["LSEnvironment"]["CHIP_PLUGIN"], str(self.chip_bin))
+        self.assertIn("/opt/bin", info["LSEnvironment"]["PATH"])
+        self.assertIn(["codesign", "--force", "--sign", "-", str(self.app)], self.calls)
+        self.assertIn(["xattr", "-dr", "com.apple.quarantine", str(self.app)], self.calls)
+        self.assertIn(["open", str(self.app)], self.calls)
+        self.assertTrue(any(c[:2] == ["iconutil", "-c"] for c in self.calls))
+        login = [c for c in self.calls if c[0] == "osascript" and "login item" in c[-1]]
+        self.assertTrue(login and str(self.app) in login[0][-1])
+
+    def test_without_swift_skips_the_app(self):
+        self.tools.discard("swift")
+        self.assertEqual(self.install(), 0)
+        self.assertFalse(self.app.exists())
+        self.assertTrue(any("xcode-select --install" in line for line in self.out))
+
+    def test_build_failure_is_reported(self):
+        self.build_fails = True
+        self.assertEqual(self.install(), 1)
+        self.assertFalse(self.app.exists())
+        self.assertTrue(any("boom" in line for line in self.out))
+
+    def test_removes_chip_swiftbar_plugins_only(self):
+        self.plugin_dir.mkdir()
+        for name in ("chip.1m.sh", "chip.3m.sh", "chip-mine.1m.sh"):
+            (self.plugin_dir / name).write_text(f"#!/bin/bash\n# {installer.MARKER}\n")
+        (self.plugin_dir / "weather.5m.sh").write_text("#!/bin/sh\necho sun\n")
+        (self.plugin_dir / "chip.1m.sh.bak").write_text("keep")
+        self.install()
+        self.assertEqual(sorted(p.name for p in self.plugin_dir.iterdir()), ["chip.1m.sh.bak", "weather.5m.sh"])
 
     def test_second_install_is_idempotent(self):
         self.install()
@@ -81,13 +129,13 @@ class InstallTest(unittest.TestCase):
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("someone else's skill")
         self.plugin_dir.mkdir()
-        (self.plugin_dir / installer.PLUGIN_NAME).write_text("#!/bin/sh\necho mine\n")
+        (self.plugin_dir / "chip.1m.sh").write_text("#!/bin/sh\necho mine\n")
         self.mcp_registered = "chip:\n  Command: /other/chip\n"
         self.install()
         self.assertEqual(os.readlink(link), "/somewhere/else")
         self.assertEqual((skill_dir / "SKILL.md").read_text(), "someone else's skill")
-        self.assertIn("echo mine", (self.plugin_dir / installer.PLUGIN_NAME).read_text())
-        self.assertGreaterEqual(sum("skip" in line for line in self.out), 4)
+        self.assertIn("echo mine", (self.plugin_dir / "chip.1m.sh").read_text())
+        self.assertGreaterEqual(sum("skip" in line for line in self.out), 3)
 
     def test_dev_symlink_skill_is_replaced(self):
         skill_dir = self.home / ".claude" / "skills" / "chip"
@@ -109,50 +157,7 @@ class InstallTest(unittest.TestCase):
         installer.uninstall(self.repo, self.home, runner=self.runner, out=self.out.append)
         self.assertFalse((self.home / ".local" / "bin" / "chip").exists())
         self.assertFalse((self.home / ".claude" / "skills" / "chip").exists())
-        self.assertFalse((self.plugin_dir / installer.PLUGIN_NAME).exists())
+        self.assertFalse(self.app.exists())
         self.assertIn(["claude", "mcp", "remove", "chip", "--scope", "user"], self.calls)
+        self.assertTrue(any(c[0] == "osascript" and "delete login item" in c[-1] for c in self.calls))
         self.assertTrue(self.config.exists())
-
-    def test_refreshes_every_minute_and_removes_legacy_plugin(self):
-        self.assertEqual(installer.PLUGIN_NAME, "chip.1m.sh")
-        self.plugin_dir.mkdir()
-        legacy = self.plugin_dir / "chip.3m.sh"
-        legacy.write_text(f"#!/bin/bash\n# {installer.MARKER}\n")
-        self.install()
-        self.assertFalse(legacy.exists())
-        self.assertTrue((self.plugin_dir / "chip.1m.sh").exists())
-
-    def test_foreign_legacy_name_is_kept(self):
-        self.plugin_dir.mkdir()
-        legacy = self.plugin_dir / "chip.3m.sh"
-        legacy.write_text("#!/bin/sh\necho mine\n")
-        self.install()
-        self.assertTrue(legacy.exists())
-
-    def test_unset_plugin_dir_uses_dot_swiftbar(self):
-        self.defaults_dir = None
-        self.install()
-        expected = self.home / ".swiftbar"
-        self.assertTrue((expected / installer.PLUGIN_NAME).exists())
-        self.assertIn(["defaults", "write", "com.ameba.SwiftBar", "PluginDirectory", str(expected)], self.calls)
-
-    def test_moves_off_swiftbar_data_folder(self):
-        data_dir = self.home / "Library" / "Application Support" / "SwiftBar" / "Plugins"
-        data_dir.mkdir(parents=True)
-        (data_dir / "chip.3m.sh").write_text(f"#!/bin/bash\n# {installer.MARKER}\n")
-        self.defaults_dir = data_dir
-        self.app.mkdir()
-        self.install()
-        new_dir = self.home / ".swiftbar"
-        self.assertTrue((new_dir / installer.PLUGIN_NAME).exists())
-        self.assertFalse((data_dir / "chip.3m.sh").exists())
-        self.assertIn(["defaults", "write", "com.ameba.SwiftBar", "PluginDirectory", str(new_dir)], self.calls)
-        self.assertIn(["killall", "SwiftBar"], self.calls)
-
-    def test_one_plugin_and_old_mine_plugin_removed(self):
-        self.plugin_dir.mkdir()
-        old = self.plugin_dir / "chip-mine.1m.sh"
-        old.write_text(f"#!/bin/bash\n# {installer.MARKER}\n")
-        self.install()
-        self.assertFalse(old.exists())
-        self.assertEqual(sorted(p.name for p in self.plugin_dir.iterdir()), [installer.PLUGIN_NAME])
