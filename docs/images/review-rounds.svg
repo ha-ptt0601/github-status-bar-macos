@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="626" viewBox="0 0 1180 626"><rect width="1180" height="626" rx="14" fill="#0d1117"/>
+<text x="40" y="50" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" fill="#e6e6e6" font-weight="bold" text-anchor="start">What Run does</text>
+<rect x="40" y="80" width="204" height="120" rx="12" fill="#2a2a2a" stroke="#3a3a3a"/>
+<circle cx="64" cy="106" r="12" fill="#2459d4"/>
+<text x="64" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#ffffff" font-weight="bold" text-anchor="middle">1</text>
+<text x="84" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="bold" text-anchor="start">Find your clone</text>
+<text x="56" y="146" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">your code folders, or</text>
+<text x="56" y="168" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">a clone in chip's cache</text>
+<path d="M248 140 h14 m-6 -6 l6 6 l-6 6" fill="none" stroke="#8e8e93" stroke-width="1.8"/>
+<rect x="268" y="80" width="204" height="120" rx="12" fill="#2a2a2a" stroke="#3a3a3a"/>
+<circle cx="292" cy="106" r="12" fill="#2459d4"/>
+<text x="292" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#ffffff" font-weight="bold" text-anchor="middle">2</text>
+<text x="312" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="bold" text-anchor="start">Check the PR out</text>
+<text x="284" y="146" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">its own git worktree, with</text>
+<text x="284" y="168" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">your settings, .env, vendor</text>
+<path d="M476 140 h14 m-6 -6 l6 6 l-6 6" fill="none" stroke="#8e8e93" stroke-width="1.8"/>
+<rect x="496" y="80" width="204" height="120" rx="12" fill="#2a2a2a" stroke="#3a3a3a"/>
+<circle cx="520" cy="106" r="12" fill="#2459d4"/>
+<text x="520" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#ffffff" font-weight="bold" text-anchor="middle">3</text>
+<text x="540" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="bold" text-anchor="start">Pick the review</text>
+<text x="512" y="146" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">your skill, the repo's</text>
+<text x="512" y="168" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">/review, or the built-in</text>
+<path d="M704 140 h14 m-6 -6 l6 6 l-6 6" fill="none" stroke="#8e8e93" stroke-width="1.8"/>
+<rect x="724" y="80" width="204" height="120" rx="12" fill="#2a2a2a" stroke="#3a3a3a"/>
+<circle cx="748" cy="106" r="12" fill="#2459d4"/>
+<text x="748" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#ffffff" font-weight="bold" text-anchor="middle">4</text>
+<text x="768" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="bold" text-anchor="start">Run in background</text>
+<text x="740" y="146" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">claude --bg, read-only;</text>
+<text x="740" y="168" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">the row turns 🔵 Reviewing</text>
+<path d="M932 140 h14 m-6 -6 l6 6 l-6 6" fill="none" stroke="#8e8e93" stroke-width="1.8"/>
+<rect x="952" y="80" width="204" height="120" rx="12" fill="#2a2a2a" stroke="#3a3a3a"/>
+<circle cx="976" cy="106" r="12" fill="#2459d4"/>
+<text x="976" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#ffffff" font-weight="bold" text-anchor="middle">5</text>
+<text x="996" y="111" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="bold" text-anchor="start">Read the result</text>
+<text x="968" y="146" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">✅ Reviewed + notification;</text>
+<text x="968" y="168" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">View session opens it</text>
+<text x="40" y="260" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" fill="#e6e6e6" font-weight="bold" text-anchor="start">Rounds: one session per review button</text>
+<rect x="40" y="290" width="1100" height="64" rx="12" fill="#2a2a2a" stroke="#3a3a3a"/>
+<text x="60" y="328" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="bold" text-anchor="start">Round 1</text>
+<path d="M153 317 l9 6 l-9 6 z" fill="#e6e6e6"/>
+<text x="176" y="328" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">Run "Full review"</text>
+<text x="440" y="328" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#0a84ff" font-weight="normal" text-anchor="start">new session abc123</text>
+<text x="680" y="328" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8e8e93" font-weight="normal" text-anchor="start">findings: 3 bugs, 1 test gap</text>
+<text x="60" y="376" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8e8e93" font-weight="normal" text-anchor="start">new commits pushed → the round resolves → the button becomes Continue</text>
+<rect x="40" y="390" width="1100" height="64" rx="12" fill="#2a2a2a" stroke="#3a3a3a"/>
+<text x="60" y="428" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="bold" text-anchor="start">Round 2</text>
+<path d="M153 417 l9 6 l-9 6 z" fill="#e6e6e6"/>
+<text x="176" y="428" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">Continue review (round 2)</text>
+<text x="440" y="428" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#0a84ff" font-weight="normal" text-anchor="start">same session abc123</text>
+<text x="680" y="420" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8e8e93" font-weight="normal" text-anchor="start">checks each finding: fixed / answered / open,</text>
+<text x="680" y="438" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8e8e93" font-weight="normal" text-anchor="start">then reviews only the new commits</text>
+<text x="60" y="476" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8e8e93" font-weight="normal" text-anchor="start">new commits pushed → the round resolves → the button becomes Continue</text>
+<rect x="40" y="490" width="1100" height="64" rx="12" fill="#2a2a2a" stroke="#3a3a3a"/>
+<text x="60" y="528" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="bold" text-anchor="start">Round 3</text>
+<path d="M153 517 l9 6 l-9 6 z" fill="#e6e6e6"/>
+<text x="176" y="528" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">Continue review (round 3)</text>
+<text x="440" y="528" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#0a84ff" font-weight="normal" text-anchor="start">same session abc123</text>
+<text x="680" y="528" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8e8e93" font-weight="normal" text-anchor="start">…</text>
+<text x="40" y="596" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8e8e93" font-weight="normal" text-anchor="start">Your own PRs: Address review in feature session continues the Claude Code session where you built the PR.</text>
+</svg>

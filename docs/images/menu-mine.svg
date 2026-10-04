@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="870" viewBox="0 0 1180 870"><rect width="1180" height="870" rx="14" fill="#0d1117"/>
+<rect x="0" y="0" width="1180" height="38" rx="14" fill="#1c1c1e"/>
+<rect x="36" y="6" width="103" height="26" rx="7" fill="#3a3a3c"/>
+<path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" fill="#e6e6e6" transform="translate(45 10) scale(1.15)"/>
+<text x="70" y="25" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">22 · ⚠8</text>
+<text x="1156" y="25" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#e6e6e6" font-weight="normal" text-anchor="end">Sun 4 Oct  17:29</text>
+<rect x="24" y="50" width="700" height="668" rx="12" fill="#1e1e1e" stroke="#444"/>
+<rect x="38" y="68" width="672" height="30" rx="7" fill="#2a2a2a"/>
+<rect x="374.0" y="70" width="334.0" height="26" rx="6" fill="#4a4a4a"/>
+<text x="207.0" y="88" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#8e8e93" font-weight="normal" text-anchor="middle">Review requests · 22 / 30</text>
+<text x="541.0" y="88" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#e6e6e6" font-weight="normal" text-anchor="middle">My pull requests · 8 / 72</text>
+<text x="42" y="126" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#8e8e93" font-weight="normal" text-anchor="start">Updated 17:29</text>
+<path d="M55 155 a6.5 6.5 0 1 1 -2 -5 M54 146 v4.5 h-4.5" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="68" y="156" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Refresh now</text>
+<line x1="36" y1="170" x2="712" y2="170" stroke="#3a3a3a" stroke-width="1"/>
+<rect x="36" y="180" width="676" height="30" rx="8" fill="#2a2a2a" stroke="#3a3a3a"/>
+<circle cx="52" cy="196" r="5" fill="none" stroke="#8e8e93" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M56 200 l4 4" fill="none" stroke="#8e8e93" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="68" y="200" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#8e8e93" font-weight="normal" text-anchor="start">Search pull requests</text>
+<rect x="43" y="223" width="5" height="5" rx="1" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="43" y="230" width="5" height="5" rx="1" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="50" y="223" width="5" height="5" rx="1" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="50" y="230" width="5" height="5" rx="1" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="68" y="234" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Projects</text>
+<path d="M698 223 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="36" y1="248" x2="712" y2="248" stroke="#3a3a3a" stroke-width="1"/>
+<text x="66" y="274" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8e8e93" font-weight="normal" text-anchor="start">API · 6 PRs</text>
+<rect x="26" y="280" width="690" height="28" rx="6" fill="#2459d4"/>
+<circle cx="54" cy="295" r="7" fill="#ff453a"/>
+<text x="70" y="300" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#ffffff" font-weight="normal" text-anchor="start">#2130</text>
+<text x="134" y="300" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#ffffff" font-weight="normal" text-anchor="start">Changes</text>
+<text x="228" y="300" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#ffffff" font-weight="normal" text-anchor="start">feat(billing): prorate plan ch…</text>
+<text x="528" y="300" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#ffffff" font-weight="normal" text-anchor="start">bob ✗ carol ✓</text>
+<path d="M698 289 l5 5 l-5 5" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="54" cy="325" r="7" fill="#ff453a"/>
+<text x="70" y="330" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">#2127</text>
+<text x="134" y="330" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">CI failed</text>
+<text x="228" y="330" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">fix(webhooks): retry on 5xx re…</text>
+<text x="528" y="330" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">→ bob</text>
+<path d="M698 319 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="54" cy="355" r="7" fill="#ff9f0a"/>
+<text x="70" y="360" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">#2119</text>
+<text x="134" y="360" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">Conflict</text>
+<text x="228" y="360" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">chore(deps): bump the test ru…</text>
+<text x="528" y="360" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">carol 💬</text>
+<path d="M698 349 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="54" cy="385" r="7" fill="#d0d0d0"/>
+<text x="70" y="390" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">#2111</text>
+<text x="134" y="390" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">2 threads</text>
+<text x="228" y="390" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">feat(api): paginate the order…</text>
+<text x="528" y="390" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">bob 💬</text>
+<path d="M698 379 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="54" cy="415" r="7" fill="#30d158"/>
+<text x="70" y="420" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">#2105</text>
+<text x="134" y="420" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">Approved</text>
+<text x="228" y="420" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">docs: explain the retry polic…</text>
+<text x="528" y="420" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">carol ✓</text>
+<path d="M698 409 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="66" y="450" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#8e8e93" font-weight="normal" text-anchor="start">1 more in API ›</text>
+<path d="M698 439 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="66" y="480" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#8e8e93" font-weight="normal" text-anchor="start">SHOPBOX-API · 2 PRs</text>
+<circle cx="54" cy="501" r="7" fill="#d0d0d0"/>
+<text x="70" y="506" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">#280</text>
+<text x="134" y="506" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">Waiting</text>
+<text x="228" y="506" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">feat(box): weekly digest email</text>
+<text x="528" y="506" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">→ dave, erin</text>
+<path d="M698 495 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="54" cy="531" r="7" fill="#d0d0d0"/>
+<text x="70" y="536" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">#276</text>
+<text x="134" y="536" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">Draft</text>
+<text x="228" y="536" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">spike: new pricing table</text>
+<text x="528" y="536" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e6e6" font-weight="normal" text-anchor="start">—</text>
+<path d="M698 525 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="36" y1="570" x2="712" y2="570" stroke="#3a3a3a" stroke-width="1"/>
+<path d="M44 596 h10 l-1.5 -2 v-4 a3.5 3.5 0 0 0 -7 0 v4 z M47.5 598 h3" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="68" y="596" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Recent notifications</text>
+<path d="M698 585 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="49" cy="621" r="2.5" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="49" cy="621" r="6.5" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2"/>
+<text x="68" y="626" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Settings</text>
+<path d="M698 615 l5 5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="36" y1="640" x2="712" y2="640" stroke="#3a3a3a" stroke-width="1"/>
+<text x="22" y="666" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">✓</text>
+<text x="42" y="666" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Open at Login</text>
+<text x="42" y="696" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Quit GitHubBar</text>
+<text x="704" y="696" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#8e8e93" font-weight="normal" text-anchor="end">⌘Q</text>
+<rect x="718" y="270" width="456" height="580" rx="12" fill="#1e1e1e" stroke="#444"/>
+<text x="738" y="300" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#8e8e93" font-weight="normal" text-anchor="start">api#2130</text>
+<text x="738" y="330" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#8e8e93" font-weight="normal" text-anchor="start">feat(billing): prorate plan changes</text>
+<text x="738" y="360" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#8e8e93" font-weight="normal" text-anchor="start">Changes requested · opened 3 days ago</text>
+<text x="738" y="390" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14.5" fill="#8e8e93" font-weight="normal" text-anchor="start">Reviews: bob ✗ · carol ✓</text>
+<line x1="730" y1="408" x2="1162" y2="408" stroke="#3a3a3a" stroke-width="1"/>
+<path d="M739 425 l9 6 l-9 6 z" fill="#e6e6e6"/>
+<text x="762" y="436" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Run "Address review"</text>
+<line x1="730" y1="454" x2="1162" y2="454" stroke="#3a3a3a" stroke-width="1"/>
+<text x="738" y="482" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8e8e93" font-weight="normal" text-anchor="start">Feature session · 2026-10-01 · found on feat/prorate</text>
+<text x="738" y="512" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8e8e93" font-weight="normal" text-anchor="start">“add proration when a plan changes mid-cycle”</text>
+<path d="M739 531 l9 6 l-9 6 z" fill="#e6e6e6"/>
+<text x="762" y="542" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Address review in feature session</text>
+<rect x="736" y="560" width="14" height="11" rx="2" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M739 563 l3 2 l-3 2" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="762" y="572" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Open feature session</text>
+<path d="M738 600 l10 -10 M742 590 h6 v6" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="762" y="602" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Link another session…</text>
+<line x1="730" y1="620" x2="1162" y2="620" stroke="#3a3a3a" stroke-width="1"/>
+<path d="M738 648 h10 l-1.5 -2 v-4 a3.5 3.5 0 0 0 -7 0 v4 z" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="762" y="648" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Re-request review (bob)</text>
+<line x1="730" y1="666" x2="1162" y2="666" stroke="#3a3a3a" stroke-width="1"/>
+<path d="M738 694 l1 -4 l8 -8 l3 3 l-8 8 z" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="762" y="694" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Convert to draft</text>
+<path d="M737 713 h12 v8 h-7 l-3 3 v-3 h-2 z" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="762" y="724" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Comment…</text>
+<circle cx="743" cy="749" r="6.5" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M740.5 746.5 l5 5 M745.5 746.5 l-5 5" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="762" y="754" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Close PR…</text>
+<line x1="730" y1="772" x2="1162" y2="772" stroke="#3a3a3a" stroke-width="1"/>
+<path d="M738 798 l10 -10 M742 788 h6 v6" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="762" y="800" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Open on GitHub</text>
+<rect x="740" y="818" width="8" height="10" rx="1.5" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M738 821 v9 h7" fill="none" stroke="#e6e6e6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="762" y="830" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#e6e6e6" font-weight="normal" text-anchor="start">Copy link</text>
+</svg>
