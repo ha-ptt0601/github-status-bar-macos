@@ -294,5 +294,12 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 - `skills` defaults to `[]`; `chip install` writes only the fixed keys and each user adds their own skills.
 - `chip/project.py` finds a repo's review skill: `.claude/skills/*review*/SKILL.md` or `.claude/commands/*review*.md` (exact `review` wins). The menu knows it for repos already in the clone cache (`project.known_skills`, no scanning).
 - Buttons per PR (`swiftbar.review_buttons`): configured skills (`--skill N`), plus `Run "/<name> (project)"` (`--project`) when the repo has a skill; with no skills configured and no known repo skill, one `Run "Review"` (`--project`).
-- `chip run --project`: resolves/clones the repo, then if it has a review skill, `git fetch origin +refs/pull/N/head:refs/chip/pr-N +refs/heads/<base>:refs/remotes/origin/<base>` and `git worktree add --detach work_root/.chip-worktrees/<repo>-N refs/chip/pr-N` (a later round re-checks out the same worktree). The prompt is `/<name> {url}` plus a note that HEAD is the PR and the base is `origin/{base}`. Without a repo skill it runs the built-in `config.REVIEW_PROMPT` in the clone. Records carry `auto`, `clone` and `worktree`.
+- `chip run --project`: resolves/clones the repo, then if it has a review skill, `git fetch origin +refs/pull/N/head:refs/chip/pr-N +refs/heads/<base>:refs/remotes/origin/<base>` and `git worktree add --detach ~/.cache/chip/worktrees/<repo>-N refs/chip/pr-N` (a later round re-checks out the same worktree). The prompt is `/<name> {url}` plus a note that HEAD is the PR and the base is `origin/{base}`. Without a repo skill it runs the built-in `config.REVIEW_PROMPT` in the clone. Records carry `auto`, `clone` and `worktree`.
 - `runs.clean_worktrees` removes the worktree and `refs/chip/pr-N` once the round is resolved as "PR merged or closed".
+
+## Finding clones (v0.1.2)
+
+- `work_roots` (list) replaces `work_root` (still read). Empty means `store.detected_roots()`: the common code folders that exist under the home folder (`~/work`, `~/code`, `~/Projects`, `~/Developer`, `~/src`, `~/repos`, `~/git`, `~/dev`, `~/Documents/GitHub|Projects|code`).
+- `repos.resolve(slug, roots, cache, clone_root)`: remembered path in `repos.json`, else a scan of every root, else `clone_root/<repo>` or a legacy `<root>/.chip-repos/<repo>`. Everything found is remembered.
+- `repos.clone` targets `clone_root` (`config.clone_root` or `~/.cache/chip/repos`), so chip never creates folders in the user's home. Worktrees live in `~/.cache/chip/worktrees`.
+- `chip install` prints the folders it searches and where it clones.

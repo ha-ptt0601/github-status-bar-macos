@@ -53,7 +53,7 @@ Quit GitHubBar
 - **Re-request review** from the reviewers who have not approved yet.
 
 ### Background reviews, in rounds
-- **Run** starts `claude "<prompt>" --bg` inside the PR's local clone. chip finds the clone under `work_root`, or clones the repo into `work_root/.chip-repos/`. A project review runs in the PR's own worktree instead (below). The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
+- **Run** starts `claude "<prompt>" --bg` inside the PR's local clone. chip finds your clone (see [Where chip finds your repos](#where-chip-finds-your-repos)), or clones the repo into `~/.cache/chip/repos/`. A project review runs in the PR's own worktree instead (below). The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
 - **The row follows the run:** 🔵 Reviewing → 🟡 Needs you (waiting for input or permission) → ✅ Reviewed. The icon shows `🔵N` and `🟡N` badges.
 - **View session** opens the session in Terminal (`claude attach`), so you can read the report and keep talking to Claude.
 - **Round resolved.** After you post your review on GitHub, or new commits land, the round is resolved: the PR goes back to its GitHub status and leaves "Reviews by chip". Merged or closed PRs resolve on their own.
@@ -128,7 +128,8 @@ It is safe to run again, and it never overwrites files it did not create. `chip 
 
 ```json
 {
-  "work_root": "~/work",
+  "work_roots": [],
+  "clone_root": "",
   "skills": [],
   "address_skills": [
     {"name": "Address review", "prompt": "Help me address the review feedback on my pull request {url}. …"}
@@ -140,6 +141,16 @@ It is safe to run again, and it never overwrites files it did not create. `chip 
   "hidden_projects": []
 }
 ```
+
+### Where chip finds your repos
+
+A review runs in a local clone of the PR's repo, so chip needs to find one:
+
+1. **Remembered:** every clone chip has found is stored in `~/.cache/chip/repos.json` and reused.
+2. **Your folders:** otherwise it scans `work_roots` (3 levels deep) for a git repo whose `origin` is that GitHub repo. With `work_roots` empty, it scans the usual code folders that exist on your Mac, so most people need no setup. `chip install` prints the folders it will use.
+3. **Its own clone:** if none is found, it clones the repo with `gh repo clone` into `clone_root` (`~/.cache/chip/repos/<repo>` by default). Nothing is created in your home or code folders.
+
+PR worktrees for project review skills go in `~/.cache/chip/worktrees/`. If you keep your code somewhere unusual, set `"work_roots": ["~/my/code"]`.
 
 ### Which review runs
 
@@ -153,7 +164,7 @@ It is safe to run again, and it never overwrites files it did not create. `chip 
 | yours | no | your skills |
 
 - **A repo's review skill** is `.claude/skills/<name>/SKILL.md` or `.claude/commands/<name>.md` in the repo, with "review" in its name (one named exactly `review` wins). Committed with the repo, it is the same for everyone on the team.
-- **It runs on the PR's code.** Project skills usually review the checked-out branch (`git diff main...HEAD`), so chip fetches the PR and checks it out in its own worktree, `work_root/.chip-worktrees/<repo>-<number>`, without touching your clone. The prompt tells the skill the real base branch (`origin/<base>`). "Continue review" updates the same worktree to the new commits, and it is removed when the PR is merged or closed.
+- **It runs on the PR's code.** Project skills usually review the checked-out branch (`git diff main...HEAD`), so chip fetches the PR and checks it out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, without touching your clone. The prompt tells the skill the real base branch (`origin/<base>`). "Continue review" updates the same worktree to the new commits, and it is removed when the PR is merged or closed.
 - Until chip has cloned a repo, the button reads `Run "Review"`; it still uses the repo's skill if it finds one when the run starts.
 
 ### Plug in your own review skill
@@ -178,7 +189,8 @@ To use your own Claude Code skill, put it in `~/.claude/skills/<name>/SKILL.md` 
 
 | Key | Meaning |
 |---|---|
-| `work_root` | Where chip looks for your local clones (up to 3 levels deep) and where `.chip-repos/` lives |
+| `work_roots` | Folders where chip looks for your clones (3 levels deep). Empty: the usual code folders that exist (`~/work`, `~/code`, `~/Projects`, `~/Developer`, `~/src`, `~/repos`, `~/git`, `~/dev`, `~/Documents/GitHub`…). The older single `work_root` key still works |
+| `clone_root` | Where chip clones repos it cannot find. Empty: `~/.cache/chip/repos` |
 | `skills` | Your review skills (empty by default). Each one is a `Run "<name>"` button on every PR to review. Placeholders: `{url} {repo} {number} {label} {title} {base}` |
 | `address_skills` | Skills for your own PRs (the Address review button). Same placeholders |
 | `permission_mode`, `disallowed_tools` | Passed to `claude --bg` for every run |
