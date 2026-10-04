@@ -57,7 +57,7 @@ Show approved & drafts (11)  ▸
 Settings  ▸                                       Open config · Reinstall · Check for updates · About chip v0.3.0
 ```
 
-**Paging.** Each list (fresh PRs, "Older than 30 days", "Show approved & drafts") shows 12 PR rows per page. When a list has more, its last line is `Next 12 ›  (13–24 of 44)`, a submenu that holds the next page, which in turn ends with its own `Next ›`. Moving the pointer is enough, and the menu never closes. Going back to the parent menu acts as Previous. A project that continues onto the next page repeats its header as `API (cont.)`.
+**Paging.** Every project is always visible on the top level: each shows its header and its first 5 PRs (re-reviews and new ones come first), and the rest sit in a `10 more in API ›` submenu. Inside that submenu, and in "Older than 30 days" and "Show approved & drafts", rows are paged 12 at a time. Each further page is a nested `Next 12 ›  (13–24 of 25)` submenu, so moving the pointer is enough and the menu never closes; going back to the parent menu acts as Previous.
 
 Submenu of a PR row:
 
