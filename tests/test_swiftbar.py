@@ -280,17 +280,21 @@ class MineSectionTest(unittest.TestCase):
     def line(self, lines, number):
         return next(l for l in lines if f"#{number}" in l.split(" | ")[0] and not l.startswith("-"))
 
-    def test_views_are_separate_menus(self):
+    def test_one_icon_with_tabs(self):
         mine = [self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})]
         review = self.render(mine, view="review")
-        self.assertFalse(any(l.startswith("My pull requests") for l in review))
-        self.assertTrue(any(l.startswith("Review requests · 1 · updated") for l in review))
-        self.assertTrue(review[0].startswith("1 | templateImage="))
+        self.assertTrue(review[0].startswith("1 🔴1 | templateImage="))
+        self.assertIn("Review requests · 1 | checked=true bash=/p/chip.3m.sh terminal=false param1=view "
+                      "param2=review refresh=true", review)
+        self.assertIn("My pull requests · 1 · 🔴1 | bash=/p/chip.3m.sh terminal=false param1=view "
+                      "param2=mine refresh=true", review)
+        self.assertFalse(any(l.startswith("🔴 #2119") for l in review))
         own = self.render(mine)
-        self.assertTrue(own[0].startswith("🔴1 | sfimage=arrow.triangle.branch"))
-        self.assertTrue(any(l.startswith("My pull requests · 1 · updated") for l in own))
-        self.assertFalse(any(l.startswith("Review requests") for l in own))
-        self.assertFalse(any(l.startswith("#2001") or l.startswith("🟢 #2001") for l in own))
+        self.assertTrue(own[0].startswith("1 🔴1 | templateImage="))
+        self.assertIn("My pull requests · 1 · 🔴1 | checked=true bash=/p/chip.3m.sh terminal=false param1=view "
+                      "param2=mine refresh=true", own)
+        self.assertTrue(any(l.startswith("🔴 #2119") for l in own))
+        self.assertFalse(any(l.startswith("🟢 #2001") for l in own))
 
     def test_rows_show_status_and_reviewers(self):
         lines = self.render([
@@ -353,7 +357,7 @@ class MineSectionTest(unittest.TestCase):
         self.assertTrue(any(l.startswith("🔵 api#2001") for l in review))
         self.assertFalse(any(l.startswith("🔵 api#2119") for l in review))
         self.assertTrue(any(l.startswith("🔵 api#2119") for l in own))
-        self.assertTrue(own[0].startswith("🔵1 | sfimage="))
+        self.assertTrue(own[0].startswith("1 🔵2 | templateImage="))
 
 
 class BuildMenuTest(unittest.TestCase):

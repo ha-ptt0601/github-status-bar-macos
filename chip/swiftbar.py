@@ -405,6 +405,17 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     hidden_projects = set(cfg.get("hidden_projects", []))
     style = cfg.get("status_style", "dots")
     mine_view = view == "mine"
+    review_shown = _filter((inbox_all or {}).get("rows", []), hidden_projects)  # counts ignore the search
+    mine_shown = _filter((inbox_all or {}).get("mine", []), hidden_projects)
+    review_open = [r for r in review_shown if not r["draft"] and r["status"] != model.APPROVED]
+    count = sum(1 for r in review_open if r["status"] == model.REREVIEW
+                or (r["status"] == model.NEW and not r.get("stale")))
+    changes = sum(1 for r in mine_shown if r["mine_status"] == model.CHANGES)
+    active = [v["kind"] for v in views.values()]
+    badges = ([str(count)] if count else []) + ([f"🔴{changes}"] if changes else []) + [
+        f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
+    lines = [item("!" if error else " ".join(badges), 0, templateImage=icon_b64()), "---"]
+
     all_rows = (inbox_all or {}).get("mine" if mine_view else "rows", [])
     records = {k: rec for k, rec in records.items() if (rec.get("kind") == "address") == mine_view}
     views = {k: views[k] for k in records}
@@ -413,21 +424,7 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         runs_by_label.setdefault(rec["label"], {})[rec["skill"]] = (rec, views[key])
     ctx = {"plugin": plugin, "skills": cfg["skills"], "address_skills": cfg.get("address_skills", []),
            "runs_by_label": runs_by_label, "style": style}
-
-    shown = _filter(all_rows, hidden_projects)  # counts ignore the transient search
     rows = _filter(all_rows, hidden_projects, query)
-    active = [v["kind"] for v in views.values()]
-    run_badges = [f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡"))
-                  if kind in active]
-    if mine_view:
-        changes = sum(1 for r in shown if r["mine_status"] == model.CHANGES)
-        title = " ".join(([f"🔴{changes}"] if changes else []) + run_badges)
-        lines = [item("!" if error else title, 0, sfimage="arrow.triangle.branch"), "---"]
-    else:
-        count = sum(1 for r in shown if r["status"] == model.REREVIEW
-                    or (r["status"] == model.NEW and not r.get("stale") and not r["draft"]))
-        title = " ".join(([str(count)] if count else []) + run_badges)
-        lines = [item("!" if error else title, 0, templateImage=icon_b64()), "---"]
     if newer:
         lines.append(item(f"Update available: v{newer} — Update now", 0, **symbol("arrow.up.circle.fill", "#FF9500"),
                           color="#FF9500", **action(plugin, "update")))
@@ -442,9 +439,13 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         visible = [r for r in rows if not r["draft"] and r["status"] != model.APPROVED]
         hidden = [r for r in rows if r["draft"] or r["status"] == model.APPROVED]
     if inbox_all is not None:
+        # Tabs: clicking the other one switches the menu (it closes; reopen to see the other tab).
+        mine_text = f"My pull requests · {len(mine_shown)}" + (f" · 🔴{changes}" if changes else "")
+        for name, text in (("review", f"Review requests · {len(review_open)}"), ("mine", mine_text)):
+            checked = {"checked": "true"} if name == view else {}
+            lines.append(item(text, 0, **checked, **action(plugin, "view", name)))
         updated = datetime.fromtimestamp(inbox_all.get("fetched_at", now)).strftime("%H:%M")
-        name = "My pull requests" if mine_view else "Review requests"
-        lines.append(item(f"{name} · {len(visible)} · updated {updated}", 0, color=GREY, size="12"))
+        lines.append(item(f"Updated {updated}", 0, color=GREY, size="12"))
     lines.append(item("Refresh now", 0, sfimage="arrow.clockwise", **action(plugin, "swiftbar", "--force")))
     if inbox_all is not None:
         lines.append("---")
@@ -491,7 +492,7 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}
     latest = updates.latest_release(store.cache_dir() / "update.json", runner, now)
     newer = latest if latest and updates.is_newer(latest, __version__) else None
-    if inbox_all is not None and view == "review":  # one plugin sends notifications, so none arrive twice
+    if inbox_all is not None:
         visible = model.visible_view(inbox_all)["rows"]
         notify_path = store.cache_dir() / "notify.json"
         current = notify.snapshot(visible, views, newer, inbox_all.get("mine", []))
