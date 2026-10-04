@@ -347,30 +347,87 @@ def run_lines(records: Dict[str, dict], views: Dict[str, dict], ctx: dict) -> Li
     return lines
 
 
+def _matches(n: int) -> str:
+    return f"{n} match{'' if n == 1 else 'es'}"
+
+
+def _filter(rows: List[dict], hidden_projects: set, query: str = "") -> List[dict]:
+    """Drop hidden projects and rows that miss any search word (label, repo, title, author, Jira, reviewers)."""
+    words = query.lower().split()
+    kept = []
+    for r in rows:
+        if _project(r) in hidden_projects:
+            continue
+        haystack = " ".join([r["label"], r["repo"], r["title"], r["author"], r.get("jira", ""),
+                             " ".join(r.get("reviewers", {})), " ".join(r.get("requested", []))]).lower()
+        if all(word in haystack for word in words):
+            kept.append(r)
+    return kept
+
+
+def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, matches: int) -> List[str]:
+    """Search (native dialog) and the Projects submenu with a checkmark on every shown project."""
+    lines = []
+    if query:
+        lines.append(item(f'"{query}" · {_matches(matches)} — Clear search', 0, sfimage="xmark.circle",
+                          **action(plugin, "search", "--clear")))
+    lines.append(item("Search…", 0, sfimage="magnifyingglass", **action(plugin, "search")))
+    projects = sorted({_project(r) for r in rows})
+    if projects:
+        lines.append(item("Projects", 0, sfimage="square.grid.2x2"))
+        lines.append(item("Show all", 1, **action(plugin, "project", "all")))
+        for proj in projects:
+            checked = {} if proj in hidden_projects else {"checked": "true"}
+            lines.append(item(proj, 1, **checked, **action(plugin, "project", "toggle", proj)))
+    return lines
+
+
+def _settings(plugin: str, style: str, version: str) -> List[str]:
+    lines = [item("Settings", 0, sfimage="gearshape"), item("Status style", 1, sfimage="paintpalette")]
+    for value, label in STYLES:
+        checked = {"checked": "true"} if value == style else {}
+        lines.append(item(label, 2, **checked, **action(plugin, "config", "set", "status_style", value)))
+    lines += [
+        item("Open config", 1, sfimage="doc.text", **action(plugin, "config", "open", refresh=False)),
+        item("Reinstall", 1, sfimage="arrow.triangle.2.circlepath", **action(plugin, "install")),
+        item("Check for updates", 1, sfimage="arrow.down.circle", **action(plugin, "update", "--check")),
+        item("Open chip on GitHub", 1, href=f"https://github.com/{updates.REPO}", sfimage="link"),
+        item(f"About chip v{version}", 1, disabled="true"),
+    ]
+    return lines
+
+
 def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str, dict], cfg: dict,
            plugin: str, version: str, newer: Optional[str] = None, error: Optional[str] = None,
-           now: Optional[float] = None) -> List[str]:
+           now: Optional[float] = None, view: str = "review", query: str = "") -> List[str]:
+    """One menu: `review` (PRs waiting for the user's review) or `mine` (the user's own PRs)."""
     now = time.time() if now is None else now
-    rows = (inbox_all or {}).get("rows", [])
-    visible = [r for r in rows if not r["draft"] and r["status"] != model.APPROVED]
-    hidden = [r for r in rows if r["draft"] or r["status"] == model.APPROVED]
-    fresh = [r for r in visible if r["status"] == model.REREVIEW or not r.get("stale")]
-    older = [r for r in visible if r["status"] != model.REREVIEW and r.get("stale")]
-    count = sum(1 for r in fresh if r["status"] in (model.REREVIEW, model.NEW))
+    hidden_projects = set(cfg.get("hidden_projects", []))
+    style = cfg.get("status_style", "dots")
+    mine_view = view == "mine"
+    all_rows = (inbox_all or {}).get("mine" if mine_view else "rows", [])
+    records = {k: rec for k, rec in records.items() if (rec.get("kind") == "address") == mine_view}
+    views = {k: views[k] for k in records}
     runs_by_label: Dict[str, dict] = {}
     for key, rec in records.items():
         runs_by_label.setdefault(rec["label"], {})[rec["skill"]] = (rec, views[key])
-    style = cfg.get("status_style", "dots")
     ctx = {"plugin": plugin, "skills": cfg["skills"], "address_skills": cfg.get("address_skills", []),
            "runs_by_label": runs_by_label, "style": style}
 
-    active = [view["kind"] for view in views.values()]
-    mine = (inbox_all or {}).get("mine", [])
-    changes = sum(1 for r in mine if r["mine_status"] == model.CHANGES)
-    badges = ([f"🔴{changes}"] if changes else []) + [
-        f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
-    title = "!" if error else " ".join(([str(count)] if count else []) + badges)
-    lines = [item(title, 0, templateImage=icon_b64()), "---"]
+    shown = _filter(all_rows, hidden_projects)  # counts ignore the transient search
+    rows = _filter(all_rows, hidden_projects, query)
+    active = [v["kind"] for v in views.values()]
+    run_badges = [f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡"))
+                  if kind in active]
+    if mine_view:
+        changes = sum(1 for r in shown if r["mine_status"] == model.CHANGES)
+        title = " ".join(([f"🔴{changes}"] if changes else []) + run_badges)
+        lines = [item("!" if error else title, 0, sfimage="arrow.triangle.branch"), "---"]
+    else:
+        count = sum(1 for r in shown if r["status"] == model.REREVIEW
+                    or (r["status"] == model.NEW and not r.get("stale") and not r["draft"]))
+        title = " ".join(([str(count)] if count else []) + run_badges)
+        lines = [item("!" if error else title, 0, templateImage=icon_b64()), "---"]
     if newer:
         lines.append(item(f"Update available: v{newer} — Update now", 0, **symbol("arrow.up.circle.fill", "#FF9500"),
                           color="#FF9500", **action(plugin, "update")))
@@ -378,45 +435,47 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         lines.append(item(f"Could not refresh: {error[:90]}", 0, sfimage="exclamationmark.triangle", color="#FF3B30"))
     for message in cfg.get("errors", [])[:1]:
         lines.append(item(f"Config: {message[:90]} (using defaults)", 0, sfimage="gearshape", color="#FF9500"))
+
+    if mine_view:
+        visible, hidden = rows, []
+    else:
+        visible = [r for r in rows if not r["draft"] and r["status"] != model.APPROVED]
+        hidden = [r for r in rows if r["draft"] or r["status"] == model.APPROVED]
     if inbox_all is not None:
         updated = datetime.fromtimestamp(inbox_all.get("fetched_at", now)).strftime("%H:%M")
-        lines.append(item(f"Pull requests · {len(visible)} open · updated {updated}", 0, color=GREY, size="12"))
+        name = "My pull requests" if mine_view else "Review requests"
+        lines.append(item(f"{name} · {len(visible)} · updated {updated}", 0, color=GREY, size="12"))
     lines.append(item("Refresh now", 0, sfimage="arrow.clockwise", **action(plugin, "swiftbar", "--force")))
     if inbox_all is not None:
         lines.append("---")
-        if "mine" in inbox_all:
-            lines.append(item(f"My pull requests · {len(mine)}", 0, size="12"))
-            lines.extend(project_sections(mine, 0, ctx))
-            lines.append("---")
-            lines.append(item(f"Review requests · {len(visible)}", 0, size="12"))
-        if not visible:
-            lines.append(item("Nothing waiting for your review", 0, color=GREY))
-        elif style == "emoji":
-            lines.append(item(LEGEND, 0, **HEADER))
-        lines.extend(project_sections(fresh, 0, ctx))
-        if older:
-            lines.append(item(f"Older than 30 days · {plural(len(older), 'PR')}", 0, sfimage="clock", color=GREY))
-            lines.extend(pr_pages(older, 1, ctx))
+        lines.extend(_controls(plugin, all_rows, hidden_projects, query, len(rows)))
+        lines.append("---")
+        if mine_view:
+            if not visible:
+                lines.append(item("No open pull requests" + (" match" if query else ""), 0, color=GREY))
+            lines.extend(project_sections(visible, 0, ctx))
+        else:
+            fresh = [r for r in visible if r["status"] == model.REREVIEW or not r.get("stale")]
+            older = [r for r in visible if r["status"] != model.REREVIEW and r.get("stale")]
+            if not visible:
+                lines.append(item("Nothing waiting for your review", 0, color=GREY))
+            elif style == "emoji":
+                lines.append(item(LEGEND, 0, **HEADER))
+            lines.extend(project_sections(fresh, 0, ctx))
+            if older:
+                lines.append(item(f"Older than 30 days · {plural(len(older), 'PR')}", 0, sfimage="clock", color=GREY))
+                lines.extend(pr_pages(older, 1, ctx))
     lines.extend(run_lines(records, views, ctx))
     lines.append("---")
     if hidden:
         lines.append(item(f"Show approved & drafts ({len(hidden)})", 0, sfimage="eye.slash"))
         lines.extend(pr_pages(hidden, 1, ctx))
-    lines.append(item("Settings", 0, sfimage="gearshape"))
-    lines.append(item("Status style", 1, sfimage="paintpalette"))
-    for value, label in STYLES:
-        checked = {"checked": "true"} if value == style else {}
-        lines.append(item(label, 2, **checked, **action(plugin, "config", "set", "status_style", value)))
-    lines.append(item("Open config", 1, sfimage="doc.text", **action(plugin, "config", "open", refresh=False)))
-    lines.append(item("Reinstall", 1, sfimage="arrow.triangle.2.circlepath", **action(plugin, "install")))
-    lines.append(item("Check for updates", 1, sfimage="arrow.down.circle", **action(plugin, "update", "--check")))
-    lines.append(item("Open chip on GitHub", 1, href=f"https://github.com/{updates.REPO}", sfimage="link"))
-    lines.append(item(f"About chip v{version}", 1, disabled="true"))
+    lines.extend(_settings(plugin, style, version))
     return lines
 
 
 def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
-               now: Optional[float] = None) -> str:
+               now: Optional[float] = None, view: str = "review") -> str:
     """One refresh: inbox (3-min cache), run states, release check, notifications, menu text."""
     now = time.time() if now is None else now
     cfg = config.load()
@@ -424,17 +483,19 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     runs_path = store.cache_dir() / "runs.json"
     records = runs.load(runs_path)
     agents = runs.fetch_agents(runner) if records else {}
-    rows_by_label = {r["label"]: r for r in (inbox_all or {}).get("rows", [])}
+    every_row = (inbox_all or {}).get("rows", []) + (inbox_all or {}).get("mine", [])
+    rows_by_label = {r["label"]: r for r in every_row}  # mine too, or address rounds would look "closed"
     observed = runs.observe(records, agents, now)
     if runs.resolve(records, rows_by_label, now, fetched=inbox_all is not None and not error) or observed:
         runs.save(runs_path, records)
     views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}
     latest = updates.latest_release(store.cache_dir() / "update.json", runner, now)
     newer = latest if latest and updates.is_newer(latest, __version__) else None
-    if inbox_all is not None:
+    if inbox_all is not None and view == "review":  # one plugin sends notifications, so none arrive twice
         visible = model.visible_view(inbox_all)["rows"]
         notify_path = store.cache_dir() / "notify.json"
         current = notify.snapshot(visible, views, newer, inbox_all.get("mine", []))
         notify.send(notify.diff(notify.load(notify_path), current, visible, records), runner)
         notify.save(notify_path, current)
-    return "\n".join(render(inbox_all, records, views, cfg, plugin, __version__, newer, error, now))
+    return "\n".join(render(inbox_all, records, views, cfg, plugin, __version__, newer, error, now,
+                            view=view, query=store.load_query()))

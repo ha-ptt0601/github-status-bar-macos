@@ -262,7 +262,8 @@ def datetime_hm(ts):
 
 
 class MineSectionTest(unittest.TestCase):
-    CFG = dict(CFG, status_style="dots", address_skills=[{"name": "Address review", "prompt": "a {url}"}])
+    CFG = dict(CFG, status_style="dots", address_skills=[{"name": "Address review", "prompt": "a {url}"}],
+               hidden_projects=[])
 
     def mine(self, number, status, reviewers=None, requested=None, unresolved=0, title="fix(auth): single-use TOTP"):
         r = row(number - 2000, title=title)
@@ -270,19 +271,26 @@ class MineSectionTest(unittest.TestCase):
                  mine_status=status, reviewers=reviewers or {}, requested=requested or [], unresolved=unresolved)
         return r
 
-    def render(self, mine, rows=None):
+    def render(self, mine, rows=None, view="mine", cfg=None, query="", records=None, views=None):
         inbox = {"rows": assign_labels(rows if rows is not None else [row(1)]), "mine": assign_labels(mine),
                  "fetched_at": 0}
-        return swiftbar.render(inbox, {}, {}, self.CFG, PLUGIN, "0.1.0", now=0)
+        return swiftbar.render(inbox, records or {}, views or {}, cfg or self.CFG, PLUGIN, "0.1.0", now=0,
+                               view=view, query=query)
 
     def line(self, lines, number):
         return next(l for l in lines if f"#{number}" in l.split(" | ")[0] and not l.startswith("-"))
 
-    def test_sections_and_order(self):
-        lines = self.render([self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})])
-        mine_at = lines.index("My pull requests · 1 | size=12")
-        review_at = lines.index("Review requests · 1 | size=12")
-        self.assertLess(mine_at, review_at)
+    def test_views_are_separate_menus(self):
+        mine = [self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})]
+        review = self.render(mine, view="review")
+        self.assertFalse(any(l.startswith("My pull requests") for l in review))
+        self.assertTrue(any(l.startswith("Review requests · 1 · updated") for l in review))
+        self.assertTrue(review[0].startswith("1 | templateImage="))
+        own = self.render(mine)
+        self.assertTrue(own[0].startswith("🔴1 | sfimage=arrow.triangle.branch"))
+        self.assertTrue(any(l.startswith("My pull requests · 1 · updated") for l in own))
+        self.assertFalse(any(l.startswith("Review requests") for l in own))
+        self.assertFalse(any(l.startswith("#2001") or l.startswith("🟢 #2001") for l in own))
 
     def test_rows_show_status_and_reviewers(self):
         lines = self.render([
@@ -308,9 +316,44 @@ class MineSectionTest(unittest.TestCase):
         lines = self.render([self.mine(2118, model.READY, {"carol": "APPROVED"})])
         self.assertFalse(any(l.startswith("--Re-request review") for l in lines))
 
-    def test_title_badge_counts_changes_requested(self):
-        lines = self.render([self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED"})])
-        self.assertTrue(lines[0].startswith("1 🔴1 | templateImage="))
+    def test_search_and_projects_controls(self):
+        lines = self.render([self.mine(2119, model.CHANGES)], view="review")
+        self.assertIn("Search… | sfimage=magnifyingglass bash=/p/chip.3m.sh terminal=false param1=search "
+                      "refresh=true", lines)
+        self.assertIn("Projects | sfimage=square.grid.2x2", lines)
+        self.assertIn("--Show all | bash=/p/chip.3m.sh terminal=false param1=project param2=all refresh=true", lines)
+        self.assertIn("--api | checked=true bash=/p/chip.3m.sh terminal=false param1=project param2=toggle "
+                      "param3=api refresh=true", lines)
+
+    def test_hidden_project_is_unchecked_and_filtered(self):
+        cfg = dict(self.CFG, hidden_projects=["api"])
+        lines = self.render([], rows=[row(1), row(2, repo="acme/mailer-api")], view="review", cfg=cfg)
+        self.assertFalse(any("#2001" in l.split(" | ")[0] for l in lines if not l.startswith("-")))
+        self.assertTrue(any("#2002" in l.split(" | ")[0] for l in lines if not l.startswith("-")))
+        self.assertIn("--api | bash=/p/chip.3m.sh terminal=false param1=project param2=toggle param3=api "
+                      "refresh=true", lines)
+
+    def test_query_filters_and_offers_clear(self):
+        lines = self.render([], rows=[row(1), row(2, title="update(newsletter): migrate")], view="review",
+                            query="newsletter")
+        tops = [l for l in lines if not l.startswith("-") and "#200" in l.split(" | ")[0]]
+        self.assertEqual(len(tops), 1)
+        self.assertIn('"newsletter" · 1 match — Clear search | sfimage=xmark.circle bash=/p/chip.3m.sh '
+                      'terminal=false param1=search param2=--clear refresh=true', lines)
+
+    def test_runs_split_by_view(self):
+        recs = {"api#2001::Full review": {"id": "r1", "label": "api#2001", "skill": "Full review", "url": "u",
+                                          "started_at": 0, "kind": "review"},
+                "api#2119::Address review": {"id": "a1", "label": "api#2119", "skill": "Address review",
+                                             "url": "u", "started_at": 0, "kind": "address"}}
+        views = {k: {"kind": "running", "text": "running 1m"} for k in recs}
+        mine = [self.mine(2119, model.THREADS, unresolved=1)]
+        review = self.render(mine, view="review", records=recs, views=views)
+        own = self.render(mine, view="mine", records=recs, views=views)
+        self.assertTrue(any(l.startswith("🔵 api#2001") for l in review))
+        self.assertFalse(any(l.startswith("🔵 api#2119") for l in review))
+        self.assertTrue(any(l.startswith("🔵 api#2119") for l in own))
+        self.assertTrue(own[0].startswith("🔵1 | sfimage="))
 
 
 class BuildMenuTest(unittest.TestCase):
