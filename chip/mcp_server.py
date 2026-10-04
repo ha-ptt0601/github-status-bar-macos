@@ -79,7 +79,7 @@ def handle(msg: dict, inbox: dict) -> Optional[dict]:
         wanted = labels_in(uri)
         for r in inbox["rows"]:
             if wanted and r["label"] == wanted[0]:
-                prompt = config.fill_prompt(config.review_skills(config.load())[0], r)
+                prompt = config.fill_prompt(config.skills_for(config.load(), r)[0], r)
                 text = preview_text(r) + f"\n\nReview: {prompt}"
                 return ok({"contents": [{"uri": uri, "mimeType": "text/plain", "text": text}]})
         return err(-32002, f"PR {uri} is not in the review inbox")

@@ -164,3 +164,34 @@ class HiddenProjectsTest(unittest.TestCase):
         config.show_all_projects(self.path)
         data = json.loads(self.path.read_text())
         self.assertEqual((data["hidden_projects"], data["work_root"]), ([], "~/src"))
+
+
+class AppliesTest(unittest.TestCase):
+    PHP = {"repo": "acme/api", "language": "PHP"}
+    SWIFT = {"repo": "acme/shop-ios", "language": "Swift"}
+
+    def test_no_scope_applies_everywhere(self):
+        self.assertTrue(config.applies({"name": "A", "prompt": "x"}, self.SWIFT))
+
+    def test_repos_patterns(self):
+        skill = {"name": "A", "prompt": "x", "repos": ["acme/*", "*-ios"]}
+        self.assertTrue(config.applies(skill, self.PHP))
+        self.assertTrue(config.applies(skill, self.SWIFT))
+        self.assertFalse(config.applies(skill, {"repo": "acme/web", "language": "TypeScript"}))
+        self.assertTrue(config.applies({"name": "A", "prompt": "x", "repos": ["API"]}, self.PHP))  # bare repo name
+
+    def test_languages_and_both_must_match(self):
+        php = {"name": "A", "prompt": "x", "languages": ["php"]}
+        self.assertTrue(config.applies(php, self.PHP))
+        self.assertFalse(config.applies(php, self.SWIFT))
+        both = dict(php, repos=["acme/*"])
+        self.assertFalse(config.applies(both, self.PHP))
+
+    def test_skills_for_falls_back_to_builtin(self):
+        cfg = {"skills": [{"name": "Laravel", "prompt": "/laravel {url}", "languages": ["PHP"]}]}
+        self.assertEqual([s["name"] for s in config.skills_for(cfg, self.PHP)], ["Laravel"])
+        self.assertEqual(config.skills_for(cfg, self.SWIFT), [config.DEFAULT_SKILL])
+
+    def test_scope_validation(self):
+        self.assertIn("repos must be a list", config.validate({"skills": [{"name": "A", "prompt": "x", "repos": "api"}]})[0])
+        self.assertEqual(config.validate({"skills": [{"name": "A", "prompt": "x", "languages": ["Swift"]}]}), [])

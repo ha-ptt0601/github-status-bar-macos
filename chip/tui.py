@@ -197,7 +197,7 @@ def run_ui(
             except Exception as exc:  # CloneError or gh failure: tell and move on
                 out(f"Clone failed: {exc}. Skipped {r['label']}.")
                 continue
-        claude(config.fill_prompt(config.review_skills(config.load())[0], r), path)
+        claude(config.fill_prompt(config.skills_for(config.load(), r)[0], r), path)
         if n < len(picked):
             nxt = picked[n]
             if ask(f"Continue with {nxt['label']}? [Y/n] ").strip().lower() == "n":

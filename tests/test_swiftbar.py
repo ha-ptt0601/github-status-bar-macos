@@ -397,6 +397,21 @@ class ReviewButtonsTest(unittest.TestCase):
         self.assertEqual(names, ['--Run "Full review"', '--Run "Quick"', '--Run "/review (project)"'])
         self.assertIn("param3=--project", self.buttons(lines)[2])
 
+    def test_skills_are_offered_by_repo_and_language(self):
+        cfg = dict(CFG, skills=[{"name": "Laravel", "prompt": "x", "languages": ["PHP"]},
+                                {"name": "iOS", "prompt": "y", "repos": ["*-ios"]}])
+        rows = [row(1, language="PHP"), row(2, repo="acme/shop-ios", language="Swift"),
+                row(3, repo="acme/web", language="TypeScript")]
+        lines = swiftbar.render({"rows": assign_labels(rows), "fetched_at": 0}, {}, {}, cfg, PLUGIN, "0.1.0", now=0)
+        by_pr, current = {}, None
+        for line in lines:
+            if line.startswith("--") and line[2:].startswith(("api#", "shop-ios#", "web#")):
+                current = line[2:].split(" |")[0]
+            if line.startswith('--Run "') and current:
+                by_pr.setdefault(current, []).append(line.split(" | ")[0][7:-1])
+        self.assertEqual(by_pr, {"api#2001": ["Laravel"], "shop-ios#2002": ["iOS"], "web#2003": ["Review"]})
+        self.assertIn("param3=--skill param4=2", next(l for l in lines if l.startswith('--Run "iOS"')))
+
     def test_configured_skills_only_when_repo_has_none(self):
         names = [b.split(" | ")[0] for b in self.buttons(render([row(1)]))]
         self.assertEqual(names, ['--Run "Full review"', '--Run "Quick"'])

@@ -23,7 +23,7 @@ query($q: String!, $after: String) {
       ... on PullRequest {
         id number title url isDraft createdAt
         author { login }
-        repository { nameWithOwner defaultBranchRef { name } }
+        repository { nameWithOwner defaultBranchRef { name } primaryLanguage { name } }
         baseRefName headRefName
         additions deletions changedFiles mergeable reviewDecision
         commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }

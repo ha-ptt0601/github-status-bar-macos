@@ -216,6 +216,8 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
     lines.append(separator(d))
     my_runs = ctx["runs_by_label"].get(r["label"], {})
     for i, skill in enumerate(ctx["address_skills"], 1):
+        if not config.applies(skill, r):
+            continue
         run = my_runs.get(skill["name"])
         if run is None:
             lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill",
@@ -233,13 +235,14 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
 
 
 def review_buttons(r: dict, ctx: dict) -> List[tuple]:
-    """(name, run args) per review button: the configured skills, plus the repo's own review skill.
-    With no skills configured, a repo without its own skill gets one built-in "Review" button."""
-    buttons = [(skill["name"], ("--skill", i)) for i, skill in enumerate(ctx["skills"], 1)]
+    """(name, run args) per review button: the configured skills that apply to this PR (their `repos` /
+    `languages`), plus the repo's own review skill. With neither, one built-in "Review" button."""
+    buttons = [(skill["name"], ("--skill", i)) for i, skill in enumerate(ctx["skills"], 1)
+               if config.applies(skill, r)]
     own = ctx.get("project_skills", {}).get(r["repo"])
     if own:
         buttons.append((project.skill_label(own), ("--project",)))
-    elif not ctx["skills"]:
+    elif not buttons:
         buttons.append((config.DEFAULT_SKILL["name"], ("--project",)))
     return buttons
 

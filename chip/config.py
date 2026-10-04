@@ -1,6 +1,7 @@
 """User config at ~/.config/chip/config.json: review skills, work root, permissions, terminal."""
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import string
@@ -65,6 +66,10 @@ def _validate_skills(key: str, skills, allow_empty: bool = False) -> List[str]:
             continue
         if unknown:
             errors.append(f"{key}[{i}] unknown placeholder(s): {', '.join(sorted(unknown))}")
+        for scope in ("repos", "languages"):
+            values = skill.get(scope, [])
+            if not isinstance(values, list) or not all(isinstance(v, str) and v.strip() for v in values):
+                errors.append(f"{key}[{i}] {scope} must be a list of names")
     names = [s.get("name") for s in skills if isinstance(s, dict)]
     if len(names) != len(set(names)):
         errors.append(f"{key} names must be unique")
@@ -134,6 +139,23 @@ DEFAULT_SKILL = {"name": "Review", "prompt": REVIEW_PROMPT}
 def review_skills(cfg: dict) -> List[dict]:
     """The configured review skills, or the built-in review when none are configured."""
     return cfg["skills"] or [DEFAULT_SKILL]
+
+
+def applies(skill: dict, row: dict) -> bool:
+    """Whether a skill is offered for a PR. Optional `repos` (patterns such as "acme/api", "acme/*",
+    "*-ios" or just "api") and `languages` (the repo's main language, e.g. "PHP", "Swift") must both match."""
+    repo = row.get("repo", "").lower()
+    patterns = [p.lower() for p in skill.get("repos", [])]
+    if patterns and not any(fnmatch.fnmatchcase(repo, p) or fnmatch.fnmatchcase(repo.split("/")[-1], p)
+                            for p in patterns):
+        return False
+    languages = [lang.lower() for lang in skill.get("languages", [])]
+    return not languages or row.get("language", "").lower() in languages
+
+
+def skills_for(cfg: dict, row: dict) -> List[dict]:
+    """The review skills offered for this PR, or the built-in review when none applies."""
+    return [s for s in cfg["skills"] if applies(s, row)] or [DEFAULT_SKILL]
 
 
 def fill_prompt(skill: dict, row: dict) -> str:

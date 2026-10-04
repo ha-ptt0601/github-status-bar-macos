@@ -100,6 +100,7 @@ def build_row(node: dict, viewer: str, now: datetime) -> dict:
     jira = JIRA_RE.search(node.get("title") or "") or JIRA_RE.search(node.get("headRefName") or "")
     return {
         "repo": repo["nameWithOwner"],
+        "language": (repo.get("primaryLanguage") or {}).get("name") or "",
         "number": node["number"],
         "title": node.get("title") or "",
         "url": node["url"],
