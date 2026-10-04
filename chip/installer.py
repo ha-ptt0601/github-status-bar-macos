@@ -14,7 +14,8 @@ REPO_DIR = Path(__file__).resolve().parents[1]
 MARKER = "installed by chip"
 SWIFTBAR_DOMAIN = "com.ameba.SwiftBar"
 DEFAULT_PLUGIN_DIR = Path.home() / "Library" / "Application Support" / "SwiftBar" / "Plugins"
-PLUGIN_NAME = "chip.3m.sh"
+PLUGIN_NAME = "chip.1m.sh"  # menu refresh every minute; GitHub is still fetched at most every 3 minutes
+LEGACY_PLUGIN_NAMES = ("chip.3m.sh",)
 SWIFTBAR_APP = Path("/Applications/SwiftBar.app")
 REQUIRED = (("gh", "brew install gh"), ("claude", "see https://claude.com/claude-code"),
             ("git", "xcode-select --install"))
@@ -98,6 +99,11 @@ def _install_mcp(chip_bin: Path, runner, out) -> None:
 def _install_plugin(chip_bin: Path, runner, which, out, swiftbar_app: Path) -> None:
     plugin_dir = swiftbar_plugin_dir(runner)
     plugin_dir.mkdir(parents=True, exist_ok=True)
+    for legacy_name in LEGACY_PLUGIN_NAMES:
+        legacy = plugin_dir / legacy_name
+        if legacy.exists() and MARKER in legacy.read_text():
+            legacy.unlink()
+            out(f"rm    {legacy} (replaced by {PLUGIN_NAME})")
     plugin = plugin_dir / PLUGIN_NAME
     if plugin.exists() and MARKER not in plugin.read_text():
         out(f"skip  {plugin} was not installed by chip")

@@ -109,3 +109,19 @@ class InstallTest(unittest.TestCase):
         self.assertFalse((self.plugin_dir / installer.PLUGIN_NAME).exists())
         self.assertIn(["claude", "mcp", "remove", "chip", "--scope", "user"], self.calls)
         self.assertTrue(self.config.exists())
+
+    def test_refreshes_every_minute_and_removes_legacy_plugin(self):
+        self.assertEqual(installer.PLUGIN_NAME, "chip.1m.sh")
+        self.plugin_dir.mkdir()
+        legacy = self.plugin_dir / "chip.3m.sh"
+        legacy.write_text(f"#!/bin/bash\n# {installer.MARKER}\n")
+        self.install()
+        self.assertFalse(legacy.exists())
+        self.assertTrue((self.plugin_dir / "chip.1m.sh").exists())
+
+    def test_foreign_legacy_name_is_kept(self):
+        self.plugin_dir.mkdir()
+        legacy = self.plugin_dir / "chip.3m.sh"
+        legacy.write_text("#!/bin/sh\necho mine\n")
+        self.install()
+        self.assertTrue(legacy.exists())
