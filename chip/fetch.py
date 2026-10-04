@@ -12,6 +12,8 @@ SEARCHES = (
     "is:pr is:open reviewed-by:@me -author:@me",
 )
 
+MINE_SEARCH = "is:pr is:open author:@me"
+
 QUERY = """
 query($q: String!, $after: String) {
   viewer { login }
@@ -26,7 +28,8 @@ query($q: String!, $after: String) {
         additions deletions changedFiles mergeable reviewDecision
         commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
         latestReviews(first: 20) { nodes { author { login } state submittedAt } }
-        reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } }
+        reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { slug } } } }
+        reviewThreads(first: 100) { totalCount nodes { isResolved } }
       }
     }
   }
@@ -79,3 +82,15 @@ def fetch_inbox_nodes(runner: Runner = run_gh_graphql) -> Tuple[str, List[dict]]
         for node in nodes:
             seen.setdefault(node["id"], node)
     return results[-1][0], list(seen.values())
+
+
+def fetch_all(runner: Runner = run_gh_graphql) -> Tuple[str, List[dict], List[dict]]:
+    """Viewer, PRs waiting on the viewer's review (deduped), and the viewer's own open PRs — fetched in parallel."""
+    searches = list(SEARCHES) + [MINE_SEARCH]
+    with ThreadPoolExecutor(max_workers=len(searches)) as pool:
+        results = list(pool.map(lambda search: search_all(search, runner), searches))
+    seen: Dict[str, dict] = {}
+    for _, nodes in results[:-1]:
+        for node in nodes:
+            seen.setdefault(node["id"], node)
+    return results[0][0], list(seen.values()), results[-1][1]
