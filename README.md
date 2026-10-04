@@ -124,14 +124,13 @@ It is safe to run again, and it never overwrites files it did not create. `chip 
 
 ## Configuration
 
-Open the config with `chip config open` (or **Settings → Open config**), and check it with `chip config check`:
+`chip install` writes `~/.config/chip/config.json` once; it is yours and is never overwritten. Open it with `chip config open` (or **Settings → Open config**), and check it with `chip config check`. GitHubBar picks up changes at the next refresh.
 
 ```json
 {
   "work_root": "~/work",
   "skills": [
-    {"name": "Full review", "prompt": "/my-review-skill {url}"},
-    {"name": "Quick review", "prompt": "/code-review {url}"}
+    {"name": "Full review", "prompt": "Review the pull request {url}. Use gh to read its description, diff … Do not edit files, commit, push, or post anything to GitHub."}
   ],
   "address_skills": [
     {"name": "Address review", "prompt": "Help me address the review feedback on my pull request {url}. …"}
@@ -143,6 +142,26 @@ Open the config with `chip config open` (or **Settings → Open config**), and c
   "hidden_projects": []
 }
 ```
+
+### Plug in your own review skill
+
+The default **Full review** is a plain prompt that works on any machine. To use your own Claude Code skill, put it in `~/.claude/skills/<name>/SKILL.md` (or install it from a plugin), then point `skills` at it. You can have several; each becomes a `Run "<name>"` button on every PR:
+
+```json
+"skills": [
+  {"name": "My review",    "prompt": "/my-review-skill {url}"},
+  {"name": "Quick review", "prompt": "Review {url} briefly: only bugs and security issues."},
+  {"name": "Full review",  "prompt": "Review the pull request {url}. …"}
+]
+```
+
+- `prompt` is sent to `claude` as the first message, so it can call a skill (`/name …`) or be plain text.
+- Placeholders are filled per PR: `{url}`, `{repo}`, `{number}`, `{label}`, `{title}`.
+- The run is read-only (`disallowed_tools`), and "Continue review" rounds reuse the same prompt.
+- `address_skills` works the same way for the **Address review** button on your own PRs.
+- If the file is invalid, the menu shows an orange "Config: …" line and uses the defaults until you fix it.
+
+### All keys
 
 | Key | Meaning |
 |---|---|
