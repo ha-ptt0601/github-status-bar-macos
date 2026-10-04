@@ -165,6 +165,7 @@ class MineRowTest(unittest.TestCase):
         self.assertEqual(r["reviewers"], {"bob": "APPROVED", "eve": "COMMENTED"})
         self.assertEqual(r["requested"], ["zed", "backend"])
         self.assertEqual(r["unresolved"], 2)
+        self.assertEqual(r["review_times"], {"bob": MINE_AT, "eve": MINE_AT})
         self.assertEqual(r["kind"], "mine")
 
     def test_status_priority(self):

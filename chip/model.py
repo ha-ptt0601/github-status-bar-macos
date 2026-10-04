@@ -188,6 +188,10 @@ def build_mine_row(node: dict, viewer: str, now: datetime) -> dict:
         _login(r.get("author")): r["state"] for r in _nodes(node, "latestReviews")
         if _login(r.get("author")) not in (None, viewer) and r.get("submittedAt")
     }
+    row["review_times"] = {
+        _login(r.get("author")): r["submittedAt"] for r in _nodes(node, "latestReviews")
+        if _login(r.get("author")) not in (None, viewer) and r.get("submittedAt")
+    }
     row["requested"] = [
         _login(r.get("requestedReviewer")) or (r.get("requestedReviewer") or {}).get("slug")
         for r in _nodes(node, "reviewRequests") if r.get("requestedReviewer")
