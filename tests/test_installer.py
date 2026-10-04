@@ -148,3 +148,13 @@ class InstallTest(unittest.TestCase):
         self.assertFalse((data_dir / "chip.3m.sh").exists())
         self.assertIn(["defaults", "write", "com.ameba.SwiftBar", "PluginDirectory", str(new_dir)], self.calls)
         self.assertIn(["killall", "SwiftBar"], self.calls)
+
+    def test_second_plugin_for_my_prs(self):
+        self.install()
+        mine = (self.plugin_dir / installer.MINE_PLUGIN_NAME).read_text()
+        self.assertEqual(installer.MINE_PLUGIN_NAME, "chip-mine.1m.sh")
+        self.assertIn(f'exec "{self.chip_bin}" swiftbar --view mine', mine)
+        self.assertIn(installer.MARKER, mine)
+        self.mcp_registered = f"chip:\n  Command: {self.chip_bin}\n"
+        installer.uninstall(self.repo, self.home, runner=self.runner, out=self.out.append)
+        self.assertFalse((self.plugin_dir / installer.MINE_PLUGIN_NAME).exists())

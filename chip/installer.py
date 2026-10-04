@@ -14,13 +14,15 @@ REPO_DIR = Path(__file__).resolve().parents[1]
 MARKER = "installed by chip"
 SWIFTBAR_DOMAIN = "com.ameba.SwiftBar"
 PLUGIN_NAME = "chip.1m.sh"  # menu refresh every minute; GitHub is still fetched at most every 3 minutes
+MINE_PLUGIN_NAME = "chip-mine.1m.sh"  # second menu bar icon: the user's own PRs
+PLUGINS = ((PLUGIN_NAME, ""), (MINE_PLUGIN_NAME, " --view mine"))
 LEGACY_PLUGIN_NAMES = ("chip.3m.sh",)
 SWIFTBAR_APP = Path("/Applications/SwiftBar.app")
 REQUIRED = (("gh", "brew install gh"), ("claude", "see https://claude.com/claude-code"),
             ("git", "xcode-select --install"))
 
 
-def plugin_script(chip_bin: Path, path_dirs: Iterable[str]) -> str:
+def plugin_script(chip_bin: Path, path_dirs: Iterable[str], view_args: str = "") -> str:
     path = ":".join(dict.fromkeys(path_dirs))
     return f"""#!/bin/bash
 # <swiftbar.title>chip</swiftbar.title>
@@ -32,7 +34,7 @@ def plugin_script(chip_bin: Path, path_dirs: Iterable[str]) -> str:
 # {MARKER} — regenerate with `chip install`
 export PATH="{path}:$PATH"
 export CHIP_PLUGIN="$0"
-if [ $# -eq 0 ]; then exec "{chip_bin}" swiftbar; fi
+if [ $# -eq 0 ]; then exec "{chip_bin}" swiftbar{view_args}; fi
 exec "{chip_bin}" "$@"
 """
 
@@ -115,19 +117,20 @@ def _install_plugin(chip_bin: Path, runner, which, out, swiftbar_app: Path, home
         out(f"note  SwiftBar plugin folder moved to {plugin_dir} (was SwiftBar's own data folder)")
     stale = [plugin_dir / name for name in LEGACY_PLUGIN_NAMES]
     if moved_from:
-        stale += [moved_from / name for name in (PLUGIN_NAME,) + LEGACY_PLUGIN_NAMES]
+        stale += [moved_from / name for name in (PLUGIN_NAME, MINE_PLUGIN_NAME) + LEGACY_PLUGIN_NAMES]
     for old in stale:
         if old.is_file() and MARKER in old.read_text():
             old.unlink()
             out(f"rm    {old} (replaced by {plugin_dir / PLUGIN_NAME})")
-    plugin = plugin_dir / PLUGIN_NAME
-    if plugin.exists() and MARKER not in plugin.read_text():
-        out(f"skip  {plugin} was not installed by chip")
-        return
     path_dirs = [str(Path(p).parent) for p in (which(t) for t in ("gh", "claude", "git", "python3")) if p]
-    plugin.write_text(plugin_script(chip_bin, path_dirs))
-    plugin.chmod(0o755)
-    out(f"menu  {plugin}")
+    for name, view_args in PLUGINS:
+        plugin = plugin_dir / name
+        if plugin.exists() and MARKER not in plugin.read_text():
+            out(f"skip  {plugin} was not installed by chip")
+            continue
+        plugin.write_text(plugin_script(chip_bin, path_dirs, view_args))
+        plugin.chmod(0o755)
+        out(f"menu  {plugin}")
     if swiftbar_app.exists():
         if moved_from is not None:  # SwiftBar reads PluginDirectory at launch
             runner(["killall", "SwiftBar"], capture_output=True, text=True)
@@ -192,7 +195,7 @@ def uninstall(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None, o
         runner(["claude", "mcp", "remove", "chip", "--scope", "user"], capture_output=True, text=True)
         out("rm    MCP server chip")
     folders = {_read_plugin_dir(runner), home / ".swiftbar", _swiftbar_data_dir(home)}
-    for plugin in (folder / name for folder in folders if folder for name in (PLUGIN_NAME,) + LEGACY_PLUGIN_NAMES):
+    for plugin in (folder / name for folder in folders if folder for name in (PLUGIN_NAME, MINE_PLUGIN_NAME) + LEGACY_PLUGIN_NAMES):
         if plugin.is_file() and MARKER in plugin.read_text():
             plugin.unlink()
             out(f"rm    {plugin}")
