@@ -44,6 +44,10 @@
 - **Your open PRs, grouped by project.** Each row shows its status, first match wins: 🔴 Changes requested · ❌ CI failed · ⚠️ Conflict · 💬 N unresolved threads · ✅ Approved · ⚪ Waiting · ⚪ Draft.
 - **Reviewer column:** `bob ✗ carol ✓` (✓ approved, ✗ changes requested, 💬 commented), or `→ bob, carol` while you are still waiting on requested reviewers.
 - **Address review:** runs a skill that reads every unresolved thread, then **only proposes** the code change and drafts a reply for each one. It never edits files, commits, pushes or posts. `git commit`, `git push`, `gh pr comment` and `gh pr review` are blocked for these runs.
+- **Feature session:** chip finds the Claude Code session where you built the PR (the session with the most work on the PR's branch, from `~/.claude/projects`), or one you link by hand (**Link feature session…**, paste the session id). Then:
+  - **Address review in feature session** continues that very session in the background, so Claude remembers how the feature was built while it answers the reviewers (don't keep that session open elsewhere at the same time);
+  - **Open feature session** resumes it in Terminal, in the folder it started in;
+  - **Link another session…** / **Unlink** change the link.
 - **Re-request review** from the reviewers who have not approved yet.
 - **Merge…** (only once the PR is approved and CI is not failing; the repo's preferred method, squash first, branch kept), **Close PR…** and **Comment…**, confirmed in a dialog; **Mark as ready for review** / **Convert to draft** in one click.
 - After any of these, chip refetches from GitHub, so every part of the menu shows the new state (an approved PR moves to "Show approved & drafts", a merged or closed PR leaves the list, counts follow).
@@ -226,6 +230,8 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 | `chip run <label> [--skill N \| --project] [--address]` | Start a background review: skill N from your config, or `--project` for the repo's own review (built-in if none); `--address` for your PR |
 | `chip attach / stop / forget <session-id>` | Open, stop or remove a chip review session |
 | `chip nudge <label>` | Re-request review on your PR |
+| `chip session open\|link [id]\|unlink <label>` | The Claude Code session where your PR was built |
+| `chip run <label> --address --feature` | Address the review inside that session |
 | `chip act <label> approve\|request-changes\|comment\|merge\|close\|ready\|draft` | Act on a PR on GitHub (asks first in a dialog where it matters) |
 | `chip view review\|mine` | Switch the menu tab |
 | `chip notifications --clear` | Empty the Recent notifications menu |
