@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 [ "$(git branch --show-current)" = main ] || { echo "release from main"; exit 1; }
 sed -i '' "s/^__version__ = .*/__version__ = \"$v\"/" chip/__init__.py
 python3 -m unittest discover -s tests -t . -q
-git commit -qam "release: v$v"
+git diff --quiet || git commit -qam "release: v$v"  # nothing to commit when the version is already $v
 git tag "v$v"
 git push -q origin main "v$v"
 gh release create "v$v" --title "chip v$v" --generate-notes
