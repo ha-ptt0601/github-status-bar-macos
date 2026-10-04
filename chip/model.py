@@ -121,6 +121,7 @@ def build_row(node: dict, viewer: str, now: datetime) -> dict:
         "ci": CI_MAP.get(rollup.get("state") or "", "-"),
         "conflict": node.get("mergeable") == "CONFLICTING",
         "base": base,
+        "head": node.get("headRefName") or "",
         "stacked": base != default_branch and base not in TRUNK_BRANCHES,
         "jira": jira.group(0) if jira else "",
         "draft": bool(node.get("isDraft")),
