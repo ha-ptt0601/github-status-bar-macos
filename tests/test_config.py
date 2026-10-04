@@ -195,3 +195,32 @@ class AppliesTest(unittest.TestCase):
     def test_scope_validation(self):
         self.assertIn("repos must be a list", config.validate({"skills": [{"name": "A", "prompt": "x", "repos": "api"}]})[0])
         self.assertEqual(config.validate({"skills": [{"name": "A", "prompt": "x", "languages": ["Swift"]}]}), [])
+
+
+class TemplateTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "config.json"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_new_config_has_help_and_examples_and_loads_clean(self):
+        config.init(self.path)
+        data = json.loads(self.path.read_text())
+        self.assertEqual(list(data)[:5], ["_help", "work_roots", "clone_root", "skills", "_skill_examples"])
+        self.assertEqual(data["skills"], [])
+        self.assertEqual(data["_skill_examples"], config.EXAMPLE_SKILLS)
+        cfg = config.load(self.path)
+        self.assertEqual((cfg["errors"], cfg["skills"]), ([], []))
+        self.assertNotIn("_help", cfg)
+
+    def test_examples_survive_menu_settings(self):
+        config.init(self.path)
+        config.set_value("status_style", "emoji", self.path)
+        self.assertIn("_skill_examples", json.loads(self.path.read_text()))
+
+    def test_example_file_in_repo_matches(self):
+        example = Path(__file__).resolve().parents[1] / "config.example.json"
+        self.assertEqual(json.loads(example.read_text()), config.example())
+        self.assertEqual(config.validate(config.example()), [])

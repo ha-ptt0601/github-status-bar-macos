@@ -135,6 +135,37 @@ def load(path: Optional[Path] = None) -> dict:
 
 DEFAULT_SKILL = {"name": "Review", "prompt": REVIEW_PROMPT}
 
+HELP = (
+    "skills: your review buttons, empty = the repo's own review skill or a built-in review. "
+    "Copy entries from _skill_examples into skills and edit them. prompt can call a skill (/name {url}) or be "
+    "plain text; placeholders: {url} {repo} {number} {label} {title} {base}. Optional: repos (\"owner/repo\", "
+    "\"acme/*\", \"*-ios\") and languages (\"PHP\", \"Swift\"...) limit where a skill is offered. "
+    "Keys starting with _ are ignored. Check with: chip config check. "
+    "Docs: https://github.com/ha-ptt0601/chip#configuration"
+)
+EXAMPLE_SKILLS = [
+    {"name": "My review", "prompt": "/my-review-skill {url}"},
+    {"name": "Laravel review", "prompt": "/review-laravel {url}", "languages": ["PHP"]},
+    {"name": "Front-end review", "prompt": "/review-frontend {url}", "languages": ["TypeScript", "Vue", "JavaScript"]},
+    {"name": "iOS review", "prompt": "/review-ios {url}", "repos": ["my-org/*-ios"]},
+    {"name": "Quick review", "prompt": "Review {url} briefly: only bugs and security issues. Do not edit files."},
+]
+
+
+def template(**values) -> dict:
+    """What `chip install` writes: the defaults, a short help line and example skills to copy from."""
+    data = {"_help": HELP}
+    for key, value in dict(DEFAULT, **values).items():
+        data[key] = value
+        if key == "skills":
+            data["_skill_examples"] = EXAMPLE_SKILLS
+    return data
+
+
+def example() -> dict:
+    """A filled-in config (config.example.json in the repo)."""
+    return dict(DEFAULT, skills=EXAMPLE_SKILLS, work_roots=["~/code", "~/Projects"])
+
 
 def review_skills(cfg: dict) -> List[dict]:
     """The configured review skills, or the built-in review when none are configured."""
@@ -169,7 +200,7 @@ def init(path: Optional[Path] = None, **values) -> bool:
     if path.exists():
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(dict(DEFAULT, **values), ensure_ascii=False, indent=2) + "\n")
+    path.write_text(json.dumps(template(**values), ensure_ascii=False, indent=2) + "\n")
     return True
 
 

@@ -232,6 +232,9 @@ def cmd_config(args) -> int:
     if args.action == "path":
         print(path)
         return 0
+    if args.action == "example":
+        print(json.dumps(config.example(), ensure_ascii=False, indent=2))
+        return 0
     if args.action == "set":
         if not (args.key and args.value):
             _error("usage: chip config set <key> <value>")
@@ -472,8 +475,8 @@ def main(argv=None, runner=None) -> int:
     p_repo = sub.add_parser("repo", help="local clone path of owner/repo")
     p_repo.add_argument("slug")
     p_repo.add_argument("--clone", action="store_true", help="clone into the clone folder (~/.cache/chip/repos) if missing")
-    p_config = sub.add_parser("config", help="config file: init | check | path | open | set KEY VALUE")
-    p_config.add_argument("action", choices=["init", "check", "path", "open", "set"])
+    p_config = sub.add_parser("config", help="config file: init | check | path | open | example | set KEY VALUE")
+    p_config.add_argument("action", choices=["init", "check", "path", "open", "example", "set"])
     p_config.add_argument("key", nargs="?")
     p_config.add_argument("value", nargs="?")
     p_prompt = sub.add_parser("prompt", help="review prompt for a PR label from the configured skill")

@@ -1,0 +1,55 @@
+{
+  "work_roots": [
+    "~/code",
+    "~/Projects"
+  ],
+  "clone_root": "",
+  "skills": [
+    {
+      "name": "My review",
+      "prompt": "/my-review-skill {url}"
+    },
+    {
+      "name": "Laravel review",
+      "prompt": "/review-laravel {url}",
+      "languages": [
+        "PHP"
+      ]
+    },
+    {
+      "name": "Front-end review",
+      "prompt": "/review-frontend {url}",
+      "languages": [
+        "TypeScript",
+        "Vue",
+        "JavaScript"
+      ]
+    },
+    {
+      "name": "iOS review",
+      "prompt": "/review-ios {url}",
+      "repos": [
+        "my-org/*-ios"
+      ]
+    },
+    {
+      "name": "Quick review",
+      "prompt": "Review {url} briefly: only bugs and security issues. Do not edit files."
+    }
+  ],
+  "address_skills": [
+    {
+      "name": "Address review",
+      "prompt": "Help me address the review feedback on my pull request {url}. Use gh to read every unresolved review thread and review comment. For each one: quote it, propose the exact code change as a diff, and draft a short reply I can post. Do not edit files, commit, push, or post anything to GitHub."
+    }
+  ],
+  "permission_mode": "auto",
+  "disallowed_tools": [
+    "Edit",
+    "Write",
+    "NotebookEdit"
+  ],
+  "terminal": "Terminal",
+  "status_style": "dots",
+  "hidden_projects": []
+}
