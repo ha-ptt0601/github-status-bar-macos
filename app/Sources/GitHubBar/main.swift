@@ -145,7 +145,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 parsed.notifications.forEach(Self.post)
                 self.onMainDuringMenu {
                     view.setBusy(false, text: started ? "✓ Review started" : "Could not start: see the notification")
-                    if self.menuIsOpen { self.pending = parsed } else { self.apply(parsed) }
+                    if self.menuIsOpen {
+                        self.pending = parsed
+                        self.updateInPlace(parsed, from: view)
+                    } else {
+                        self.apply(parsed)
+                    }
                 }
             } else if kind == "refresh" {
                 self.refillOpenMenu()
@@ -159,6 +164,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 DispatchQueue.main.async { if self.menuIsOpen { self.pending = parsed } else { self.apply(parsed) } }
             }
         }
+    }
+
+    /// After a Run inside a PR submenu: show the new state of that PR's row (🔵 Reviewing) and the menu
+    /// bar badge at once, by changing the row's title and image only; nothing is added or removed, so the
+    /// open submenu is untouched. The rest of the new menu is applied when the menu closes.
+    private func updateInPlace(_ parsed: ParsedMenu, from view: KeepOpenView) {
+        setTitle(parsed.title)
+        guard let submenu = view.enclosingMenuItem?.menu,
+              let label = submenu.items.first?.title, !label.isEmpty else { return }
+        func entry(in entries: [MenuEntry]) -> MenuEntry? {
+            for e in entries {
+                if e.children.first?.text == label { return e }
+                if let found = entry(in: e.children) { return found }
+            }
+            return nil
+        }
+        func row(in menu: NSMenu) -> NSMenuItem? {
+            for item in menu.items {
+                if item.submenu === submenu { return item }
+                if let sub = item.submenu, let found = row(in: sub) { return found }
+            }
+            return nil
+        }
+        guard let menu = statusItem.menu, let item = row(in: menu), let fresh = entry(in: parsed.items) else { return }
+        item.attributedTitle = MenuBuilder.attributedText(fresh)
+        item.image = MenuBuilder.image(fresh, height: 16)
+        item.toolTip = fresh.params["tooltip"]
+    }
+
+    private func setTitle(_ title: MenuEntry) {
+        guard let button = statusItem.button else { return }
+        button.image = MenuBuilder.image(title, height: 18)
+        button.title = title.text.isEmpty ? "" : " " + title.text
+        button.toolTip = title.params["tooltip"]
     }
 
     /// Runs `block` on the main thread, also while a menu is open (event-tracking run loop mode).
