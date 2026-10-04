@@ -175,7 +175,7 @@ Other people clone the repo anywhere and run one command. Nothing may assume `/U
 ## SwiftBar plugin install (part of `chip install`)
 
 - `brew install swiftbar` (the user runs it, or the command prints it when SwiftBar is missing).
-- Plugin folder: SwiftBar's configured `PluginDirectory`. If it is unset, use `~/Library/Application Support/SwiftBar/Plugins` and write that path with `defaults write com.ameba.SwiftBar PluginDirectory`.
+- Plugin folder: SwiftBar's configured `PluginDirectory`, unless it is unset or is SwiftBar's own per-plugin data folder (`~/Library/Application Support/SwiftBar/Plugins`, where SwiftBar creates `Users/…` data directories). In those cases use `~/.swiftbar`, write it with `defaults write com.ameba.SwiftBar PluginDirectory`, remove chip's plugin from the old folder, and restart SwiftBar so it rereads the setting.
 - Write the generated `chip.1m.sh` into the plugin folder (removing an older chip-made `chip.3m.sh`), then `open -a SwiftBar`.
 
 ## Testing
