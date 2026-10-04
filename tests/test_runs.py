@@ -169,3 +169,44 @@ class RoundTest(unittest.TestCase):
         records = {"a": {"label": "api#9", "started_at": 0, "done_at": 5}}
         self.assertFalse(runs.resolve(records, {}, now=50.0))
         self.assertNotIn("resolved_at", records["a"])
+
+
+class AddressRunTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "runs.json"
+        self.calls = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def runner(self, cmd, **kw):
+        self.calls.append(cmd)
+        return done(cmd, "backgrounded · cd34ef56 · x\n")
+
+    def test_address_run_denies_commit_push_and_posting(self):
+        skill = {"name": "Address review", "prompt": "address {url}"}
+        record = runs.start(ROW, skill, CFG, "/src", self.path, runner=self.runner, address=True)
+        tools = self.calls[0][self.calls[0].index("--disallowedTools") + 1].split(",")
+        for denied in ("Edit", "Bash(git commit:*)", "Bash(git push:*)", "Bash(gh pr comment:*)", "Bash(gh pr review:*)"):
+            self.assertIn(denied, tools)
+        self.assertEqual(record["kind"], "address")
+
+    def test_review_run_kind(self):
+        record = runs.start(ROW, SKILL, CFG, "/src", self.path, runner=self.runner)
+        self.assertEqual(record["kind"], "review")
+
+    def test_address_round_resolves_on_commits_or_approval(self):
+        started = datetime(2026, 10, 4, 10, 0).timestamp()
+        after = datetime.utcfromtimestamp(started + 60).strftime("%Y-%m-%dT%H:%M:%SZ")
+        before = datetime.utcfromtimestamp(started - 60).strftime("%Y-%m-%dT%H:%M:%SZ")
+        records = {"a": {"label": "api#1", "started_at": started, "done_at": started + 1},
+                   "b": {"label": "api#2", "started_at": started, "done_at": started + 1},
+                   "c": {"label": "api#3", "started_at": started, "done_at": started + 1}}
+        rows = {"api#1": {"kind": "mine", "my_review_at": None, "last_commit_at": after, "mine_status": "threads"},
+                "api#2": {"kind": "mine", "my_review_at": None, "last_commit_at": before, "mine_status": "ready"},
+                "api#3": {"kind": "mine", "my_review_at": None, "last_commit_at": before, "mine_status": "threads"}}
+        runs.resolve(records, rows, now=5.0, fetched=True)
+        self.assertEqual(records["a"]["resolved_by"], "new commits")
+        self.assertEqual(records["b"]["resolved_by"], "approved")
+        self.assertNotIn("resolved_at", records["c"])

@@ -13,6 +13,8 @@ from chip import config, model
 
 BG_ID_RE = re.compile(r"backgrounded · ([0-9a-f]{6,})")
 KINDS = {"working": "running", "blocked": "needs_you", "done": "done"}
+# Address runs only propose fixes and draft replies: never commit, push or post to GitHub.
+ADDRESS_DENY = ["Bash(git commit:*)", "Bash(git push:*)", "Bash(gh pr comment:*)", "Bash(gh pr review:*)"]
 ROUND_NOTE = (" — round {n}: re-review this PR. First check whether each finding from round {prev} was addressed "
               "(fixed, answered, or still open), then review only what changed since round {prev}.")
 
@@ -52,7 +54,7 @@ def parse_bg_id(stdout: str) -> Optional[str]:
 
 
 def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
-          now: Callable[[], float] = time.time) -> dict:
+          now: Callable[[], float] = time.time, address: bool = False) -> dict:
     """Round 1 starts a new background session; later rounds continue the same session."""
     runner = runner or subprocess.run
     key = run_key(row["label"], skill["name"])
@@ -73,6 +75,8 @@ def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
         }]
     else:
         number, history = 1, []
+        if address:
+            cfg = dict(cfg, disallowed_tools=list(cfg["disallowed_tools"]) + ADDRESS_DENY)
         cmd = build_command(prompt, row["label"], skill["name"], cfg)
     proc = runner(cmd, cwd=cwd, capture_output=True, text=True)
     run_id = parse_bg_id(proc.stdout)
@@ -80,7 +84,8 @@ def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
         raise RunError((proc.stderr or proc.stdout or "claude --bg failed").strip())
     record = {"id": run_id, "session_id": previous.get("session_id") if number > 1 else None,
               "label": row["label"], "title": row["title"], "url": row["url"], "repo": row["repo"],
-              "skill": skill["name"], "cwd": cwd, "round": number, "history": history, "started_at": now()}
+              "skill": skill["name"], "kind": "address" if address else "review", "cwd": cwd,
+              "round": number, "history": history, "started_at": now()}
     records[key] = record
     save(path, records)
     return record
@@ -163,6 +168,8 @@ def resolve(records: Dict[str, dict], rows_by_label: Dict[str, dict], now: float
             record.update(resolved_at=now, resolved_by="you reviewed on GitHub")
         elif _after(row.get("last_commit_at"), record["started_at"]):
             record.update(resolved_at=now, resolved_by="new commits")
+        elif row.get("kind") == "mine" and row.get("mine_status") == model.READY:
+            record.update(resolved_at=now, resolved_by="approved")
         else:
             continue
         changed = True
