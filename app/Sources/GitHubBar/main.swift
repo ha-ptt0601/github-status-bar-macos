@@ -1,9 +1,10 @@
 import AppKit
 import GitHubBarCore
 import ServiceManagement
+import UserNotifications
 
-/// GitHubBar: shows `chip swiftbar` as a menu bar menu and runs the menu's actions.
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+/// GitHubBar: shows `chip swiftbar` as a menu bar menu, runs the menu's actions and posts chip's notifications.
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var timer: Timer?
     private var menuIsOpen = false
@@ -18,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem.button?.title = "…"
+        // chip queues notifications for us instead of using osascript; `--deliver` hands them over.
+        setenv("GITHUBBAR_NOTIFY", "1", 1)
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         // Open at login by default, once; afterwards the menu toggle decides.
         if !UserDefaults.standard.bool(forKey: "loginItemConfigured") {
             try? SMAppService.mainApp.register()
@@ -30,8 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func refresh() {
         queue.async { [weak self] in
             guard let self else { return }
-            let output = Self.run(self.chip, ["swiftbar"])
+            let output = Self.run(self.chip, ["swiftbar", "--deliver"])
             let menu = MenuParser.parse(output)
+            menu.notifications.forEach(Self.post)
             DispatchQueue.main.async {
                 if self.menuIsOpen {
                     self.pending = menu  // never rebuild under the pointer
@@ -79,8 +86,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sender.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
 
+    /// Posts a notification; its params (href, or bash + paramN) say what a click does.
+    static func post(_ entry: MenuEntry) {
+        let content = UNMutableNotificationContent()
+        content.title = "GitHubBar"
+        content.body = entry.text
+        content.sound = .default
+        content.userInfo = entry.params
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound, .list])
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let params = response.notification.request.content.userInfo as? [String: String] ?? [:]
+        DispatchQueue.main.async { self.handle(MenuEntry(params: params)) }
+        completionHandler()
+    }
+
     @objc func runEntry(_ sender: NSMenuItem) {
         guard let entry = sender.representedObject as? MenuEntry else { return }
+        handle(entry)
+    }
+
+    /// Opens `href` and/or runs `bash` with `paramN` (refreshing afterwards when `refresh=true`).
+    private func handle(_ entry: MenuEntry) {
         if let href = entry.params["href"], let url = URL(string: href) {
             NSWorkspace.shared.open(url)
         }
