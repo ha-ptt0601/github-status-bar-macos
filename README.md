@@ -165,6 +165,8 @@ Each PR is reviewed in a worktree of that clone, in `~/.cache/chip/worktrees/`. 
 
 - **A repo's review skill** is `.claude/skills/<name>/SKILL.md` or `.claude/commands/<name>.md` in the repo, with "review" in its name (one named exactly `review` wins). Committed with the repo, it is the same for everyone on the team.
 - **Every review runs on the PR's code.** Whatever runs (your skill, the repo's skill or the built-in review), chip fetches the PR and its base branch and checks the PR out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, without touching your clone. The prompt ends with a note saying HEAD is the PR and the base is `origin/<base>`, so skills that review "the current branch" (`git diff main...HEAD`) see the right diff. "Continue review" updates the same worktree to the new commits; it is removed when the PR is merged or closed, or when you remove the review.
+- **The worktree gets what git does not track:** your clone's `.claude/settings.local.json` is copied in (it enables the repo's MCP servers, such as Laravel Boost, and holds your permissions), and `worktree_links` (default `.env`, `vendor`, `node_modules`) are linked from your clone, so those tools work as they do in your clone. Note that `vendor` is your clone's branch, not the PR's.
+- Everything committed in the repo is there as on GitHub: `.claude/agents`, `.claude/skills`, `CLAUDE.md`, `.ai/`, `.mcp.json`. A skill such as `/my-review-skill` that runs the repo's own reviewers finds them.
 - Reviews run with **Claude Code** (`claude`).
 - Until chip has cloned a repo, the button reads `Run "Review"`; it still uses the repo's skill if it finds one when the run starts.
 
@@ -208,6 +210,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 |---|---|
 | `work_roots` | Folders where chip looks for your clones (3 levels deep). Empty: the usual code folders that exist (`~/work`, `~/code`, `~/Projects`, `~/Developer`, `~/src`, `~/repos`, `~/git`, `~/dev`, `~/Documents/GitHub`…). The older single `work_root` key still works |
 | `clone_root` | Where chip clones repos it cannot find. Empty: `~/.cache/chip/repos` |
+| `worktree_links` | Paths linked from your clone into each PR worktree (default `[".env", "vendor", "node_modules"]`; `[]` for none). `.claude/settings.local.json` is always copied |
 | `skills` | Your review skills (empty by default). Each one is a `Run "<name>"` button on the PRs it applies to (optional `repos`, `languages`). Placeholders: `{url} {repo} {number} {label} {title} {base}` |
 | `address_skills` | Skills for your own PRs (the Address review button). Same placeholders |
 | `permission_mode`, `disallowed_tools` | Passed to `claude --bg` for every run |

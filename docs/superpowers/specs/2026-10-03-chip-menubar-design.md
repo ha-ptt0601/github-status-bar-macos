@@ -316,3 +316,4 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 - `project.in_worktree(skill)` appends `project.NOTE` to the prompt template: HEAD is PR #{number}, base is `origin/{base}`.
 - `--project` picks the repo's own skill (`/<name> {url}`) or the built-in review; both get the note.
 - `chip forget` removes the worktree when no other record uses it; `runs.clean_worktrees` removes it when the PR is merged or closed. Only Claude Code is supported as the agent.
+- `project.prepare` runs after every checkout: copies `.claude/settings.local.json` from the clone (MCP enablement, permissions) and symlinks `worktree_links` (default `.env`, `vendor`, `node_modules`) when the clone has them and the worktree does not.
