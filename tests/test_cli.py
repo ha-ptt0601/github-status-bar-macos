@@ -373,6 +373,37 @@ class RunCliTest(RunCliBase):
         self.assertEqual((record["cwd"], record["clone"], record["auto"]),
                          (str(Path(os.environ["CHIP_CACHE_DIR"]) / "worktrees" / "api-274"), "/src/acme/api", True))
 
+    def test_run_clones_an_unknown_repo_and_says_so(self):
+        cli.repos.resolve = lambda slug, roots, cache, clone_root=None: None
+        cloned = Path(os.environ["CHIP_CACHE_DIR"]) / "repos" / "api"
+        orig_clone = cli.repos.clone
+        cli.repos.clone = lambda slug, root, cache: str(cloned)
+        try:
+            self.run_cli(["menu"], runner=fake_runner)
+            code, _, _ = self.run_cli(["run", "api#274"])
+        finally:
+            cli.repos.clone = orig_clone
+        self.assertEqual(code, 0)
+        notes = [c[2] for c in self.calls if c[0] == "osascript"]
+        self.assertIn("Cloning acme/api", notes[0])
+        self.assertIn("without .claude/settings.local.json, .env, vendor, node_modules", notes[1])
+        self.assertIn("Reviewing api#274", notes[2])
+
+    def test_run_reports_a_failed_clone(self):
+        cli.repos.resolve = lambda slug, roots, cache, clone_root=None: None
+        orig_clone = cli.repos.clone
+
+        def fail(slug, root, cache):
+            raise cli.repos.CloneError("repository not found")
+        cli.repos.clone = fail
+        try:
+            self.run_cli(["menu"], runner=fake_runner)
+            code, _, err = self.run_cli(["run", "api#274"])
+        finally:
+            cli.repos.clone = orig_clone
+        self.assertEqual(code, 1)
+        self.assertIn("could not clone acme/api (do you have access?", err)
+
     def test_run_unknown_label(self):
         self.run_cli(["menu"], runner=fake_runner)
         code, _, _ = self.run_cli(["run", "nope#1"], runner=fake_runner)

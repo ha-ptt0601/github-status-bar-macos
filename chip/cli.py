@@ -291,7 +291,7 @@ def cmd_run(args, runner) -> int:
         _error(f"PR {args.label} is not in the list")
         return 1
     try:
-        clone = find_clone(row["repo"]) or clone_repo(row["repo"])
+        clone = find_clone(row["repo"]) or _first_clone(row["repo"], cfg)
         extra = {}
         if args.project:
             skill, extra = _project_skill(clone), {"auto": True}
@@ -306,6 +306,21 @@ def cmd_run(args, runner) -> int:
     notify.send([f"Reviewing {row['label']} ({skill['name']})"])
     print(f"started {record['id']} for {row['label']} ({skill['name']})")
     return 0
+
+
+def _first_clone(slug: str, cfg: dict) -> str:
+    """Clone a repo chip has not seen on this Mac, telling the user (it can take a while) and what it lacks."""
+    notify.send([f"Cloning {slug}… (first review of this repo)"])
+    try:
+        clone = clone_repo(slug)
+    except repos.CloneError as exc:
+        raise repos.CloneError(f"could not clone {slug} (do you have access? gh auth status): {exc}") from exc
+    missing = [name for name in [project.LOCAL_SETTINGS] + list(cfg["worktree_links"])
+               if not (Path(clone) / name).exists()]
+    if missing:
+        notify.send([f"{slug} was cloned into {clone} without {', '.join(missing)}: tools such as Laravel Boost "
+                     f"will not run. Clone it into your code folder (or set it up there) to use them."])
+    return clone
 
 
 def _project_skill(clone: str) -> dict:
