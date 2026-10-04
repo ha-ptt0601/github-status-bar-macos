@@ -172,6 +172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     private func updateInPlace(_ parsed: ParsedMenu, from view: KeepOpenView) {
         setTitle(parsed.title)
         guard let menu = statusItem.menu, let submenu = view.enclosingMenuItem?.menu else { return }
+        openSubmenu = submenu
+        defer { openSubmenu = nil }
         updateRunRows(menu, parsed)
         // The PR the click was about: a PR submenu starts with its label ("api#2123"); a review row's
         // text starts with it ("api#2123 · Full review · …").
@@ -187,11 +189,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         }
     }
 
+    /// The submenu the user clicked in; it is never replaced while open.
+    private var openSubmenu: NSMenu?
+
     private func refresh(_ item: NSMenuItem, with fresh: MenuEntry) {
         item.attributedTitle = MenuBuilder.attributedText(fresh)
         item.image = MenuBuilder.image(fresh, height: 16)
         item.toolTip = fresh.params["tooltip"]
         item.representedObject = fresh
+        // Its submenu too (e.g. "View running review" → "Run …"), unless it is the open one.
+        if !fresh.children.isEmpty, let old = item.submenu, old !== openSubmenu,
+           Self.allItems(old).allSatisfy({ $0.submenu !== openSubmenu }) {
+            item.submenu = MenuBuilder.menu(fresh.children, target: self, action: #selector(runEntry(_:)))
+        }
     }
 
     /// Every item of a menu and its submenus.
