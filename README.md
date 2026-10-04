@@ -24,6 +24,7 @@ Reviews by chip
 🔵 shopbox-api#272 · Full review · running 3m ›
 ──────────────
 Show approved & drafts (8) ›
+Recent notifications ›
 Settings ›
 Open at Login ✓
 Quit GitHubBar
@@ -65,6 +66,8 @@ You are notified about:
 - CI failures, conflicts, and new chip versions.
 
 The first refresh after install is silent, and each refresh sends at most 3 notifications.
+
+GitHubBar posts them as native macOS notifications (allow them when macOS asks). **Clicking one opens the PR**, or the review session for "Review finished" and "Review needs you". The last 10 are also kept under **Recent notifications ›** in the menu, with the same click actions and a **Clear** button.
 
 ### Other ways to pick PRs
 - **Claude Code prompt bar:** type `/chip @`, pick PRs from the `@` autocomplete (served by chip's MCP server), and press Enter to review them one by one.
@@ -144,6 +147,7 @@ Open the config with `chip config open` (or **Settings → Open config**), and c
 | `chip attach / stop / forget <session-id>` | Open, stop or remove a chip review session |
 | `chip nudge <label>` | Re-request review on your PR |
 | `chip view review\|mine` | Switch the menu tab |
+| `chip notifications --clear` | Empty the Recent notifications menu |
 | `chip search [--clear]` · `chip project toggle <name>\|all` | Search and project filter |
 | `chip config init\|check\|path\|open\|set <key> <value>` | Configuration |
 | `chip swiftbar [--view review\|mine]` | Print the menu (what GitHubBar renders) |

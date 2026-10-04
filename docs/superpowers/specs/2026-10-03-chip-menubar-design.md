@@ -187,7 +187,13 @@ On each `chip swiftbar` run, the current state is diffed against `notify.json`, 
 - **Needs you:** "Review needs you: api#2069 (Full review)", for a run whose state became `blocked`.
 - **Update:** "chip v0.4.0 is available", once per new version.
 
-The first run, with no snapshot yet, is silent. At most 3 notifications go out per refresh, plus "+N more". Notifications use `osascript -e 'display notification … with title "chip"'`.
+The first run, with no snapshot yet, is silent. At most 3 notifications go out per refresh, plus "+N more".
+
+Each notification is an event `{text, href}` (the PR or release page) or `{text, run}` (the review session, for "Review finished" and "Review needs you"):
+
+- **History.** Every event is prepended to `history.json` (last 10). The menu shows them under **Recent notifications ›**; clicking one opens its link or runs `chip attach <run>`. **Clear** runs `chip notifications --clear`.
+- **Delivery under GitHubBar.** The app sets `GITHUBBAR_NOTIFY=1` for every chip process, so events are appended to `outbox.json` instead of shown. The app's own refresh runs `chip swiftbar --deliver`, which drains the outbox into extra title-block lines (`<text> | notify=true href=…` or `bash=… param1=attach param2=<run>`). GitHubBar posts these with `UNUserNotificationCenter`, and a click performs the same action as the menu item.
+- **Elsewhere** (no `GITHUBBAR_NOTIFY`): `osascript -e 'display notification … with title "chip"'`, which cannot open a link.
 
 ## Version updates (in-app)
 
