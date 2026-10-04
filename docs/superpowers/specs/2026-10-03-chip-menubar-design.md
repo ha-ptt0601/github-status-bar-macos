@@ -251,3 +251,25 @@ Unit tests (stdlib `unittest`, no network, no real `claude` or `osascript`, all 
 - config: defaults, placeholder filling, unknown placeholders, bad JSON falling back to defaults, and one ▶ item per skill.
 
 A manual check in SwiftBar on the real menu bar follows.
+
+## GitHubBar app (replaces SwiftBar)
+
+People who install chip should see an app named **GitHubBar** with the GitHub icon, not "SwiftBar". chip ships its own small menu bar app, and SwiftBar is no longer needed.
+
+- **Code.** `app/` is a SwiftPM package (swift-tools 5.9, macOS 13, AppKit). It builds with Command Line Tools only (verified: `swift build -c release`, ~45 s on the first build). It has three targets:
+  - `GitHubBarCore` holds the parser and models;
+  - `GitHubBar` is the executable app (`NSStatusItem`, `LSUIElement`);
+  - `GitHubBarChecks` is an executable test runner. Command Line Tools have neither XCTest nor swift-testing, so `swift run GitHubBarChecks` asserts the parser and exits non-zero on failure.
+- **Protocol.** The app does not reimplement chip. Every 60 s, and after any action marked `refresh=true`, it runs `chip swiftbar` and parses the SwiftBar-format text that chip already prints. The app handles exactly the subset chip emits:
+  - the first line as the title (text, plus `templateImage` or `sfimage`);
+  - `---` separators;
+  - submenus by `--` depth;
+  - `| key=value` parameters, with values quoted when they contain spaces: `bash`, `param1…N`, `terminal`, `refresh`, `href`, `sfimage`, `sfconfig` (base64 palette JSON), `templateImage`, `checked`, `disabled`, `color`, `font`, `size`, `tooltip`.
+- **Actions.** `bash` plus params run as a background `Process` (never a terminal); if `refresh=true`, the menu reloads afterwards. `href` opens the URL. The menu is rebuilt atomically and only while it is closed, so it never flickers under the pointer.
+- **Bundle.** `chip install` builds the app and assembles `~/Applications/GitHubBar.app`:
+  - `Info.plist`: `CFBundleName`/`CFBundleDisplayName` GitHubBar, bundle id `com.ha-ptt0601.githubbar`, `LSUIElement` true, and `LSEnvironment` with the `PATH` (gh, claude, git, python3 folders) plus `CHIP_PLUGIN=<repo>/bin/chip`, so menu actions call chip directly;
+  - an `.icns` made from the GitHub mark with `sips` and `iconutil`;
+  - an ad-hoc signature (`codesign -s -`) and the quarantine flag cleared.
+
+  It then adds a Login Item through System Events and launches the app. It also removes chip's SwiftBar plugin. It does not uninstall SwiftBar itself, which the user may use for other plugins. `chip uninstall` quits the app, removes the bundle and removes the Login Item.
+- **Later (not now):** native notifications through the app, so that clicking one opens the PR or session.
