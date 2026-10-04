@@ -172,7 +172,7 @@ def _round_lines(record: dict, view: dict, d: int, label: str, ctx: dict, run_ar
     state = f"resolved ({record['resolved_by']})" if record.get("resolved_at") else view["kind"]
     return [
         item(f"{head} · {when} · {state}", d, disabled="true"),
-        item(f"Continue review (round {number + 1})", d, sfimage="play.fill",
+        item(f"Continue review (round {number + 1})", d, sfimage="play.fill", keep="run",
              **action(ctx["plugin"], "run", label, *run_args)),
         item("Open last session", d, sfimage="eye", **action(ctx["plugin"], "attach", record["id"], refresh=False)),
     ]
@@ -220,7 +220,7 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
             continue
         run = my_runs.get(skill["name"])
         if run is None:
-            lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill",
+            lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill", keep="run",
                               **action(ctx["plugin"], "run", r["label"], "--skill", i, "--address")))
         else:
             lines.extend(_round_lines(run[0], run[1], d, r["label"], ctx, ("--skill", i, "--address")))
@@ -265,7 +265,7 @@ def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
         if run is None and run_args == ("--project",):
             run = next((v for v in my_runs.values() if v[0].get("auto")), None)
         if run is None:
-            lines.append(item(f'Run "{name}"', d, sfimage="play.fill",
+            lines.append(item(f'Run "{name}"', d, sfimage="play.fill", keep="run",
                               **action(ctx["plugin"], "run", r["label"], *run_args)))
             continue
         record, view = run
