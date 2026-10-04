@@ -54,7 +54,7 @@ Reviews by GitHubBar
   ✓ mailer-api#61 · Full review · done 11:40 ▸   View session · Remove
 ──────────────────────────────────────────────
 Show approved & drafts (11)  ▸
-Settings  ▸                                       Open config · Reinstall · Check for updates · About chip v0.3.0
+Settings  ▸                                       Open config · Reinstall · Check for updates · About GitHubBar v0.3.0
 ```
 
 **Paging.** Every project is always visible on the top level: each shows its header and its first 5 PRs (re-reviews and new ones come first), and the rest sit in a `10 more in API ›` submenu. Inside that submenu, and in "Older than 30 days" and "Show approved & drafts", rows are paged 12 at a time. Each further page is a nested `Next 12 ›  (13–24 of 25)` submenu, so moving the pointer is enough and the menu never closes; going back to the parent menu acts as Previous.
