@@ -1,15 +1,57 @@
 import AppKit
 import GitHubBarCore
 
+/// The menu's tab bar; `names` holds each segment's `tab` value.
+final class TabControl: NSSegmentedControl {
+    var names: [String] = []
+}
+
 /// Turns parsed SwiftBar-format entries into AppKit menu items.
 enum MenuBuilder {
-    static func menu(_ entries: [MenuEntry], target: AnyObject, action: Selector) -> NSMenu {
+    static func menu(_ entries: [MenuEntry], target: AnyObject, action: Selector,
+                     tabAction: Selector? = nil) -> NSMenu {
         let menu = NSMenu()
-        menu.autoenablesItems = false  // keep header lines in their own colour instead of greyed out
-        for entry in entries {
-            menu.addItem(item(entry, target: target, action: action))
-        }
+        fill(menu, entries, target: target, action: action, tabAction: tabAction)
         return menu
+    }
+
+    /// Adds the entries to `menu`. Consecutive `tab=` entries become one segmented control, so
+    /// switching tabs does not close the menu (a click on a plain item always would).
+    static func fill(_ menu: NSMenu, _ entries: [MenuEntry], target: AnyObject, action: Selector,
+                     tabAction: Selector? = nil) {
+        menu.autoenablesItems = false  // keep header lines in their own colour instead of greyed out
+        var index = 0
+        while index < entries.count {
+            if let tabAction, entries[index].params["tab"] != nil {
+                var tabs: [MenuEntry] = []
+                while index < entries.count, entries[index].params["tab"] != nil {
+                    tabs.append(entries[index])
+                    index += 1
+                }
+                menu.addItem(tabItem(tabs, target: target, action: tabAction))
+                continue
+            }
+            menu.addItem(item(entries[index], target: target, action: action))
+            index += 1
+        }
+    }
+
+    static func tabItem(_ tabs: [MenuEntry], target: AnyObject, action: Selector) -> NSMenuItem {
+        let control = TabControl(labels: tabs.map(\.text), trackingMode: .selectOne, target: target, action: action)
+        control.names = tabs.map { $0.params["tab"] ?? "" }
+        control.selectedSegment = tabs.firstIndex { $0.params["checked"] == "true" } ?? 0
+        control.segmentDistribution = .fillEqually
+        control.controlSize = .regular
+        control.sizeToFit()
+        let width = max(control.frame.width + 28, 300)
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: width, height: control.frame.height + 10))
+        control.frame = NSRect(x: 14, y: 5, width: width - 28, height: control.frame.height)
+        control.autoresizingMask = [.width]
+        view.autoresizingMask = [.width]
+        view.addSubview(control)
+        let item = NSMenuItem()
+        item.view = view
+        return item
     }
 
     static func item(_ entry: MenuEntry, target: AnyObject, action: Selector) -> NSMenuItem {

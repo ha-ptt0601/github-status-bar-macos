@@ -50,12 +50,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     }
 
     private func apply(_ parsed: ParsedMenu) {
+        let menu = NSMenu()
+        menu.delegate = self
+        fill(menu, parsed)
+        statusItem.menu = menu
+    }
+
+    /// Sets the menu bar title and (re)fills `menu`, which may be open.
+    private func fill(_ menu: NSMenu, _ parsed: ParsedMenu) {
         if let button = statusItem.button {
             button.image = MenuBuilder.image(parsed.title, height: 18)
             button.imagePosition = .imageLeft
             button.title = parsed.title.text.isEmpty ? "" : " " + parsed.title.text
         }
-        let menu = MenuBuilder.menu(parsed.items, target: self, action: #selector(runEntry(_:)))
+        menu.removeAllItems()
+        MenuBuilder.fill(menu, parsed.items, target: self, action: #selector(runEntry(_:)),
+                         tabAction: #selector(switchTab(_:)))
         menu.addItem(NSMenuItem.separator())
         let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem(_:)), keyEquivalent: "")
         login.target = self
@@ -63,8 +73,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         menu.addItem(login)
         menu.addItem(NSMenuItem(title: "Quit GitHubBar", action: #selector(NSApplication.terminate(_:)),
                                 keyEquivalent: "q"))
-        menu.delegate = self
-        statusItem.menu = menu
+    }
+
+    /// Switches the tab inside the open menu: saves it with `chip view`, then refills from chip's cache.
+    @objc func switchTab(_ sender: TabControl) {
+        guard sender.selectedSegment >= 0, sender.selectedSegment < sender.names.count,
+              let menu = statusItem.menu else { return }
+        let name = sender.names[sender.selectedSegment]
+        queue.async { [weak self] in
+            guard let self else { return }
+            _ = Self.run(self.chip, ["view", name])
+            let parsed = MenuParser.parse(Self.run(self.chip, ["swiftbar", "--deliver"]))
+            parsed.notifications.forEach(Self.post)
+            DispatchQueue.main.async {
+                self.pending = nil
+                self.fill(menu, parsed)
+            }
+        }
     }
 
     func menuWillOpen(_ menu: NSMenu) { menuIsOpen = true }
