@@ -291,11 +291,14 @@ def cmd_run(args, runner) -> int:
         _error(f"PR {args.label} is not in the list")
         return 1
     try:
-        path = find_clone(row["repo"]) or clone_repo(row["repo"])
+        clone = find_clone(row["repo"]) or clone_repo(row["repo"])
         extra = {}
         if args.project:
-            skill, path, extra = _project_run(row, path)
-        record = runs.start(row, skill, cfg, path, _runs_path(), address=args.address, extra=extra)
+            skill, extra = _project_skill(clone), {"auto": True}
+        worktree = project.checkout(clone, row, store.worktree_root())
+        extra.update(clone=clone, worktree=worktree)
+        record = runs.start(row, project.in_worktree(skill), cfg, worktree, _runs_path(), address=args.address,
+                            extra=extra)
     except (repos.CloneError, runs.RunError, project.WorktreeError) as exc:
         notify.send([f"Could not start review for {args.label}: {exc}"])
         _error(str(exc))
@@ -305,14 +308,12 @@ def cmd_run(args, runner) -> int:
     return 0
 
 
-def _project_run(row: dict, clone: str):
-    """The repo's review skill, run on the PR checked out in its own worktree; or the built-in review."""
+def _project_skill(clone: str) -> dict:
+    """The repo's own review skill, or the built-in review when it has none."""
     name = project.find_review_skill(clone)
     if name is None:
-        return config.DEFAULT_SKILL, clone, {"auto": True}
-    worktree = project.checkout(clone, row, store.worktree_root())
-    skill = {"name": project.skill_label(name), "prompt": project.prompt_template(name)}
-    return skill, worktree, {"auto": True, "clone": clone, "worktree": worktree}
+        return config.DEFAULT_SKILL
+    return {"name": project.skill_label(name), "prompt": project.prompt_template(name)}
 
 
 def _known_run(run_id: str) -> bool:
@@ -355,7 +356,9 @@ def cmd_forget(args) -> int:
         _error(f"no chip run {args.id}")
         return 2
     subprocess.run(["claude", "rm", args.id], capture_output=True, text=True)
-    del records[found[0]]
+    record = records.pop(found[0])
+    if record.get("worktree") and not any(r.get("worktree") == record["worktree"] for r in records.values()):
+        project.remove(record["clone"], record["worktree"], record["label"].rsplit("#", 1)[-1])
     runs.save(_runs_path(), records)
     return 0
 

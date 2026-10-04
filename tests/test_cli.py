@@ -334,7 +334,12 @@ class RunCliTest(RunCliBase):
         code, out, _ = self.start()
         self.assertEqual(code, 0)
         bg = next(c for c in self.calls if "--bg" in c)
-        self.assertEqual(bg[1], config.REVIEW_PROMPT.format(url="https://github.com/acme/api/pull/1"))
+        self.assertTrue(bg[1].startswith(config.REVIEW_PROMPT.format(url="https://github.com/acme/api/pull/1")))
+        self.assertIn("git worktree with pull request #274 checked out", bg[1])
+        worktree = str(Path(os.environ["CHIP_CACHE_DIR"]) / "worktrees" / "api-274")
+        self.assertIn(["git", "-C", "/src/acme/api", "worktree", "add", "--quiet", "--detach", worktree,
+                       "refs/chip/pr-274"], self.calls)
+        self.assertEqual(runs.load(self.runs_path())["api#274::Review"]["cwd"], worktree)
         self.assertTrue(any(c[0] == "osascript" for c in self.calls))
         self.assertIn("ab12cd34", out)
         self.assertIn("api#274::Review", runs.load(self.runs_path()))
@@ -364,9 +369,9 @@ class RunCliTest(RunCliBase):
         self.run_cli(["menu"], runner=fake_runner)
         code, _, _ = self.run_cli(["run", "api#274", "--project"])
         self.assertEqual(code, 0)
-        self.assertFalse(any(c[:1] == ["git"] for c in self.calls))
-        record = runs.load(self.runs_path())["api#274::Review"]
-        self.assertEqual((record["cwd"], record["auto"]), ("/src/acme/api", True))
+        record = runs.load(self.runs_path())["api#274::Review"]  # built-in review, still in the PR worktree
+        self.assertEqual((record["cwd"], record["clone"], record["auto"]),
+                         (str(Path(os.environ["CHIP_CACHE_DIR"]) / "worktrees" / "api-274"), "/src/acme/api", True))
 
     def test_run_unknown_label(self):
         self.run_cli(["menu"], runner=fake_runner)
@@ -388,6 +393,7 @@ class RunCliTest(RunCliBase):
         self.assertIn(["pbcopy"], self.calls)
         self.run_cli(["forget", "ab12cd34"])
         self.assertIn(["claude", "rm", "ab12cd34"], self.calls)
+        self.assertTrue(any(c[3:5] == ["worktree", "remove"] for c in self.calls))  # nothing else uses it
         self.assertEqual(runs.load(self.runs_path()), {})
 
     def test_attach_falls_back_to_resume_when_background_session_is_gone(self):
@@ -399,7 +405,7 @@ class RunCliTest(RunCliBase):
         self.run_cli(["attach", "ab12cd34"])
         script = next(c[2] for c in self.calls if c[0] == "osascript")
         self.assertIn("claude --resume ab12cd34-full", script)
-        self.assertIn("cd /src/acme/api", script)
+        self.assertIn(f"cd {Path(os.environ['CHIP_CACHE_DIR']) / 'worktrees' / 'api-274'}", script)
 
     def test_unknown_run_id(self):
         code, _, _ = self.run_cli(["stop", "zzzz"])

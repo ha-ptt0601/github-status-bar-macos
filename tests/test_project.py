@@ -46,7 +46,7 @@ class FindSkillTest(unittest.TestCase):
         self.assertEqual(project.known_skills({"acme/api", "acme/mailer-api"}, cache), {"acme/api": "review"})
 
     def test_prompt_is_filled_per_pr(self):
-        skill = {"name": project.skill_label("review"), "prompt": project.prompt_template("review")}
+        skill = project.in_worktree({"name": project.skill_label("review"), "prompt": project.prompt_template("review")})
         self.assertEqual(skill["name"], "/review (project)")
         text = config.fill_prompt(skill, ROW)
         self.assertTrue(text.startswith("/review https://github.com/acme/api/pull/2079\n"))

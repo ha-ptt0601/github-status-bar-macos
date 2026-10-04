@@ -1,7 +1,8 @@
-"""A repository's own review skill, and the per-PR git worktree it runs in.
+"""A repository's own review skill, and the per-PR git worktree every chip run happens in.
 
-Project review skills (e.g. `.claude/skills/review`) review the *checked-out branch*, so chip checks the
-PR out in its own worktree under ~/.cache/chip/worktrees/ instead of touching the user's clone.
+Every run (configured skill, the repo's own skill, or the built-in review) gets the PR checked out in its own
+worktree under ~/.cache/chip/worktrees/, so Claude reads the PR's code without touching the user's clone.
+Repo skills such as `.claude/skills/review` review the checked-out branch, which this makes the PR.
 """
 from __future__ import annotations
 
@@ -11,10 +12,10 @@ from typing import Dict, Iterable, Optional
 
 from chip import repos
 
-PROMPT = (
-    "/{skill} {{url}}\n\n"
-    "This directory is a git worktree with pull request #{{number}} checked out at HEAD. Its base branch is "
-    "origin/{{base}}: compare against it (git diff origin/{{base}}...HEAD), not against main."
+# Appended to every run's prompt template ({number} and {base} are filled per PR).
+NOTE = (
+    "\n\nThis directory is a git worktree with pull request #{number} checked out at HEAD. Its base branch is "
+    "origin/{base}: compare against it (git diff origin/{base}...HEAD), not against main."
 )
 
 
@@ -52,7 +53,12 @@ def skill_label(skill: str) -> str:
 
 def prompt_template(skill: str) -> str:
     """The run prompt for a project skill; `{url}`, `{number}` and `{base}` are filled per PR."""
-    return PROMPT.format(skill=skill)
+    return f"/{skill} {{url}}"
+
+
+def in_worktree(skill: dict) -> dict:
+    """The skill with the worktree note added to its prompt."""
+    return dict(skill, prompt=skill["prompt"] + NOTE)
 
 
 def worktree_path(row: dict, root) -> Path:
