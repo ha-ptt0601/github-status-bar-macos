@@ -112,6 +112,7 @@ class InstallTest(unittest.TestCase):
         (self.plugin_dir / "chip.1m.sh.bak").write_text("keep")
         self.install()
         self.assertEqual(sorted(p.name for p in self.plugin_dir.iterdir()), ["chip.1m.sh.bak", "weather.5m.sh"])
+        self.assertTrue(any("brew uninstall --cask swiftbar" in line for line in self.out))
 
     def test_second_install_is_idempotent(self):
         self.install()

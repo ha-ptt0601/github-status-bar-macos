@@ -106,12 +106,16 @@ def _swiftbar_folders(runner, home: Path) -> List[Path]:
 
 def _remove_old_plugins(runner, home: Path, out) -> None:
     """Remove the SwiftBar plugins earlier chip versions wrote (only files carrying chip's marker)."""
+    removed = False
     for folder in _swiftbar_folders(runner, home):
         for name in OLD_PLUGIN_NAMES:
             plugin = folder / name
             if plugin.is_file() and MARKER in plugin.read_text():
                 plugin.unlink()
+                removed = True
                 out(f"rm    {plugin} (GitHubBar replaces the SwiftBar plugin)")
+    if removed:
+        out("note  chip no longer needs SwiftBar; if nothing else uses it: brew uninstall --cask swiftbar")
 
 
 def _make_icon(repo: Path, resources: Path, runner) -> None:
