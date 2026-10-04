@@ -149,6 +149,9 @@ A review runs in a local clone of the PR's repo, so chip needs to find one:
 1. **Remembered:** every clone chip has found is stored in `~/.cache/chip/repos.json` and reused.
 2. **Your folders:** otherwise it scans `work_roots` (3 levels deep) for a git repo whose `origin` is that GitHub repo. With `work_roots` empty, it scans the usual code folders that exist on your Mac, so most people need no setup. `chip install` prints the folders it will use.
 3. **Its own clone:** if none is found, it clones the repo with `gh repo clone` into `clone_root` (`~/.cache/chip/repos/<repo>` by default). Nothing is created in your home or code folders.
+   - It is a partial clone (`--filter=blob:none`): history without file contents, fetched on demand, so even big repos clone quickly.
+   - You get a "Cloning <repo>…" notification first, and a clear one if it fails (no access: check `gh auth status`).
+   - A fresh clone has no `.env`, `vendor`, `node_modules` or `.claude/settings.local.json`, so tools that need them (e.g. Laravel Boost over MCP) do not run; chip tells you so. The review itself still has the code, the repo's committed skills, agents and `CLAUDE.md`. To get those tools, clone the repo into your code folder (chip uses it from then on) or set it up in chip's clone. chip never runs `composer install` or creates `.env` itself.
 
 Each PR is reviewed in a worktree of that clone, in `~/.cache/chip/worktrees/`. If you keep your code somewhere unusual, set `"work_roots": ["~/my/code"]`.
 

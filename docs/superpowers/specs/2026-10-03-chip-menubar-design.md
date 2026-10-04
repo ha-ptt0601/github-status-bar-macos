@@ -317,3 +317,4 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 - `--project` picks the repo's own skill (`/<name> {url}`) or the built-in review; both get the note.
 - `chip forget` removes the worktree when no other record uses it; `runs.clean_worktrees` removes it when the PR is merged or closed. Only Claude Code is supported as the agent.
 - `project.prepare` runs after every checkout: copies `.claude/settings.local.json` from the clone (MCP enablement, permissions) and symlinks `worktree_links` (default `.env`, `vendor`, `node_modules`) when the clone has them and the worktree does not.
+- First review of an unknown repo (`cli._first_clone`): notification "Cloning <repo>…", `gh repo clone <slug> <dir> -- --filter=blob:none`, a clear error on failure, and a notification listing what the fresh clone lacks (local settings, `worktree_links`).
