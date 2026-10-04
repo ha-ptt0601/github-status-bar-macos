@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         statusItem.button?.title = "…"
         // chip queues notifications for us instead of using osascript; `--deliver` hands them over.
         setenv("GITHUBBAR_NOTIFY", "1", 1)
+        Self.restorePath()
         MenuBuilder.keepOpenHandler = { [weak self] view in self?.keepOpen(view) }
         SearchFieldView.onChange = { [weak self] text in
             MenuBuilder.query = text
@@ -254,6 +255,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 DispatchQueue.main.async { self?.refresh() }
             }
         }
+    }
+
+    /// launchd starts login items with PATH=/usr/bin:/bin:/usr/sbin:/sbin and ignores LSEnvironment's PATH,
+    /// so gh, git and claude would not be found. Put the PATH `chip install` wrote back in front.
+    static func restorePath() {
+        let env = Bundle.main.object(forInfoDictionaryKey: "LSEnvironment") as? [String: String]
+        let current = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        let wanted = (env?["PATH"] ?? "/opt/homebrew/bin:/usr/local/bin").split(separator: ":").map(String.init)
+        var seen = Set<String>()
+        let merged = (wanted + current.split(separator: ":").map(String.init)).filter { seen.insert($0).inserted }
+        setenv("PATH", merged.joined(separator: ":"), 1)
     }
 
     /// Both tabs (switched in place) plus queued notifications.
