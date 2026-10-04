@@ -29,7 +29,7 @@
 
 ### Review requests tab (default)
 - **Every PR waiting for you**, from two searches: `review-requested:@me` and `reviewed-by:@me`. GitHub drops you from the requested reviewers once you review, so the second search is what keeps PRs that need a **re-review** visible.
-- **Grouped by project.** Every project is always visible, with up to 5 PRs each and the rest under `N more in <project> ›`, paged 12 at a time with nested `Next ›` submenus.
+- **Grouped by project, newest change first.** PRs waiting on you (re-reviews and new requests) come first, ordered by their latest change (opened or new commits), so a request that just arrived is at the top. Every project is always visible, with up to 5 PRs each and the rest under `N more in <project> ›`, paged 12 at a time with nested `Next ›` submenus.
 - **Status on every row:** 🟠 Re-review (new commits after your review, or you were re-requested) · 🟢 New · ⚪ Waiting on author / Commented. PRs older than 30 days go under **Older than 30 days**, and approved PRs and drafts under **Show approved & drafts**.
 - **PR submenu:**
   - the full title, status, author, age, size, base branch (flagged *stacked*), Jira key and conflict;
