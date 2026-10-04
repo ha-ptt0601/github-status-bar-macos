@@ -64,13 +64,13 @@ class RenderTest(unittest.TestCase):
         self.assertIn(f"sfimage=sparkle sfconfig={swiftbar.sf_config('#34C759')} tooltip=New font=Menlo size=12", pr)
         self.assertIn("--api#2001 | disabled=true", lines)
         self.assertIn("--New · by alice · opened 2 days ago | disabled=true", lines)
-        self.assertIn('--Run "Full review" | sfimage=play.fill keep=run bash=/p/chip.3m.sh terminal=false '
+        self.assertIn('--Run "Full review" | sfimage=play.fill keep=run busy="Starting review…" done="✓ Review started" bash=/p/chip.3m.sh terminal=false '
                       'param1=run param2=api#2001 param3=--skill param4=1 refresh=true', lines)
-        self.assertIn('--Run "Quick" | sfimage=play.fill keep=run bash=/p/chip.3m.sh terminal=false '
+        self.assertIn('--Run "Quick" | sfimage=play.fill keep=run busy="Starting review…" done="✓ Review started" bash=/p/chip.3m.sh terminal=false '
                       'param1=run param2=api#2001 param3=--skill param4=2 refresh=true', lines)
         self.assertIn("--Open on GitHub | href=https://github.com/acme/api/pull/2001 sfimage=arrow.up.right.square",
                       lines)
-        self.assertIn("--Copy link | sfimage=doc.on.doc bash=/p/chip.3m.sh terminal=false param1=copy param2=api#2001",
+        self.assertIn('--Copy link | sfimage=doc.on.doc keep=run done="✓ Copied" bash=/p/chip.3m.sh terminal=false param1=copy param2=api#2001',
                       lines)
 
     def test_projects_ordered_by_actionable_count(self):
@@ -116,8 +116,8 @@ class RenderTest(unittest.TestCase):
                       f"sfconfig={swiftbar.sf_config('#0A84FF')}", lines)
         self.assertIn("--View session | sfimage=eye bash=/p/chip.3m.sh terminal=false param1=attach param2=ab12cd34",
                       lines)
-        self.assertIn("--Stop | sfimage=stop.circle bash=/p/chip.3m.sh terminal=false param1=stop param2=ab12cd34 "
-                      "refresh=true", lines)
+        self.assertIn('--Stop | sfimage=stop.circle keep=run busy=Stopping… done="✓ Stopped" bash=/p/chip.3m.sh terminal=false param1=stop param2=ab12cd34 '
+                      'refresh=true', lines)
         self.assertFalse(any(l.startswith('--Run "Full review"') for l in lines))
         self.assertTrue(any(l.startswith("--View running review") for l in lines))
 
@@ -237,8 +237,9 @@ class RoundMenuTest(unittest.TestCase):
         lines = self.lines("done", resolved=True)
         self.assertIn("--Last review · Full review · round 1 · 07:00 · resolved (new commits) | disabled=true",
                       [l.replace(datetime_hm(0), "07:00") for l in lines])
-        self.assertIn("--Continue review (round 2) | sfimage=play.fill keep=run bash=/p/chip.3m.sh terminal=false "
-                      "param1=run param2=api#2001 param3=--skill param4=1 refresh=true", lines)
+        self.assertIn('--Continue review (round 2) | sfimage=play.fill keep=run busy="Starting review…" '
+                      'done="✓ Review started" bash=/p/chip.3m.sh terminal=false '
+                      'param1=run param2=api#2001 param3=--skill param4=1 refresh=true', lines)
         self.assertIn("--Open last session | sfimage=eye bash=/p/chip.3m.sh terminal=false param1=attach "
                       "param2=ab12cd34", lines)
         self.assertFalse(any(l.startswith('--Run "Full review"') for l in lines))
@@ -319,10 +320,10 @@ class MineSectionTest(unittest.TestCase):
         lines = self.render([self.mine(2119, model.CHANGES, {"bob": "CHANGES_REQUESTED", "carol": "APPROVED"})])
         self.assertIn("--Changes requested · opened 2 days ago | disabled=true", lines)
         self.assertIn("--Reviews: bob ✗ · carol ✓ | disabled=true", lines)
-        self.assertIn('--Run "Address review" | sfimage=play.fill keep=run bash=/p/chip.3m.sh terminal=false param1=run '
+        self.assertIn('--Run "Address review" | sfimage=play.fill keep=run busy="Starting review…" done="✓ Review started" bash=/p/chip.3m.sh terminal=false param1=run '
                       'param2=api#2119 param3=--skill param4=1 param5=--address refresh=true', lines)
-        self.assertIn("--Re-request review (bob) | sfimage=bell bash=/p/chip.3m.sh terminal=false param1=nudge "
-                      "param2=api#2119 refresh=true", lines)
+        self.assertIn('--Re-request review (bob) | sfimage=bell keep=run busy="Asking again…" done="✓ Review re-requested" bash=/p/chip.3m.sh terminal=false param1=nudge '
+                      'param2=api#2119 refresh=true', lines)
 
     def test_no_rerequest_when_everyone_approved(self):
         lines = self.render([self.mine(2118, model.READY, {"carol": "APPROVED"})])
@@ -396,7 +397,7 @@ class ReviewButtonsTest(unittest.TestCase):
     def test_no_skills_no_project_skill_gets_builtin_review(self):
         lines = swiftbar.render({"rows": assign_labels([row(1)]), "fetched_at": 0}, {}, {},
                                 dict(CFG, skills=[]), PLUGIN, "0.1.0", now=0)
-        self.assertEqual(self.buttons(lines), ['--Run "Review" | sfimage=play.fill keep=run bash=/p/chip.3m.sh terminal=false '
+        self.assertEqual(self.buttons(lines), ['--Run "Review" | sfimage=play.fill keep=run busy="Starting review…" done="✓ Review started" bash=/p/chip.3m.sh terminal=false '
                                                'param1=run param2=api#2001 param3=--project refresh=true'])
 
     def test_project_skill_is_added_next_to_configured_skills(self):

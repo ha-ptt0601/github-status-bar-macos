@@ -172,7 +172,7 @@ def _round_lines(record: dict, view: dict, d: int, label: str, ctx: dict, run_ar
     state = f"resolved ({record['resolved_by']})" if record.get("resolved_at") else view["kind"]
     return [
         item(f"{head} · {when} · {state}", d, disabled="true"),
-        item(f"Continue review (round {number + 1})", d, sfimage="play.fill", keep="run",
+        item(f"Continue review (round {number + 1})", d, sfimage="play.fill", keep="run", busy="Starting review…", done="✓ Review started",
              **action(ctx["plugin"], "run", label, *run_args)),
         item("Open last session", d, sfimage="eye", **action(ctx["plugin"], "attach", record["id"], refresh=False)),
     ]
@@ -220,17 +220,18 @@ def mine_lines(r: dict, depth: int, ctx: dict) -> List[str]:
             continue
         run = my_runs.get(skill["name"])
         if run is None:
-            lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill", keep="run",
+            lines.append(item(f'Run "{skill["name"]}"', d, sfimage="play.fill", keep="run", busy="Starting review…", done="✓ Review started",
                               **action(ctx["plugin"], "run", r["label"], "--skill", i, "--address")))
         else:
             lines.extend(_round_lines(run[0], run[1], d, r["label"], ctx, ("--skill", i, "--address")))
     pending = [login for login, state in r["reviewers"].items() if state != "APPROVED"]
     if pending:
-        lines.append(item(f"Re-request review ({', '.join(pending)})", d, sfimage="bell",
+        lines.append(item(f"Re-request review ({', '.join(pending)})", d, sfimage="bell", keep="run",
+                          busy="Asking again…", done="✓ Review re-requested",
                           **action(ctx["plugin"], "nudge", r["label"])))
     lines.append(separator(d))
     lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
-    lines.append(item("Copy link", d, sfimage="doc.on.doc", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
+    lines.append(item("Copy link", d, sfimage="doc.on.doc", keep="run", done="✓ Copied", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
     return lines
 
 
@@ -265,14 +266,14 @@ def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
         if run is None and run_args == ("--project",):
             run = next((v for v in my_runs.values() if v[0].get("auto")), None)
         if run is None:
-            lines.append(item(f'Run "{name}"', d, sfimage="play.fill", keep="run",
+            lines.append(item(f'Run "{name}"', d, sfimage="play.fill", keep="run", busy="Starting review…", done="✓ Review started",
                               **action(ctx["plugin"], "run", r["label"], *run_args)))
             continue
         record, view = run
         lines.extend(_round_lines(record, view, d, r["label"], ctx, run_args))
     lines.append(separator(d))
     lines.append(item("Open on GitHub", d, href=r["url"], sfimage="arrow.up.right.square"))
-    lines.append(item("Copy link", d, sfimage="doc.on.doc", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
+    lines.append(item("Copy link", d, sfimage="doc.on.doc", keep="run", done="✓ Copied", **action(ctx["plugin"], "copy", r["label"], refresh=False)))
     return lines
 
 
@@ -373,8 +374,8 @@ def run_lines(records: Dict[str, dict], views: Dict[str, dict], ctx: dict) -> Li
         if view["kind"] != "gone":
             lines.append(item("View session", 1, sfimage="eye", **action(ctx["plugin"], "attach", rec["id"], refresh=False)))
         if view["kind"] in ("running", "needs_you"):
-            lines.append(item("Stop", 1, sfimage="stop.circle", **action(ctx["plugin"], "stop", rec["id"])))
-        lines.append(item("Remove", 1, sfimage="trash", **action(ctx["plugin"], "forget", rec["id"])))
+            lines.append(item("Stop", 1, sfimage="stop.circle", keep="run", busy="Stopping…", done="✓ Stopped", **action(ctx["plugin"], "stop", rec["id"])))
+        lines.append(item("Remove", 1, sfimage="trash", keep="run", busy="Removing…", done="✓ Removed", **action(ctx["plugin"], "forget", rec["id"])))
         lines.append(item("Open on GitHub", 1, href=rec["url"], sfimage="arrow.up.right.square"))
     return lines
 
@@ -453,7 +454,7 @@ def recent_lines(plugin: str, history: List[dict], now: float) -> List[str]:
     lines = [item("Recent notifications", 0, sfimage="bell")]
     for event in history:
         lines.append(item(f"{_when(event.get('at', now), now)}  {event['text']}", 1, **event_params(plugin, event)))
-    lines += [separator(1), item("Clear", 1, sfimage="trash", **action(plugin, "notifications", "--clear"))]
+    lines += [separator(1), item("Clear", 1, sfimage="trash", keep="run", done="✓ Cleared", **action(plugin, "notifications", "--clear"))]
     return lines
 
 
