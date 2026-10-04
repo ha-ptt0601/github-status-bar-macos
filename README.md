@@ -91,14 +91,13 @@ chip has no login of its own: every request goes through `gh` with **your** toke
 - Several accounts: `gh auth login` adds another one; `gh auth switch` changes the active one. GitHubBar follows the active github.com account, at the next refresh or **Refresh now**. Note that this also switches the account for every other `gh` command on the machine.
 - Organizations with SAML SSO: authorize the `gh` token for the organization (GitHub → Settings → Applications → GitHub CLI, or follow the link `gh` prints). Otherwise that organization's PRs do not appear.
 - Only github.com is supported, not GitHub Enterprise Server.
-- Updates come from this private repository's releases, so your account needs access to it.
+- Updates come from this repository's GitHub releases, read with your `gh` login.
 
 ### Get it
 
-The repository is private. Ask for access, then:
 
 ```sh
-git clone git@github.com:ha-ptt0601/github-status-bar-macos.git ~/work/github-status-bar-macos
+git clone https://github.com/ha-ptt0601/github-status-bar-macos.git ~/work/github-status-bar-macos
 ~/work/github-status-bar-macos/bin/chip install
 ```
 
@@ -234,3 +233,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 - GitHubBar (`app/`, Swift, AppKit): `swift build -c release --package-path app`. Parser checks: `swift run --package-path app GitHubBarChecks [menu.txt]`. Command Line Tools ship no XCTest, so the checks are a plain executable.
 - After editing `skill/SKILL.md` or the app, run `chip install` to re-render the skill and rebuild the app.
 - Release from `main`: `scripts/release.sh X.Y.Z`. It bumps the version, runs the tests, tags and creates a GitHub release.
+
+## License
+
+[MIT](LICENSE) © ha-ptt0601
