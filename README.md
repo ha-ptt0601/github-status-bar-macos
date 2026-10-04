@@ -39,6 +39,10 @@ Edit `~/.config/chip/config.json` (`chip config open`), then check it with `chip
 
 Each skill becomes a `Run "<name>"` button on every PR. Placeholders: `{url} {repo} {number} {label} {title}`. Reviews run in a background Claude Code session (`claude --bg`) inside the PR's local clone (found under `work_root`, or cloned into `work_root/.chip-repos/`).
 
+## Review rounds
+
+Each Run is a **round** in a background Claude Code session. While it runs the PR row shows 🔵 Reviewing; when it finishes, ✅ Reviewed, and it is listed under **Reviews by chip**. Open the session, then act on GitHub (post your review) or push fixes. As soon as GitHub shows your review or newer commits after the round started, the round is **resolved**: the row goes back to its GitHub status and the PR leaves "Reviews by chip". The PR still remembers the session: its submenu shows `Last chip review · round N` with **Continue review (round N+1)**, which continues the same session and checks whether the previous findings were addressed, and **Open last session**.
+
 ## Updating
 
 The menu shows **Update available** when a newer release exists. Click it, or run `chip update`. Maintainers release with `scripts/release.sh X.Y.Z` from `main`.
