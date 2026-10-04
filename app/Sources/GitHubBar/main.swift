@@ -142,31 +142,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         queue.async { [weak self] in
             guard let self else { return }
             let (_, status) = Self.runWithStatus(bash, args)
-            if kind == "run" {
-                // The click came from a submenu: say how it went on that row, update the rows it changed in
-                // place, and apply the full new menu when it closes (never rebuild under an open submenu).
-                let parsed = MenuParser.parse(Self.run(self.chip, Self.render))
-                parsed.notifications.forEach(Self.post)
-                self.onMainDuringMenu {
+            if kind == "refresh" {
+                self.refillOpenMenu()
+                return
+            }
+            // Every other row sits in a submenu (a PR, Projects, Settings…): say how it went on that row,
+            // rebuild the rest of the menu from the new state now, and the open branch when it closes.
+            let parsed = MenuParser.parse(Self.run(self.chip, Self.render))
+            parsed.notifications.forEach(Self.post)
+            self.onMainDuringMenu {
+                if kind == "run" {
                     view.setBusy(false, text: status == 0 ? (view.entry.params["done"] ?? "✓ Done")
                                                           : "Failed: see the notification")
-                    if self.menuIsOpen {
-                        self.pending = parsed
-                        self.updateInPlace(parsed, from: view)
-                    } else {
-                        self.apply(parsed)
-                    }
                 }
-            } else if kind == "refresh" {
-                self.refillOpenMenu()
-            } else if kind == "radio" || kind == "setting" {
-                // A new status style redraws every row. The click came from an open submenu, and replacing
-                // items under an open submenu is unsafe, so close the menu, swap it and open it again.
-                self.refillOpenMenu(reopen: true)
-            } else {
-                let parsed = MenuParser.parse(Self.run(self.chip, Self.render))
-                parsed.notifications.forEach(Self.post)
-                DispatchQueue.main.async { if self.menuIsOpen { self.pending = parsed } else { self.apply(parsed) } }
+                if self.menuIsOpen {
+                    self.pending = parsed
+                    self.updateInPlace(parsed, from: view)
+                } else {
+                    self.apply(parsed)
+                }
             }
         }
     }
