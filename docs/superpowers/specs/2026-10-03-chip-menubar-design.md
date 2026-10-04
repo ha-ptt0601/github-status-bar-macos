@@ -318,3 +318,8 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 - `chip forget` removes the worktree when no other record uses it; `runs.clean_worktrees` removes it when the PR is merged or closed. Only Claude Code is supported as the agent.
 - `project.prepare` runs after every checkout: copies `.claude/settings.local.json` from the clone (MCP enablement, permissions) and symlinks `worktree_links` (default `.env`, `vendor`, `node_modules`) when the clone has them and the worktree does not.
 - First review of an unknown repo (`cli._first_clone`): notification "Cloning <repo>…", `gh repo clone <slug> <dir> -- --filter=blob:none`, a clear error on failure, and a notification listing what the fresh clone lacks (local settings, `worktree_links`).
+
+## Faster updates and counts (v0.1.3)
+
+- `chip/watch.py`: each `chip swiftbar` (unless `--force`) calls `gh api -i notifications` with `If-Modified-Since`, at most every `X-Poll-Interval` (60 s). `304` → nothing; `200` with a PullRequest notification newer than the last seen (`review_requested`, `author`, `comment`, `mention`, `state_change`, `ci_activity`…) → `load_all(force=True)`. The first check only records. State: `~/.cache/chip/notifications.json`. Not available (non-200) → back off 5 min and use the 3-minute cache; available → the cache lasts 5 min.
+- Counts: icon `review to-do · ⚠mine to-do` + run badges, with a tooltip; tabs `to do / all`. Review to-do = `model.needs_review` (re-review, or new and younger than 30 days); mine to-do = `model.MINE_ACTION` (changes, CI failed, conflict, threads, ready).

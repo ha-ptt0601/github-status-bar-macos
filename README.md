@@ -48,7 +48,7 @@ Quit GitHubBar
 - **Tabs:** *Review requests* (default) and *My pull requests* sit in a tab bar at the top. Switching is instant and keeps the menu open; both tabs share one width, and the choice is remembered.
 - **Refresh now** keeps the menu open: it shows a spinner and *Refreshing…* while it fetches from GitHub, updates the list in place, then says *✓ Up to date* for two seconds.
 - **Projects ›** and **Settings › Status style** toggle their checkmarks without closing the menu, so you can hide several projects in a row.
-- GitHubBar refreshes on its own every minute (GitHub data is cached for 3 minutes), so new PRs usually show up within a few minutes along with a notification.
+- **Updates within about a minute.** Every minute GitHubBar asks GitHub Notifications whether anything changed (`If-Modified-Since`; "nothing new" is a free `304`). A new review request, a review or comment on your PR, a mention, a merge or a CI result fetches everything at once, so the numbers and notifications follow within ~1 minute. Without such a change, the full list is still refreshed every 5 minutes (changes GitHub does not notify, such as a conflict on someone else's PR). If notifications are not available to your `gh` token, chip falls back to a full refresh every 3 minutes.
 
 ### Review requests tab (default)
 - **Every PR waiting for you**, from two searches: `review-requested:@me` and `reviewed-by:@me`. GitHub drops you from the requested reviewers once you review, so the second search is what keeps PRs that need a **re-review** visible.
