@@ -519,6 +519,21 @@ class BuildMenuTest(unittest.TestCase):
                                     now=2020, env=env, deliver=True)
         self.assertEqual(len(again.split("\n---\n")[0].splitlines()), 1)  # the outbox was drained
 
+    def test_new_pr_notification_fetches_before_the_cache_expires(self):
+        fetches = []
+        runner = lambda search, after: fetches.append(search) or self.fetch_runner(search, after)
+        swiftbar.build_menu(PLUGIN, fetch_runner=runner, runner=self.runner, now=1000)
+        count = len(fetches)
+        swiftbar.build_menu(PLUGIN, fetch_runner=runner, runner=self.runner, now=1010)
+        self.assertEqual(len(fetches), count)  # cache still fresh, nothing new
+        orig = swiftbar.watch.check
+        swiftbar.watch.check = lambda path, runner, now: True
+        try:
+            swiftbar.build_menu(PLUGIN, fetch_runner=runner, runner=self.runner, now=1020)
+        finally:
+            swiftbar.watch.check = orig
+        self.assertGreater(len(fetches), count)
+
     def test_round_resolves_when_commits_land_after_it(self):
         Path(self.tmp.name, "runs.json").write_text(json.dumps({"api#1::Full review": {
             "id": "ab", "label": "api#1", "skill": "Full review", "url": "u", "started_at": 0, "done_at": 10}}))

@@ -11,6 +11,8 @@ from typing import List, Optional, Tuple
 from chip import fetch, menu, model
 
 CACHE_TTL_SECONDS = 180
+# With GitHub Notifications watched (chip/watch.py), changes trigger a fetch, so the full refresh can be rarer.
+WATCHED_TTL_SECONDS = 300
 
 
 def cache_dir() -> Path:
@@ -62,12 +64,12 @@ def cached_all() -> Optional[dict]:
         return None
 
 
-def load_all(runner, force: bool = False) -> Tuple[Optional[dict], Optional[str]]:
-    """All rows, approved and drafts included. Reuses a fetch younger than CACHE_TTL_SECONDS
+def load_all(runner, force: bool = False, ttl: int = CACHE_TTL_SECONDS) -> Tuple[Optional[dict], Optional[str]]:
+    """All rows, approved and drafts included. Reuses a fetch younger than `ttl` seconds
     unless `force`. On a fetch error, returns the stale cache (or None) and the error text."""
     cached = cached_all()
     fresh = (cached and cached.get("all_rows") and "mine" in cached
-             and time.time() - cached.get("fetched_at", 0) < CACHE_TTL_SECONDS)
+             and time.time() - cached.get("fetched_at", 0) < ttl)
     if not force and fresh:
         return cached, None
     try:

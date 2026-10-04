@@ -11,7 +11,7 @@ from pathlib import Path
 import os
 from typing import Dict, List, Optional
 
-from chip import __version__, config, fetch, model, notify, project, runs, store, updates
+from chip import __version__, config, fetch, model, notify, project, runs, store, updates, watch
 
 GREY = "#8E8E93"
 PAGE = 12
@@ -578,7 +578,10 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     env = os.environ if env is None else env
     now = time.time() if now is None else now
     cfg = config.load()
-    inbox_all, error = store.load_all(fetch_runner or fetch.run_gh_graphql, force)
+    # A new PR notification fetches now; otherwise the inbox cache is reused (longer while notifications work).
+    changed = None if force else watch.check(store.cache_dir() / "notifications.json", runner, now)
+    ttl = store.WATCHED_TTL_SECONDS if changed is not None else store.CACHE_TTL_SECONDS
+    inbox_all, error = store.load_all(fetch_runner or fetch.run_gh_graphql, force or bool(changed), ttl=ttl)
     runs_path = store.cache_dir() / "runs.json"
     records = runs.load(runs_path)
     agents = runs.fetch_agents(runner) if records else {}
