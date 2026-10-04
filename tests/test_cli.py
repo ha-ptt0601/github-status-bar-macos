@@ -361,3 +361,28 @@ class RunCliTest(CliCase):
     def test_unknown_run_id(self):
         code, _, _ = self.run_cli(["stop", "zzzz"])
         self.assertEqual(code, 2)
+
+
+class ConfigSetCliTest(CliCase):
+    def setUp(self):
+        super().setUp()
+        self.cfg_old = os.environ["CHIP_CONFIG"]
+        os.environ["CHIP_CONFIG"] = str(Path(self.tmp.name) / "config.json")
+
+    def tearDown(self):
+        os.environ["CHIP_CONFIG"] = self.cfg_old
+        super().tearDown()
+
+    def test_set_status_style(self):
+        code, _, _ = self.run_cli(["config", "set", "status_style", "emoji"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(Path(os.environ["CHIP_CONFIG"]).read_text())["status_style"], "emoji")
+
+    def test_set_rejects_bad_value(self):
+        code, _, err = self.run_cli(["config", "set", "status_style", "stars"])
+        self.assertEqual(code, 2)
+        self.assertIn("status_style must be one of", err)
+
+    def test_set_needs_key_and_value(self):
+        code, _, err = self.run_cli(["config", "set", "status_style"])
+        self.assertEqual(code, 2)
