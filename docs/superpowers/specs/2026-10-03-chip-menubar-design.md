@@ -114,6 +114,20 @@ The Settings submenu lists the three styles with a checkmark on the current one;
 | any other value | shown as the raw state, in grey |
 | not listed | gone; only Remove is offered |
 
+## Review rounds
+
+A chip review of a PR is a **round**. The record for `<label>::<skill>` keeps the session (`id`, `session_id`), the current `round`, and a `history` of earlier rounds.
+
+- **Round 1** starts a new background session (above).
+- **Resolved.** A finished round counts as resolved, and the PR row and "Reviews by chip" stop showing it, once GitHub shows either of these after the round started:
+  - the user's own review (approve, request changes or comment), shown as `resolved_by: "you reviewed on GitHub"`;
+  - a newer commit (the author's, or the user's own fix), shown as `resolved_by: "new commits"`.
+
+  Rows carry `my_review_at` and `last_commit_at` for this check. The row then shows its GitHub status again, for example Waiting, then Re-review after the author pushes.
+- **The PR remembers its session.** The PR submenu always shows `Last chip review · round N · HH:MM · <running | needs you | done | resolved (…)>` with **Open last session**. That runs `claude attach <id>` while the background session exists, and otherwise `claude --resume <session_id>` in the repo folder.
+- **Round N+1 continues the same session.** The button is **Continue review (round N+1)**. It runs `claude stop <id>`, then `claude "<skill prompt> — round N+1: …" --resume <session_id> --bg` with **no other flags**: the session keeps its saved name, permission mode and disallowed tools (verified; extra flags would fork a copy). The note asks the skill to check whether each finding of the previous round was addressed, then review only what changed.
+- **Remove** deletes the record and its session (history included).
+
 ## Notifications (English)
 
 On each `chip swiftbar` run, the current state is diffed against `notify.json`, then the snapshot is written:
