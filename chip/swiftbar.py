@@ -33,6 +33,9 @@ DOT = {model.REREVIEW: "🟠", model.NEW: "🟢", model.WAITING: "⚪", model.CO
 EMOJI = {model.REREVIEW: "🔁", model.NEW: "🆕", model.WAITING: "⏳", model.COMMENTED: "💬", model.APPROVED: "✅"}
 LEGEND = "🔁 Re-review · 🆕 New · 💬 Commented · ⏳ Waiting on author"
 RUN_DOT = {"running": "🔵", "needs_you": "🟡", "done": "🟢", "gone": "⚪", "other": "⚪"}
+# A PR row with a live or finished chip review shows that instead of its review status.
+RUN_SHORT = {"running": "Reviewing", "needs_you": "Needs you", "done": "Reviewed"}
+RUN_ROW_DOT = {"running": "🔵", "needs_you": "🟡", "done": "✅"}
 STYLES = (("dots", "Colored dots + label"), ("emoji", "Emoji"), ("symbols", "Symbols"))
 RUN_SYMBOL = {
     "running": ("circle.lefthalf.filled", "#0A84FF"),
@@ -116,22 +119,35 @@ def _cut(text: str, width: int) -> str:
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
-def _row(r: dict, depth: int, style: str) -> str:
-    """The top-level PR line in the chosen status style; the tooltip always names the status."""
+def _active_run(r: dict, ctx: dict) -> Optional[tuple]:
+    """The latest (record, view) of a chip review on this PR that is running, waiting or done."""
+    runs = [rv for rv in ctx["runs_by_label"].get(r["label"], {}).values() if rv[1]["kind"] in RUN_SHORT]
+    return max(runs, key=lambda rv: rv[0].get("started_at", 0)) if runs else None
+
+
+def _row(r: dict, depth: int, style: str, run: Optional[tuple] = None) -> str:
+    """The top-level PR line in the chosen status style; the tooltip names the status (or the review)."""
     name, sf_name, color = STATUS[r["status"]]
+    dot, short, mark, tooltip = DOT[r["status"]], SHORT[r["status"]], EMOJI[r["status"]], name
+    if run:
+        record, view = run
+        dot = mark = RUN_ROW_DOT[view["kind"]]
+        short = RUN_SHORT[view["kind"]]
+        sf_name, color = RUN_SYMBOL[view["kind"]]
+        tooltip = f"{record['skill']} · {view['text']}"
     number = f"#{r['number']}"
     if style == "dots":
-        text = f"{DOT[r['status']]} {number:<7}{SHORT[r['status']]:<11}{_cut(r['title'], 38):<39} {r['author']}"
-        return item(text, depth, tooltip=name, **ROW_FONT)
+        text = f"{dot} {number:<7}{short:<11}{_cut(r['title'], 38):<39} {r['author']}"
+        return item(text, depth, tooltip=tooltip, **ROW_FONT)
     if style == "emoji":
-        text = f"{EMOJI[r['status']]} {number:<7}{_cut(r['title'], 44):<45} {r['author']}"
-        return item(text, depth, tooltip=name, **ROW_FONT)
+        text = f"{mark} {number:<7}{_cut(r['title'], 44):<45} {r['author']}"
+        return item(text, depth, tooltip=tooltip, **ROW_FONT)
     text = f"{number:<7}{_cut(r['title'], 44):<45} {r['author']}"
-    return item(text, depth, **symbol(sf_name, color), tooltip=name, **ROW_FONT)
+    return item(text, depth, **symbol(sf_name, color), tooltip=tooltip, **ROW_FONT)
 
 
 def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
-    lines = [_row(r, depth, ctx["style"])]
+    lines = [_row(r, depth, ctx["style"], _active_run(r, ctx))]
     name = STATUS[r["status"]][0]
     d = depth + 1
     lines.append(item(r["label"], d, disabled="true"))
@@ -259,7 +275,9 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
     style = cfg.get("status_style", "dots")
     ctx = {"plugin": plugin, "skills": cfg["skills"], "runs_by_label": runs_by_label, "style": style}
 
-    title = "!" if error else (str(count) if count else "")
+    active = [view["kind"] for view in views.values()]
+    badges = [f"{dot}{active.count(kind)}" for kind, dot in (("running", "🔵"), ("needs_you", "🟡")) if kind in active]
+    title = "!" if error else " ".join(([str(count)] if count else []) + badges)
     lines = [item(title, 0, templateImage=icon_b64()), "---"]
     if newer:
         lines.append(item(f"Update available: v{newer} — Update now", 0, **symbol("arrow.up.circle.fill", "#FF9500"),

@@ -183,6 +183,40 @@ class StatusStyleTest(unittest.TestCase):
                       "param3=status_style param4=symbols refresh=true", lines)
 
 
+class RunOnRowTest(unittest.TestCase):
+    KEY = "api#2001::Full review"
+
+    def lines(self, kind, text, style="dots", started=0):
+        records = {self.KEY: {"id": "ab", "label": "api#2001", "skill": "Full review", "url": "u", "started_at": started}}
+        views = {self.KEY: {"kind": kind, "text": text}}
+        return render([row(1), row(2)], records, views, style=style)
+
+    def pr_line(self, lines, number):
+        return next(l for l in lines if f"#{number}" in l.split(" | ")[0] and not l.startswith("-"))
+
+    def test_running_review_replaces_status_on_the_row(self):
+        line = self.pr_line(self.lines("running", "running 3m"), 2001)
+        self.assertTrue(line.startswith("🔵 #2001  Reviewing  feat: thing 1"))
+        self.assertIn('tooltip="Full review · running 3m"', line)
+        self.assertTrue(self.pr_line(self.lines("running", "running 3m"), 2002).startswith("🟢 #2002  New"))
+
+    def test_needs_you_and_done(self):
+        self.assertTrue(self.pr_line(self.lines("needs_you", "needs you"), 2001).startswith("🟡 #2001  Needs you"))
+        self.assertTrue(self.pr_line(self.lines("done", "done 11:40"), 2001).startswith("✅ #2001  Reviewed"))
+
+    def test_gone_run_keeps_pr_status(self):
+        self.assertTrue(self.pr_line(self.lines("gone", "session gone"), 2001).startswith("🟢 #2001  New"))
+
+    def test_emoji_and_symbols_styles(self):
+        self.assertTrue(self.pr_line(self.lines("running", "running 3m", "emoji"), 2001).startswith("🔵 #2001  feat"))
+        self.assertIn("sfimage=circle.lefthalf.filled", self.pr_line(self.lines("running", "running 3m", "symbols"), 2001))
+
+    def test_title_counts_active_reviews(self):
+        self.assertTrue(self.lines("running", "running 3m")[0].startswith("2 🔵1 | templateImage="))
+        self.assertTrue(self.lines("needs_you", "needs you")[0].startswith("2 🟡1 | templateImage="))
+        self.assertTrue(self.lines("done", "done 11:40")[0].startswith("2 | templateImage="))
+
+
 class BuildMenuTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
