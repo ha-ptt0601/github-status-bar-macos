@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import (config, fetch, installer, mcp_server, menu, model, notify, project, render, repos, runs, store,
+from chip import (actions, config, fetch, installer, mcp_server, menu, model, notify, project, render, repos, runs, store,
                   terminal, tui, updates)
 from chip.selection import SelectionError, parse_selection
 
@@ -378,6 +378,27 @@ def cmd_forget(args) -> int:
     return 0
 
 
+def cmd_act(args, runner) -> int:
+    """Approve / request changes / comment on a PR to review; merge / close / ready / draft / comment on
+    your own. Asks in a dialog first, then refetches so every part of the menu shows the new state."""
+    row = _find_row(args.label)
+    if row is None:
+        _error(f"PR {args.label} is not in the list")
+        return 2
+    try:
+        done, message = actions.run(args.action, row)
+    except actions.ActionError as exc:
+        notify.send([f"Could not {args.action} {args.label}: {exc}"])
+        _error(str(exc))
+        return 1
+    if not done:  # cancelled in the dialog
+        return 0
+    store.load_all(runner, force=True)
+    notify.send([message])
+    print(message)
+    return 0
+
+
 def cmd_nudge(args) -> int:
     """Re-request review from the reviewers of one of the user's PRs who have not approved it."""
     row = _find_row(args.label)
@@ -512,6 +533,9 @@ def main(argv=None, runner=None) -> int:
     p_project.add_argument("action", choices=["toggle", "all"])
     p_project.add_argument("name", nargs="?")
     sub.add_parser("nudge", help="re-request review from reviewers who have not approved").add_argument("label")
+    p_act = sub.add_parser("act", help="approve | request-changes | comment a PR; merge | close | ready | draft yours")
+    p_act.add_argument("label")
+    p_act.add_argument("action", choices=sorted(actions.ACTIONS))
     for name in ("attach", "stop", "forget"):
         sub.add_parser(name, help=f"{name} a chip review by session id").add_argument("id")
     sub.add_parser("copy", help="copy a PR link").add_argument("label")
@@ -570,6 +594,8 @@ def main(argv=None, runner=None) -> int:
         return cmd_project(args)
     if args.cmd == "nudge":
         return cmd_nudge(args)
+    if args.cmd == "act":
+        return cmd_act(args, runner or fetch.run_gh_graphql)
     if args.cmd == "copy":
         return cmd_copy(args)
     if args.cmd == "config":
