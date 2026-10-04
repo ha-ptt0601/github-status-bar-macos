@@ -226,7 +226,7 @@ Anyone can run their own skill instead of, or next to, `/my-review-skill`. The c
 
 The `/chip` skill and the fzf picker use the same config: their review step uses the default skill's prompt instead of the hard-coded `/my-review-skill`.
 
-## Sharing with other people (private repo `ha-ptt0601/github-status-bar-macos`)
+## Sharing with other people (`ha-ptt0601/github-status-bar-macos`)
 
 Other people clone the repo anywhere and run one command. Nothing may assume `/Users/me` or `~/work/github-status-bar-macos`.
 
