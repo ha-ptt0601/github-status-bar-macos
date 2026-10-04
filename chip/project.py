@@ -48,7 +48,7 @@ def known_skills(slugs: Iterable[str], cache) -> Dict[str, str]:
 
 
 def skill_label(skill: str) -> str:
-    """How a project skill is named on buttons and in "Reviews by chip"."""
+    """How a project skill is named on buttons and in "Reviews by GitHubBar"."""
     return f"/{skill} (project)"
 
 

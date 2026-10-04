@@ -48,7 +48,7 @@ SHOPBOX-API · 6 PRs
   …
 Older than 30 days · 22 PRs  ▸                    ← one submenu, grouped by project inside
 ──────────────────────────────────────────────
-Reviews by chip
+Reviews by GitHubBar
   ◐ api#2069 · Full review · running 3m       ▸   View session · Stop
   ⚠︎ shopbox-api#261 · Full review · needs you  ▸   View session · Stop
   ✓ mailer-api#61 · Full review · done 11:40 ▸   View session · Remove
@@ -92,7 +92,7 @@ Copy link
 | `emoji` | `🔁 #2079  ABC-123 feat(mcp)…  alice` | 🔁 Re-review · 🆕 New · 💬 Commented · ⏳ Waiting, with a one-line legend above the list |
 | `symbols` | SF Symbol + `#2079 …` | tinted with `sfconfig`; SwiftBar 2.1.1 may still draw them monochrome |
 
-The Settings submenu lists the three styles with a checkmark on the current one; choosing one runs `chip config set status_style <style>` and refreshes. Runs under "Reviews by chip" use 🔵 running · 🟡 needs you · 🟢 done · ⚪ gone outside the `symbols` style.
+The Settings submenu lists the three styles with a checkmark on the current one; choosing one runs `chip config set status_style <style>` and refreshes. Runs under "Reviews by GitHubBar" use 🔵 running · 🟡 needs you · 🟢 done · ⚪ gone outside the `symbols` style.
 
 ## Running a review (`chip run <label> [--skill N]`)
 
@@ -119,14 +119,14 @@ The Settings submenu lists the three styles with a checkmark on the current one;
 A chip review of a PR is a **round**. The record for `<label>::<skill>` keeps the session (`id`, `session_id`), the current `round`, and a `history` of earlier rounds.
 
 - **Round 1** starts a new background session (above).
-- **Resolved.** A finished round counts as resolved, and the PR row and "Reviews by chip" stop showing it, once GitHub shows either of these after the round started:
+- **Resolved.** A finished round counts as resolved, and the PR row and "Reviews by GitHubBar" stop showing it, once GitHub shows either of these after the round started:
   - the user's own review (approve, request changes or comment), shown as `resolved_by: "you reviewed on GitHub"`;
   - a newer commit (the author's, or the user's own fix), shown as `resolved_by: "new commits"`.
 
   Rows carry `my_review_at` and `last_commit_at` for this check. The row then shows its GitHub status again, for example Waiting, then Re-review after the author pushes.
-- **The PR remembers its session.** The PR submenu always shows `Last chip review · round N · HH:MM · <running | needs you | done | resolved (…)>` with **Open last session**. That runs `claude attach <id>` while the background session exists, and otherwise `claude --resume <session_id>` in the repo folder.
+- **The PR remembers its session.** The PR submenu always shows `Last review · round N · HH:MM · <running | needs you | done | resolved (…)>` with **Open last session**. That runs `claude attach <id>` while the background session exists, and otherwise `claude --resume <session_id>` in the repo folder.
 - **Round N+1 continues the same session.** The button is **Continue review (round N+1)**. It runs `claude stop <id>`, then `claude "<skill prompt> — round N+1: …" --resume <session_id> --bg` with **no other flags**: the session keeps its saved name, permission mode and disallowed tools (verified; extra flags would fork a copy). The note asks the skill to check whether each finding of the previous round was addressed, then review only what changed.
-- **Merged or closed PRs** drop out of every list on the next fetch, because all searches use `is:open`. Any round whose PR is missing from a *successful* fetch is resolved as `PR merged or closed`, so it leaves "Reviews by chip". A failed fetch never resolves anything.
+- **Merged or closed PRs** drop out of every list on the next fetch, because all searches use `is:open`. Any round whose PR is missing from a *successful* fetch is resolved as `PR merged or closed`, so it leaves "Reviews by GitHubBar". A failed fetch never resolves anything.
 - **Remove** deletes the record and its session (history included).
 
 ## Tabs, search and project filter
@@ -185,7 +185,7 @@ On each `chip swiftbar` run, the current state is diffed against `notify.json`, 
 - **Re-review:** "Needs re-review: api#2094 — …", for a label whose status became `re-review`.
 - **Review done:** "Review finished: api#2069 (Full review)", for a run whose state became `done`.
 - **Needs you:** "Review needs you: api#2069 (Full review)", for a run whose state became `blocked`.
-- **Update:** "chip v0.4.0 is available", once per new version.
+- **Update:** "GitHubBar v0.4.0 is available", once per new version.
 
 The first run, with no snapshot yet, is silent. At most 3 notifications go out per refresh, plus "+N more".
 
@@ -218,7 +218,7 @@ Anyone can run their own skill instead of, or next to, `/my-review-skill`. The c
 ```
 
 - **`skills`:** each entry becomes one ▶ item in every PR's submenu, as `▶ <name>`. The first entry is the default. `prompt` is any text that Claude Code accepts as a first message, usually a slash command. It is filled from the placeholders `{url}`, `{repo}` (`owner/repo`), `{number}`, `{label}` and `{title}`. Unknown placeholders are an error that `chip config check` reports.
-- **Running a skill:** `chip run <label> [--skill <index>]` runs the chosen entry, and the session name becomes `chip · <label> · <skill name>`. One label can then have several runs, one per skill, each listed under "Reviews by chip" with its skill name. `runs.json` is keyed by `<label>::<skill name>`. Menu actions refer to a run by its short session id, because SwiftBar uses `|` to separate parameters.
+- **Running a skill:** `chip run <label> [--skill <index>]` runs the chosen entry, and the session name becomes `chip · <label> · <skill name>`. One label can then have several runs, one per skill, each listed under "Reviews by GitHubBar" with its skill name. `runs.json` is keyed by `<label>::<skill name>`. Menu actions refer to a run by its short session id, because SwiftBar uses `|` to separate parameters.
 - **`work_root`:** where `chip repo` scans for clones and where `.chip-repos/` lives. `CHIP_WORK_ROOT` still overrides it.
 - **`permission_mode` / `disallowed_tools`:** passed to `claude --bg` as is. Users who want a skill that fixes code can drop `Edit`/`Write` from the list, at their own risk.
 - **Bad JSON or a bad entry:** the menu shows one error line and falls back to the defaults, so it never goes blank.

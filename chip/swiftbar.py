@@ -160,9 +160,9 @@ def _row(r: dict, depth: int, style: str, run: Optional[tuple] = None) -> str:
 
 
 def _round_lines(record: dict, view: dict, d: int, label: str, ctx: dict, run_args: tuple) -> List[str]:
-    """`Last chip review · …` for one skill on one PR, then View / Continue / Open last session."""
+    """`Last review · …` for one skill on one PR, then View / Continue / Open last session."""
     number = record.get("round", 1)
-    head = f"Last chip review · {record['skill']} · round {number}"
+    head = f"Last review · {record['skill']} · round {number}"
     if view["kind"] in ("running", "needs_you") and not record.get("resolved_at"):
         lines = [item(f"{head} · {view['text']}", d, disabled="true")]
         text = "View running review" if view["kind"] == "running" else "Open session (needs you)"
@@ -361,7 +361,7 @@ def run_lines(records: Dict[str, dict], views: Dict[str, dict], ctx: dict) -> Li
     records = {key: rec for key, rec in records.items() if not rec.get("resolved_at")}
     if not records:
         return []
-    lines = ["---", item("Reviews by chip", 0, **HEADER)]
+    lines = ["---", item("Reviews by GitHubBar", 0, **HEADER)]
     for key, rec in sorted(records.items(), key=lambda kv: -kv[1].get("started_at", 0)):
         view = views[key]
         text = f"{rec['label']} · {rec['skill']} · {view['text']}"
@@ -466,8 +466,8 @@ def _settings(plugin: str, style: str, version: str) -> List[str]:
         item("Open config", 1, sfimage="doc.text", **action(plugin, "config", "open", refresh=False)),
         item("Reinstall", 1, sfimage="arrow.triangle.2.circlepath", **action(plugin, "install")),
         item("Check for updates", 1, sfimage="arrow.down.circle", **action(plugin, "update", "--check")),
-        item("Open chip on GitHub", 1, href=f"https://github.com/{updates.REPO}", sfimage="link"),
-        item(f"About chip v{version}", 1, disabled="true"),
+        item("Open GitHubBar on GitHub", 1, href=f"https://github.com/{updates.REPO}", sfimage="link"),
+        item(f"About GitHubBar v{version}", 1, disabled="true"),
     ]
     return lines
 

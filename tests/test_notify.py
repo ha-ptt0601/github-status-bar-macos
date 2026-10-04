@@ -37,7 +37,7 @@ class DiffTest(unittest.TestCase):
     def test_update_announced_once(self):
         prev = notify.snapshot(ROWS, {}, None)
         cur = notify.snapshot(ROWS, {}, "0.4.0")
-        self.assertEqual(notify.diff(prev, cur, ROWS, {}), ["chip v0.4.0 is available"])
+        self.assertEqual(notify.diff(prev, cur, ROWS, {}), ["GitHubBar v0.4.0 is available"])
         self.assertEqual(notify.diff(cur, cur, ROWS, {}), [])
 
     def test_long_titles_are_cut(self):

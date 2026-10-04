@@ -89,7 +89,7 @@ def events(prev: Optional[dict], cur: dict, rows: List[dict], records: Dict[str,
             found.append(_event(f"Review needs you: {record['label']} ({record['skill']})", run=record.get("id", "")))
     found += _mine_events(prev.get("mine"), cur.get("mine", {}))
     if cur["update"] and cur["update"] != prev.get("update"):
-        found.append(_event(f"chip v{cur['update']} is available", RELEASES_URL))
+        found.append(_event(f"GitHubBar v{cur['update']} is available", RELEASES_URL))
     return found
 
 

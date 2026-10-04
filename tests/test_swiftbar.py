@@ -111,7 +111,7 @@ class RenderTest(unittest.TestCase):
                                              "url": "https://github.com/acme/api/pull/2001", "started_at": 0}}
         views = {"api#2001::Full review": {"kind": "running", "text": "running 3m"}}
         lines = render([row(1)], records, views)
-        self.assertIn("Reviews by chip | size=11 color=#8E8E93", lines)
+        self.assertIn("Reviews by GitHubBar | size=11 color=#8E8E93", lines)
         self.assertIn(f"api#2001 · Full review · running 3m | sfimage=circle.lefthalf.filled "
                       f"sfconfig={swiftbar.sf_config('#0A84FF')}", lines)
         self.assertIn("--View session | sfimage=eye bash=/p/chip.3m.sh terminal=false param1=attach param2=ab12cd34",
@@ -135,7 +135,7 @@ class RenderTest(unittest.TestCase):
         lines = swiftbar.render(None, {}, {}, CFG, PLUGIN, "0.1.0", error="offline", now=0)
         self.assertFalse(any(l.startswith("Pull requests ·") for l in lines))
         self.assertTrue(any(l.startswith("Refresh now") for l in lines))
-        self.assertIn("--About chip v0.1.0 | disabled=true", lines)
+        self.assertIn("--About GitHubBar v0.1.0 | disabled=true", lines)
 
 
 class StatusStyleTest(unittest.TestCase):
@@ -230,12 +230,12 @@ class RoundMenuTest(unittest.TestCase):
 
     def test_resolved_round_leaves_reviews_section_and_row(self):
         lines = self.lines("done", resolved=True)
-        self.assertNotIn("Reviews by chip | size=11 color=#8E8E93", lines)
+        self.assertNotIn("Reviews by GitHubBar | size=11 color=#8E8E93", lines)
         self.assertTrue(next(l for l in lines if l.startswith("🟢 #2001")).startswith("🟢 #2001  New"))
 
     def test_submenu_remembers_last_round_and_continues(self):
         lines = self.lines("done", resolved=True)
-        self.assertIn("--Last chip review · Full review · round 1 · 07:00 · resolved (new commits) | disabled=true",
+        self.assertIn("--Last review · Full review · round 1 · 07:00 · resolved (new commits) | disabled=true",
                       [l.replace(datetime_hm(0), "07:00") for l in lines])
         self.assertIn("--Continue review (round 2) | sfimage=play.fill bash=/p/chip.3m.sh terminal=false "
                       "param1=run param2=api#2001 param3=--skill param4=1 refresh=true", lines)
@@ -246,12 +246,12 @@ class RoundMenuTest(unittest.TestCase):
 
     def test_unresolved_round_still_in_reviews_section(self):
         lines = self.lines("done")
-        self.assertIn("Reviews by chip | size=11 color=#8E8E93", lines)
+        self.assertIn("Reviews by GitHubBar | size=11 color=#8E8E93", lines)
         self.assertTrue(any(l.startswith("✅ #2001  Reviewed") for l in lines))
 
     def test_running_round_offers_view_not_continue(self):
         lines = self.lines("running", round_no=2)
-        self.assertTrue(any(l.startswith("--Last chip review · Full review · round 2 · running 3m") for l in lines))
+        self.assertTrue(any(l.startswith("--Last review · Full review · round 2 · running 3m") for l in lines))
         self.assertTrue(any(l.startswith("--View running review") for l in lines))
         self.assertFalse(any(l.startswith("--Continue review") for l in lines))
 
@@ -384,9 +384,9 @@ class RecentNotificationsTest(unittest.TestCase):
         self.assertFalse(any("Recent notifications" in line for line in render([row(1)])))
 
     def test_deliver_lines_sit_in_the_title_block(self):
-        lines = render([row(1)], deliver=[{"text": "chip v9 is available", "href": "https://r"}])
+        lines = render([row(1)], deliver=[{"text": "GitHubBar v9 is available", "href": "https://r"}])
         self.assertEqual(lines[2], "---")
-        self.assertEqual(lines[1], 'chip v9 is available | notify=true href=https://r')
+        self.assertEqual(lines[1], 'GitHubBar v9 is available | notify=true href=https://r')
 
 
 class ReviewButtonsTest(unittest.TestCase):
