@@ -11,5 +11,5 @@ python3 -m unittest discover -s tests -t . -q
 git diff --quiet || git commit -qam "release: v$v"  # nothing to commit when the version is already $v
 git tag "v$v"
 git push -q origin main "v$v"
-gh release create "v$v" --title "chip v$v" --generate-notes
+gh release create "v$v" --title "v$v" --generate-notes
 echo "released v$v"
