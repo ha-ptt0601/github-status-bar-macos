@@ -3,8 +3,8 @@
 **GitHubBar** is a macOS menu bar app that shows the GitHub pull requests waiting for **your** review and your **own** open pull requests. With one click, it runs your Claude Code review skill on a PR in the background. **chip** is the command-line tool behind it. chip also powers a `/chip` skill, an `@`-mention picker inside Claude Code and an fzf picker in the terminal.
 
 ```
-[GitHub 11 🔴1 🔵1]                      ← PRs to review · your PRs with changes requested · reviews running
-[ Review requests · 30 | My pull requests · 75 · 🔴1 ]   ← tabs: switch without closing the menu
+[GitHub 19 · ⚠8 🔵1]                    ← PRs waiting on your review · your PRs waiting on you · reviews running
+[ Review requests · 19 / 27 | My pull requests · 8 / 72 ]   ← tabs: to do / all; switch without closing
 Updated 13:40
 ↻ Refresh now                           ← spinner "Refreshing…", then "✓ Up to date"
 ──────────────
@@ -30,6 +30,19 @@ Quit GitHubBar
 ```
 
 ## Features
+
+### What the numbers mean
+
+| Where | Shows |
+|---|---|
+| Icon `19 · ⚠8` | PRs to review that wait on you · your own PRs that wait on you (hover for a tooltip) |
+| Icon `🔵1 🟡1` | chip reviews running · waiting for your input |
+| Tab `Review requests · 19 / 27` | to do / all PRs that request your review |
+| Tab `My pull requests · 8 / 72` | to do / all your open PRs |
+
+**To review** = 🟠 re-review (new commits after your review, or re-requested) + 🟢 new requests younger than 30 days. Not counted: older requests, PRs where you commented and wait on the author, approved PRs and drafts.
+
+**Your PRs to do** = 🔴 changes requested + ❌ CI failed + ⚠️ conflict + 💬 unresolved threads + ✅ approved and ready to merge. Not counted: PRs waiting for reviewers, drafts.
 
 ### A menu that stays open
 - **Tabs:** *Review requests* (default) and *My pull requests* sit in a tab bar at the top. Switching is instant and keeps the menu open; both tabs share one width, and the choice is remembered.
