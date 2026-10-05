@@ -28,6 +28,28 @@ ICON_SIZES = (16, 32, 128, 256, 512)
 BUNDLED = ("bin", "chip", "skill", "LICENSE", "config.example.json")  # what GitHubBar.app carries
 ARCHS = ("arm64", "x86_64")
 DMG = f"{APP_NAME}.dmg"
+# The window the .dmg opens with: big icons, the app on the left, Applications on the right (Finder saves it
+# in the image's .DS_Store).
+DMG_LAYOUT = f"""
+tell application "Finder"
+  tell disk "{APP_NAME}"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {{200, 120, 740, 440}}
+    set opts to the icon view options of container window
+    set arrangement of opts to not arranged
+    set icon size of opts to 128
+    set text size of opts to 13
+    set position of item "{APP_NAME}.app" of container window to {{140, 150}}
+    set position of item "Applications" of container window to {{400, 150}}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+"""
 
 
 def bundled(repo: Path = REPO_DIR) -> Optional[Path]:
@@ -205,13 +227,37 @@ def package(repo: Path = REPO_DIR, out_dir: Optional[Path] = None, runner=None, 
         (stage / "Applications").symlink_to("/Applications")
         out_dir.mkdir(parents=True, exist_ok=True)
         dmg = out_dir / DMG
+        writable = Path(tmp) / "rw.dmg"
         made = runner(["hdiutil", "create", "-volname", APP_NAME, "-srcfolder", str(stage), "-ov",
-                       "-format", "UDZO", str(dmg)], capture_output=True, text=True)
+                       "-format", "UDRW", str(writable)], capture_output=True, text=True)
+        if made.returncode != 0:
+            out(f"error hdiutil failed: {(made.stderr or made.stdout).strip()}")
+            return None
+        _lay_out(writable, runner, out)
+        made = runner(["hdiutil", "convert", str(writable), "-format", "UDZO", "-ov", "-o", str(dmg)],
+                      capture_output=True, text=True)
         if made.returncode != 0:
             out(f"error hdiutil failed: {(made.stderr or made.stdout).strip()}")
             return None
     out(f"dmg   {dmg}")
     return dmg
+
+
+def _lay_out(image: Path, runner, out) -> None:
+    """Arrange the window the .dmg opens with. Optional: without it Finder shows the two icons as they are."""
+    attach = runner(["hdiutil", "attach", "-readwrite", "-noverify", "-noautoopen", str(image)],
+                    capture_output=True, text=True)
+    volume = next((line.split("\t")[-1].strip() for line in (attach.stdout or "").splitlines()
+                   if "/Volumes/" in line), "")
+    if attach.returncode != 0 or not volume:
+        out("note  could not open the .dmg to arrange its window")
+        return
+    try:
+        if runner(["osascript", "-e", DMG_LAYOUT], capture_output=True, text=True).returncode != 0:
+            out("note  Finder did not arrange the .dmg window (allow Terminal to control Finder)")
+    finally:
+        runner(["sync"], capture_output=True, text=True)
+        runner(["hdiutil", "detach", volume], capture_output=True, text=True)
 
 
 def _report_folders(config_file, out) -> None:

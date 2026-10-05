@@ -57,6 +57,10 @@ class InstallTest(unittest.TestCase):
             stage = Path(cmd[cmd.index("-srcfolder") + 1])
             self.staged = sorted(str(p.relative_to(stage)) for p in stage.rglob("*"))
             self.staged_info = plistlib.loads((stage / "GitHubBar.app" / "Contents" / "Info.plist").read_bytes())
+            Path(cmd[-1]).write_text("rw")
+        if cmd[:2] == ["hdiutil", "attach"]:
+            return subprocess.CompletedProcess(cmd, 0, "/dev/disk9s1\tApple_HFS\t/Volumes/GitHubBar\n", "")
+        if cmd[:2] == ["hdiutil", "convert"]:
             Path(cmd[-1]).write_text("dmg")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
@@ -195,6 +199,8 @@ class InstallTest(unittest.TestCase):
         self.assertIn("GitHubBar.app/Contents/Resources/chip/LICENSE", self.staged)
         self.assertFalse(any("__pycache__" in p or "tests" in p for p in self.staged))
         self.assertNotIn("LSEnvironment", self.staged_info)
+        self.assertTrue(any(c[0] == "osascript" and 'disk "GitHubBar"' in c[-1] for c in self.calls))
+        self.assertIn(["hdiutil", "detach", "/Volumes/GitHubBar"], self.calls)
 
     def test_package_stops_when_a_build_fails(self):
         self.build_fails = True
