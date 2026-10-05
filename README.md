@@ -86,6 +86,9 @@ GitHubBar posts them as native macOS notifications (allow them when macOS asks).
 - **Search pull requests** is a field at the top of the menu, focused when the menu opens. Type and the tab shows only the PRs whose number, project, title, author, reviewers or Jira key contain all of your words, including PRs under *N more*, *Older than 30 days* and *Show approved & drafts* (up to 40 results). Clear the field to get the full list back. The text stays when you switch tabs.
 - **Projects ›** hides or shows a project's PRs at once (✓ = shown). The choice is saved in your config.
 - **Projects › Arrange…** opens a small window: drag projects into the order you want (one order for both tabs) and untick the ones to hide. Projects you have not placed follow, busiest first. **Reset order** goes back to that default.
+
+<p align="center"><img src="docs/images/arrange-projects.svg" alt="Projects › Arrange… opens a window: drag projects into order, untick to hide, then Save; both tabs follow that order" width="900"></p>
+
 - Outside GitHubBar (`chip swiftbar` without `--panes`, e.g. in SwiftBar), **Search…** opens a small dialog instead.
 
 ### Other ways to pick PRs
