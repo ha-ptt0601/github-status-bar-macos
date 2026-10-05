@@ -603,9 +603,6 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
            "runs_by_label": runs_by_label, "style": style}
     rows = _filter(all_rows, hidden_projects, query)
     listed = _filter(all_rows, set(), query)  # hidden projects too, tagged hidden, for in-place toggling
-    if newer:
-        lines.append(item(f"Update available: v{newer} — Update now", 0, **symbol("arrow.up.circle.fill", "#FF9500"),
-                          color="#FF9500", **action(plugin, "update")))
     if error:
         lines.append(item(f"Could not refresh: {error[:90]}", 0, sfimage="exclamationmark.triangle", color="#FF3B30"))
     for message in cfg.get("errors", [])[:1]:
@@ -659,6 +656,9 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         lines.extend(pr_pages(hidden, 1, ctx))
     lines.extend(recent_lines(plugin, history or [], now))
     lines.extend(_settings(plugin, style, version, cfg))
+    if newer:  # last, next to GitHubBar's own Open at Login and Quit
+        lines += ["---", item(f"Update available: v{newer} — Update now", 0, **symbol("arrow.up.circle.fill", "#FF9500"),
+                               color="#FF9500", **action(plugin, "update"))]
     return lines
 
 

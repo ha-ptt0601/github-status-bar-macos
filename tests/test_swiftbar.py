@@ -126,7 +126,7 @@ class RenderTest(unittest.TestCase):
         lines = swiftbar.render({"rows": [], "fetched_at": 0}, {}, {}, cfg_errors, PLUGIN, "0.1.0",
                                 newer="0.2.0", error="HTTP 401", now=0)
         self.assertTrue(lines[0].startswith("! | templateImage="))
-        self.assertTrue(any(l.startswith("Update available: v0.2.0 — Update now") for l in lines))
+        self.assertTrue(lines[-1].startswith("Update available: v0.2.0 — Update now"))  # at the bottom
         self.assertTrue(any(l.startswith("Could not refresh: HTTP 401") for l in lines))
         self.assertTrue(any(l.startswith("Config: skills[1] unknown placeholder") for l in lines))
         self.assertTrue(any(l.startswith("Nothing waiting for your review") for l in lines))

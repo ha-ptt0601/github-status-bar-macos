@@ -2,6 +2,11 @@
 
 Each section is a release's notes on GitHub: `scripts/release.sh X.Y.Z` publishes the `## vX.Y.Z` section, followed by the install steps.
 
+## v0.1.14
+
+### Changed
+- **"Update available — Update now" sits at the bottom of the menu**, next to Open at Login and Quit, instead of above the tabs.
+
 ## v0.1.13
 
 GitHubBar.dmg now opens like a normal Mac installer, and every release says what changed.
