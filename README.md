@@ -85,9 +85,9 @@ GitHubBar posts them as native macOS notifications (allow them when macOS asks).
 ### Search and filters
 - **Search pull requests** is a field at the top of the menu, focused when the menu opens. Type and the tab shows only the PRs whose number, project, title, author, reviewers or Jira key contain all of your words, including PRs under *N more*, *Older than 30 days* and *Show approved & drafts* (up to 40 results). Clear the field to get the full list back. The text stays when you switch tabs.
 - **Projects ›** hides or shows a project's PRs at once (✓ = shown). The choice is saved in your config.
-- **Projects › Arrange…** opens a small window: drag projects into the order you want (one order for both tabs) and untick the ones to hide. Projects you have not placed follow, busiest first. **Reset order** goes back to that default.
+- **Projects ›** is a list you can rearrange right in the menu: drag a project up or down to change the order (one order for both tabs), and click its box to show or hide it. Changes apply at once, without closing the menu. Projects you have not placed follow, busiest first; `project_order` in the config holds the order (empty it to go back to the default).
 
-<p align="center"><img src="docs/images/arrange-projects.svg" alt="Projects › Arrange… opens a window: drag projects into order, untick to hide, then Save; both tabs follow that order" width="900"></p>
+<p align="center"><img src="docs/images/arrange-projects.svg" alt="The Projects submenu: drag a project to reorder, untick to hide; the PR lists follow at once" width="900"></p>
 
 - Outside GitHubBar (`chip swiftbar` without `--panes`, e.g. in SwiftBar), **Search…** opens a small dialog instead.
 
@@ -234,7 +234,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 | `terminal` | `Terminal` or `iTerm`, used by View session |
 | `menu_bar_counts`, `menu_bar_badges`, `menu_bar_animate` | What the menu bar shows (true/false; defaults true, false, true). Also under **Settings › Menu bar** |
 | `status_style` | `dots` (🟠🟢⚪ + label), `emoji` (🔁 🆕 💬 ⏳ + legend) or `symbols` (SF Symbols). Also under **Settings → Status style** |
-| `project_order` | Projects listed first, in this order (both tabs). Also under **Projects › Arrange…** |
+| `project_order` | Projects listed first, in this order (both tabs). Also by dragging in **Projects ›** |
 | `hidden_projects` | Projects hidden from the menu. Also under **Projects ›** |
 
 ## Command reference

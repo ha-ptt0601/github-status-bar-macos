@@ -4,7 +4,7 @@ docs/images/menu-review.svg   Review requests tab + a PR submenu
 docs/images/menu-mine.svg     My pull requests tab + a PR submenu (address review, feature session, actions)
 docs/images/review-rounds.svg How a review runs: worktree, background session, rounds
 docs/images/menu-bar.svg      Menu bar states, Settings › Menu bar, a notification
-docs/images/arrange-projects.svg  Projects › Arrange… and the drag-to-reorder window
+docs/images/arrange-projects.svg  The Projects submenu: drag to reorder, tick to show
 """
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -345,64 +345,56 @@ def menu_bar():
 
 def arrange_projects():
     c = Svg(1180)
-    c.text(40, 44, "Arrange projects", 20, TEXT, weight="bold")
-    # Projects submenu with Arrange…
-    sx, sy = 40, 70
-    c.rect(sx, sy, 280, 252, BG, rx=12, stroke="#444")
-    y = sy + 30
-    c.text(sx + 34, y, "Show all", 15); y += ROW
-    for name, on in (("shop", True), ("api", True), ("mailer", True), ("billing", False), ("docs", True)):
-        if on:
-            c.text(sx + 14, y, "✓", 15)
-        c.text(sx + 34, y, name, 15)
-        y += ROW
-    c.sep(sx + 12, sx + 268, y - 12); y += 6
-    c.rect(sx + 6, y - 20, 268, 28, BLUE, rx=6)
-    c.add(f'<path d="M{sx + 20} {y - 12} v-6 m-3 3 l3 -3 l3 3 M{sx + 28} {y - 8} v6 m-3 -3 l3 3 l3 -3" '
-          f'fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>')
-    c.text(sx + 44, y, "Arrange…", 15, "#ffffff")
-    c.add(f'<path d="M{sx + 290} {sy + 140} h46 m-8 -8 l8 8 l-8 8" fill="none" stroke="{GREY}" stroke-width="2"/>')
-    # the window
-    wx, wy, ww, wh = 400, 64, 420, 380
-    c.rect(wx, wy, ww, wh, "#262626", rx=12, stroke="#4a4a4a")
-    c.rect(wx, wy, ww, 34, "#303030", rx=12)
-    c.rect(wx, wy + 22, ww, 12, "#303030", rx=0)
-    for i, color in enumerate(("#ff5f57", "#febc2e", "#28c840")):
-        c.dot(wx + 20 + 20 * i, wy + 17, color, r=6)
-    c.text(wx + ww / 2, wy + 22, "Arrange projects", 13.5, TEXT, anchor="middle", weight="bold")
-    c.text(wx + 18, wy + 60, "Drag to reorder (both tabs). Untick to hide a project.", 12.5, GREY)
-    c.rect(wx + 16, wy + 74, ww - 32, 236, "#1e1e1e", rx=6, stroke="#3a3a3a")
-    rows = [("shop", True, False), ("api", True, True), ("mailer", True, False), ("billing", False, False),
-            ("docs", True, False)]
-    ry = wy + 118
-    for name, on, dragging in rows:
+    c.text(40, 44, "Projects: drag to reorder, tick to show", 20, TEXT, weight="bold")
+    # the main menu's edge with Projects highlighted
+    mx, mw = 40, 420
+    c.rect(mx, 64, mw, 300, BG, rx=12, stroke="#444")
+    c.rect(mx + 12, 84, mw - 24, 30, PANEL, stroke=LINE)
+    c.icon("search", mx + 22, 105, GREY)
+    c.text(mx + 44, 104, "Search pull requests", 14.5, GREY)
+    c.rect(mx + 6, 124, mw - 12, 28, BLUE, rx=6)
+    c.icon("grid", mx + 18, 144, "#ffffff")
+    c.text(mx + 44, 144, "Projects", 15, "#ffffff")
+    c.chevron(mx + mw - 26, 139, "#ffffff")
+    c.sep(mx + 12, mx + mw - 12, 166)
+    y = 192
+    for head, rows in (("API · 9 PRs", ["#2124  feat(auth): add login…", "#2123  fix(cart): keep disco…"]),
+                       ("SHOP · 4 PRs", ["#272   refactor(events): sync…"]),
+                       ("MAILER · 2 PRs", ["#58    feat(export): downloa…"])):
+        c.text(mx + 42, y, head, 12.5, GREY); y += 24
+        for text in rows:
+            c.dot(mx + 26, y - 5, DOT["green"]); c.text(mx + 42, y, text, 13.5, TEXT, MONO); y += 26
+    # the Projects submenu with the list
+    sx, sy, sw = mx + mw - 6, 112, 300
+    names = [("api", True, False), ("shop", True, True), ("mailer", True, False), ("billing", False, False),
+             ("docs", True, False)]
+    c.rect(sx, sy, sw, 64 + 30 * len(names), BG, rx=12, stroke="#444")
+    c.text(sx + 34, sy + 30, "Show all", 15)
+    c.sep(sx + 12, sx + sw - 12, sy + 44)
+    ry = sy + 74
+    for name, on, dragging in names:
         if dragging:
-            c.rect(wx + 20, ry - 20, ww - 40, 30, BLUE, rx=5)
+            c.rect(sx + 6, ry - 20, sw - 12, 28, BLUE, rx=6)
+        color = "#ffffff" if dragging else TEXT
         box = "#0a84ff" if on else "none"
-        c.add(f'<rect x="{wx + 30}" y="{ry - 14}" width="15" height="15" rx="4" fill="{box}" '
-              f'stroke="{TEXT if not on else box}" stroke-width="1.2"/>')
+        c.add(f'<rect x="{sx + 20}" y="{ry - 15}" width="14" height="14" rx="3.5" fill="{box}" '
+              f'stroke="{GREY if not on else box}" stroke-width="1.2"/>')
         if on:
-            c.add(f'<path d="M{wx + 33} {ry - 6} l3 3 l6 -7" fill="none" stroke="#ffffff" stroke-width="1.8" '
+            c.add(f'<path d="M{sx + 23} {ry - 8} l3 3 l5 -6" fill="none" stroke="#ffffff" stroke-width="1.8" '
                   f'stroke-linecap="round" stroke-linejoin="round"/>')
-        c.text(wx + 56, ry, "≡", 15, GREY)
-        c.text(wx + 78, ry, name, 15, "#ffffff" if dragging else TEXT)
-        ry += 38
-    # where the dragged row ("api") will land: above "shop"
-    c.add(f'<line x1="{wx + 24}" y1="{wy + 91}" x2="{wx + ww - 24}" y2="{wy + 91}" stroke="{DOT["blue"]}" '
-          f'stroke-width="2.5" stroke-linecap="round"/>')
-    c.add(f'<circle cx="{wx + 26}" cy="{wy + 91}" r="4" fill="none" stroke="{DOT["blue"]}" stroke-width="2"/>')
-    for label, x, w, primary in (("Reset order", wx + 16, 110, False), ("Cancel", wx + ww - 200, 84, False),
-                                 ("Save", wx + ww - 108, 92, True)):
-        c.rect(x, wy + wh - 50, w, 30, BLUE if primary else "#3a3a3a", rx=7)
-        c.text(x + w / 2, wy + wh - 30, label, 14, "#ffffff", anchor="middle")
-    # result
-    c.text(860, 110, "Both tabs, in your order:", 14.5, GREY)
-    for i, name in enumerate(("API · 9 PRs", "SHOP · 4 PRs", "MAILER · 2 PRs", "DOCS · 1 PR")):
-        c.text(860, 146 + 34 * i, name, 13, GREY)
-        c.add(f'<line x1="860" y1="{154 + 34 * i}" x2="1130" y2="{154 + 34 * i}" stroke="{LINE}"/>')
-    c.text(860, 300, "Projects you have not placed", 13, GREY)
-    c.text(860, 320, "follow, busiest first.", 13, GREY)
-    return c.svg(wy + wh + 30)
+        c.text(sx + 44, ry, name, 15, color)
+        c.text(sx + sw - 30, ry, "≡", 15, color if dragging else "#5a5a5e")
+        ry += 30
+    c.add(f'<path d="M{sx + sw + 16} {sy + 104} v-26 m-6 6 l6 -6 l6 6" fill="none" stroke="{DOT["blue"]}" '
+          f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>')
+    c.text(sx + sw + 30, sy + 92, "drag shop above api", 13, DOT["blue"])
+    c.text(sx + sw + 30, sy + 186, "untick to hide billing", 13, GREY)
+    c.add(f'<path d="M{sx + sw + 24} {sy + 182} h-14" fill="none" stroke="{GREY}" stroke-width="1.5"/>')
+    c.text(40, 400, "Changes apply at once and the menu stays open: the PR lists behind the submenu reorder and hide",
+           13.5, GREY)
+    c.text(40, 422, "while you drag. One order for both tabs; projects you have not placed follow, busiest first.",
+           13.5, GREY)
+    return c.svg(446)
 
 
 def main():
