@@ -78,8 +78,10 @@ def load_all(runner, force: bool = False, ttl: int = CACHE_TTL_SECONDS) -> Tuple
         return (cached if cached and cached.get("all_rows") else None), str(exc)
     now = datetime.now(timezone.utc)
     inbox = model.build_inbox(nodes, viewer, now, show_all=True)
-    menu.assign_labels(inbox["rows"])
-    inbox["mine"] = menu.assign_labels(model.build_mine_rows(mine_nodes, viewer, now))
+    mine = model.build_mine_rows(mine_nodes, viewer, now)
+    both = inbox["rows"] + mine  # one name per repo across both tabs (order, hidden projects, labels)
+    menu.assign_labels(inbox["rows"], both)
+    inbox["mine"] = menu.assign_labels(mine, both)
     inbox["fetched_at"] = time.time()
     inbox["all_rows"] = True
     cache_dir().mkdir(parents=True, exist_ok=True)

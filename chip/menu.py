@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from chip import model
 from chip.render import STATUS_LABEL
@@ -25,9 +25,10 @@ def _repo_names(rows: List[dict]) -> dict:
     return {full: full if owners_per_name[full.split("/")[-1]] > 1 else full.split("/")[-1] for full in fulls}
 
 
-def assign_labels(rows: List[dict]) -> List[dict]:
-    """Label each row `repo#N`, or `owner/repo#N` when two owners share a repo name."""
-    names = _repo_names(rows)
+def assign_labels(rows: List[dict], everything: Optional[List[dict]] = None) -> List[dict]:
+    """Label each row `repo#N`, or `owner/repo#N` when two owners share a repo name. Pass `everything`
+    (both tabs) so a repo gets the same name in both tabs."""
+    names = _repo_names(everything if everything is not None else rows)
     for r in rows:
         r["label"] = f"{names[r['repo']]}#{r['number']}"
     return rows
