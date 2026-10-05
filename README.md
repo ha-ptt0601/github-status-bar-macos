@@ -41,7 +41,7 @@
 - **Run** finds your clone of the repo (see [Where chip finds your repos](#where-chip-finds-your-repos)) or clones it into `~/.cache/chip/repos/`, checks the PR out in its own worktree, `~/.cache/chip/worktrees/<repo>-<number>`, and starts `claude "<prompt>" --bg` there. Your clone and its branch are never touched. The run is read-only: permission mode `auto`, and `Edit`/`Write` are blocked.
 - **The row follows the run:** 🔵 Reviewing → 🟡 Needs you (waiting for input or permission) → ✅ Reviewed. The icon shows `🔵N` and `🟡N` badges.
 - **View session** opens the session in Terminal (`claude attach`), so you can read the report and keep talking to Claude.
-- **Round resolved.** After you post your review on GitHub, or new commits land, the round is resolved: the PR goes back to its GitHub status and leaves "Reviews by GitHubBar". Merged or closed PRs resolve on their own.
+- **Round resolved.** After you post your review on GitHub, or new commits land, the round is resolved: the PR goes back to its GitHub status and leaves "Reviews by GitHubBar". A round that finishes while the PR is waiting on its author (you already reviewed these commits) resolves too. Merged or closed PRs resolve on their own.
 - **Continue review (round N+1)** resumes **the same session**, so Claude still has round N in context. It checks whether each earlier finding was fixed, answered or is still open, then reviews only what changed.
 
 ### The menu bar and notifications

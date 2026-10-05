@@ -238,6 +238,20 @@ class AddressRunTest(unittest.TestCase):
         record = runs.start(ROW, SKILL, CFG, "/src", self.path, runner=self.runner)
         self.assertEqual(record["kind"], "review")
 
+    def test_a_round_after_your_review_resolves_while_the_author_has_to_act(self):
+        started = datetime(2026, 10, 5, 15, 44).timestamp()
+        before = datetime.utcfromtimestamp(started - 360).strftime("%Y-%m-%dT%H:%M:%SZ")
+        records = {k: {"label": f"api#{n}", "started_at": started, "done_at": started + 18}
+                   for k, n in (("a", 1), ("b", 2), ("c", 3))}
+        records["c"].pop("done_at")
+        rows = {"api#1": {"kind": "review", "status": "waiting-author", "my_review_at": before, "last_commit_at": None},
+                "api#2": {"kind": "review", "status": "new", "my_review_at": None, "last_commit_at": None},
+                "api#3": {"kind": "review", "status": "waiting-author", "my_review_at": before, "last_commit_at": None}}
+        runs.resolve(records, rows, now=5.0)
+        self.assertEqual(records["a"]["resolved_by"], "waiting for the author")
+        self.assertNotIn("resolved_at", records["b"])  # its findings are not posted yet
+        self.assertNotIn("resolved_at", records["c"])  # still running
+
     def test_address_round_resolves_on_commits_or_approval(self):
         started = datetime(2026, 10, 4, 10, 0).timestamp()
         after = datetime.utcfromtimestamp(started + 60).strftime("%Y-%m-%dT%H:%M:%SZ")

@@ -260,6 +260,9 @@ def resolve(records: Dict[str, dict], rows_by_label: Dict[str, dict], now: float
             record.update(resolved_at=now, resolved_by="new commits")
         elif row.get("kind") == "mine" and row.get("mine_status") == model.READY:
             record.update(resolved_at=now, resolved_by="approved")
+        elif row.get("kind") != "mine" and row.get("status") in (model.WAITING, model.COMMENTED):
+            # You already reviewed these commits (a round started since then found nothing new to review).
+            record.update(resolved_at=now, resolved_by="waiting for the author")
         else:
             continue
         changed = True

@@ -2,6 +2,11 @@
 
 Each section is a release's notes on GitHub: `scripts/release.sh X.Y.Z` publishes the `## vX.Y.Z` section, followed by the install steps.
 
+## v0.1.16
+
+### Fixed
+- **A PR waiting on its author shows that status again.** A review round started after you had already reviewed the same commits (for example "Continue review" with no new push) stayed in "Reviews by GitHubBar" and its dot replaced the PR's status. Once such a round finishes, it resolves as "waiting for the author".
+
 ## v0.1.15
 
 ### Fixed
