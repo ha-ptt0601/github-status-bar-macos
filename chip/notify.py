@@ -29,10 +29,10 @@ MINE_ALERTS = {model.CI_FAILED: "CI failed on", model.CONFLICT: "Conflict on"}
 def snapshot(rows: List[dict], run_views: Dict[str, dict], newer: Optional[str],
              mine: Optional[List[dict]] = None) -> dict:
     return {
-        "prs": {r["label"]: r["status"] for r in rows},
+        "prs": {r["url"]: r["status"] for r in rows},  # keyed by URL: labels can change
         "runs": {key: view["kind"] for key, view in run_views.items()},
         "update": newer or "",
-        "mine": {r["label"]: {"status": r["mine_status"], "title": r["title"], "url": r.get("url", ""),
+        "mine": {r["url"]: {"status": r["mine_status"], "title": r["title"], "label": r["label"], "url": r["url"],
                               "reviews": {login: [state, r.get("review_times", {}).get(login)]
                                           for login, state in r["reviewers"].items()}}
                  for r in mine or []},
@@ -53,8 +53,9 @@ def _mine_events(prev: Optional[dict], cur: dict) -> List[dict]:
     if prev is None:
         return []
     events = []
-    for label, now in cur.items():
-        before = prev.get(label)
+    for url, now in cur.items():
+        before = prev.get(url)
+        label = now.get("label", url)
         if before is None:
             continue
         what = f"{label} — {_short(now['title'])}"
@@ -69,11 +70,14 @@ def _mine_events(prev: Optional[dict], cur: dict) -> List[dict]:
 def events(prev: Optional[dict], cur: dict, rows: List[dict], records: Dict[str, dict]) -> List[dict]:
     if prev is None:
         return []
-    by_label = {r["label"]: r for r in rows}
+    if any(not key.startswith("http") for key in prev.get("prs", {})):
+        return []  # a snapshot from before PRs were keyed by URL: start over silently
+    by_url = {r["url"]: r for r in rows}
     found = []
-    for label, status in cur["prs"].items():
-        before = prev.get("prs", {}).get(label)
-        row = by_label[label]
+    for url, status in cur["prs"].items():
+        before = prev.get("prs", {}).get(url)
+        row = by_url[url]
+        label = row["label"]
         if status == model.NEW and before is None:
             found.append(_event(f"New review request: {label} — {_short(row['title'])} by {row['author']}",
                                 row.get("url", "")))

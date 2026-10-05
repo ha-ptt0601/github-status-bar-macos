@@ -6,8 +6,8 @@ from pathlib import Path
 from chip import model, notify
 
 ROWS = [
-    {"label": "api#1", "status": model.NEW, "title": "t1", "author": "alice"},
-    {"label": "api#2", "status": model.REREVIEW, "title": "t2", "author": "an"},
+    {"label": "api#1", "status": model.NEW, "title": "t1", "author": "alice", "url": "https://x/1"},
+    {"label": "api#2", "status": model.REREVIEW, "title": "t2", "author": "an", "url": "https://x/2"},
 ]
 KEY = "api#1::Full review"
 RECORDS = {KEY: {"label": "api#1", "skill": "Full review"}}
@@ -19,7 +19,7 @@ class DiffTest(unittest.TestCase):
 
     def test_new_pr_and_rereview(self):
         prev = notify.snapshot([], {}, None)
-        prev["prs"] = {"api#2": model.WAITING}
+        prev["prs"] = {"https://x/2": model.WAITING}
         self.assertEqual(notify.diff(prev, notify.snapshot(ROWS, {}, None), ROWS, {}),
                          ["New review request: api#1 — t1 by alice", "Needs re-review: api#2 — t2"])
 
@@ -41,7 +41,7 @@ class DiffTest(unittest.TestCase):
         self.assertEqual(notify.diff(cur, cur, ROWS, {}), [])
 
     def test_long_titles_are_cut(self):
-        rows = [{"label": "api#9", "status": model.NEW, "title": "x" * 80, "author": "a"}]
+        rows = [{"label": "api#9", "status": model.NEW, "title": "x" * 80, "author": "a", "url": "https://x/9"}]
         prev = notify.snapshot([], {}, None)
         message = notify.diff(prev, notify.snapshot(rows, {}, None), rows, {})[0]
         self.assertIn("x" * 59 + "…", message)
@@ -65,9 +65,20 @@ class SendAndStateTest(unittest.TestCase):
             self.assertEqual(notify.load(path), {"prs": {}, "runs": {}, "update": ""})
 
 
+class LabelChangeTest(unittest.TestCase):
+    def test_an_old_label_keyed_snapshot_is_silent(self):
+        old = {"prs": {"api#1": model.WAITING}, "runs": {}, "update": "", "mine": {}}
+        self.assertEqual(notify.diff(old, notify.snapshot(ROWS, {}, None), ROWS, {}), [])
+
+    def test_a_relabelled_pr_is_not_new(self):
+        prev = notify.snapshot(ROWS, {}, None)
+        renamed = [dict(r, label="acme/" + r["label"]) for r in ROWS]
+        self.assertEqual(notify.diff(prev, notify.snapshot(renamed, {}, None), renamed, {}), [])
+
+
 class MineNotifyTest(unittest.TestCase):
     def mine(self, status=model.AWAITING, reviewers=None, times=None):
-        return {"label": "api#7", "title": "t7", "mine_status": status,
+        return {"label": "api#7", "title": "t7", "mine_status": status, "url": "https://x/7",
                 "reviewers": reviewers or {}, "review_times": times or {}}
 
     def diff(self, before, after):
