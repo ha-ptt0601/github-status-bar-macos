@@ -283,7 +283,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 - GitHubBar (`app/`, Swift, AppKit): `swift build -c release --package-path app`. Parser checks: `swift run --package-path app GitHubBarChecks [menu.txt]`. Command Line Tools ship no XCTest, so the checks are a plain executable.
 - After editing `skill/SKILL.md` or the app, run `chip install` to re-render the skill and rebuild the app.
 - README images: `python3 scripts/mockups.py` redraws `docs/images/*.svg` (made-up data).
-- Release from `main`: `scripts/release.sh X.Y.Z`. It bumps the version, runs the tests, builds `dist/GitHubBar.dmg` (a universal app carrying chip), tags and creates a GitHub release with the `.dmg` attached. To build only the `.dmg`: `python3 -c 'from chip import installer; installer.package()'`.
+- Release from `main`: write the `## vX.Y.Z` section in [CHANGELOG.md](CHANGELOG.md), then run `scripts/release.sh X.Y.Z`. It bumps the version, runs the tests, builds `dist/GitHubBar.dmg` (a universal app carrying chip, in a window laid out by Finder), tags and creates a GitHub release with the `.dmg` attached; its notes are that changelog section plus the install steps. To build only the `.dmg`: `python3 -c 'from chip import installer; installer.package()'`.
 
 ## License
 
