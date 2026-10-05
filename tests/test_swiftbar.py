@@ -467,6 +467,24 @@ class ReviewButtonsTest(unittest.TestCase):
         self.assertIn("param3=--project", cont)
 
 
+class ProjectOrderTest(unittest.TestCase):
+    def rows(self):
+        return [row(1, repo="acme/zeta"), row(2, repo="acme/api"), row(3, repo="acme/api"), row(4, repo="acme/mid")]
+
+    def headers(self, lines):
+        return [l.split(" ·")[0] for l in lines if "size=11 color=#8E8E93" in l and " PR" in l]
+
+    def test_default_puts_busiest_first(self):
+        self.assertEqual(self.headers(render(self.rows())), ["API", "MID", "ZETA"])
+
+    def test_project_order_wins_then_the_rest(self):
+        lines = render(self.rows(), cfg_extra={"project_order": ["zeta", "mid"]}, live_search=True)
+        self.assertEqual(self.headers(lines), ["ZETA", "MID", "API"])
+        projects = [l.split(" | ")[0] for l in lines if "param2=toggle" in l]
+        self.assertEqual(projects, ["--zeta", "--mid", "--api"])
+        self.assertIn("--Arrange… | sfimage=arrow.up.arrow.down arrange=true", lines)
+
+
 class GitHubActionsTest(unittest.TestCase):
     def test_review_pr_offers_approve_request_changes_comment(self):
         lines = render([row(1)])

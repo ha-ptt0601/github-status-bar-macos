@@ -337,7 +337,9 @@ def pr_lines(r: dict, depth: int, ctx: dict) -> List[str]:
     return lines
 
 
-def _project_order(rows: List[dict]) -> List[str]:
+def _project_order(rows: List[dict], preferred=()) -> List[str]:
+    """Projects in the user's order (`project_order`), then the rest: most to do first, then most PRs."""
+    rank = {name: i for i, name in enumerate(preferred)}
     counts: Dict[str, int] = {}
     actionable: Dict[str, int] = {}
     for r in rows:
@@ -345,12 +347,12 @@ def _project_order(rows: List[dict]) -> List[str]:
         counts[p] = counts.get(p, 0) + 1
         mine_actionable = r.get("kind") == "mine" and r.get("mine_status") in MINE_ACTIONABLE
         actionable[p] = actionable.get(p, 0) + (r["status"] in (model.REREVIEW, model.NEW) or mine_actionable)
-    return sorted(counts, key=lambda p: (-actionable[p], -counts[p], p))
+    return sorted(counts, key=lambda p: (rank.get(p, len(rank)), -actionable[p], -counts[p], p))
 
 
 def pr_pages(rows: List[dict], depth: int, ctx: dict) -> List[str]:
     """Rows grouped by project, 12 per page; each further page sits in a nested `Next ›` submenu."""
-    order = _project_order(rows)
+    order = _project_order(rows, ctx.get("project_order", ()))
     entries = [(p, r) for p in order for r in rows if _project(r) == p]
     counts = {p: sum(1 for q, _ in entries if q == p) for p in order}
     lines: List[str] = []
@@ -405,7 +407,7 @@ def project_sections(rows: List[dict], depth: int, ctx: dict, hidden_projects: f
     Each project's lines carry `proj=<name>` (plus `hidden=true` for hidden projects, which are still
     listed) so GitHubBar can show or hide a project in place from the Projects submenu."""
     lines: List[str] = []
-    for proj in _project_order(rows):
+    for proj in _project_order(rows, ctx.get("project_order", ())):
         prs = [r for r in rows if _project(r) == proj]
         section = [item(f"{proj.upper()} · {plural(len(prs), 'PR')}", depth, **HEADER)]
         for r in prs[:PER_PROJECT]:
@@ -475,8 +477,7 @@ def _filter(rows: List[dict], hidden_projects: set, query: str = "") -> List[dic
 
 
 def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, matches: int,
-              live_search: bool = False, project_skills: Optional[Dict[str, str]] = None,
-           feature_sessions: Optional[Dict[str, dict]] = None) -> List[str]:
+              live_search: bool = False, order=()) -> List[str]:
     """Search (GitHubBar: a field in the menu; otherwise a native dialog) and the Projects submenu
     with a checkmark on every shown project."""
     lines = []
@@ -487,13 +488,16 @@ def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, m
                           **action(plugin, "search", "--clear")))
     if not live_search:
         lines.append(item("Search…", 0, sfimage="magnifyingglass", **action(plugin, "search")))
-    projects = sorted({_project(r) for r in rows})
+    rank = {name: i for i, name in enumerate(order)}
+    projects = sorted({_project(r) for r in rows}, key=lambda p: (rank.get(p, len(rank)), p))
     if projects:
         lines.append(item("Projects", 0, sfimage="square.grid.2x2"))
         lines.append(item("Show all", 1, keep="all", **action(plugin, "project", "all")))
         for proj in projects:
             checked = {} if proj in hidden_projects else {"checked": "true"}
             lines.append(item(proj, 1, keep="toggle", **checked, **action(plugin, "project", "toggle", proj)))
+        if live_search:  # GitHubBar opens a window to drag projects into order
+            lines += [separator(1), item("Arrange…", 1, sfimage="arrow.up.arrow.down", arrange="true")]
     return lines
 
 
@@ -592,6 +596,7 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
         runs_by_label.setdefault(rec["label"], {})[rec["skill"]] = (rec, views[key])
     ctx = {"plugin": plugin, "skills": cfg["skills"], "address_skills": cfg.get("address_skills", []),
            "project_skills": project_skills or {}, "feature_sessions": feature_sessions or {},
+           "project_order": cfg.get("project_order", []),
            "runs_by_label": runs_by_label, "style": style}
     rows = _filter(all_rows, hidden_projects, query)
     listed = _filter(all_rows, set(), query)  # hidden projects too, tagged hidden, for in-place toggling
@@ -620,7 +625,8 @@ def render(inbox_all: Optional[dict], records: Dict[str, dict], views: Dict[str,
                       **action(plugin, "swiftbar", "--force")))
     if inbox_all is not None:
         lines.append("---")
-        lines.extend(_controls(plugin, all_rows, hidden_projects, query, len(rows), live_search))
+        lines.extend(_controls(plugin, all_rows, hidden_projects, query, len(rows), live_search,
+                               cfg.get("project_order", [])))
         lines.append("---")
         body_start = len(lines)
         if mine_view:
