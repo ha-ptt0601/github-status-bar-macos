@@ -15,6 +15,9 @@ BG_ID_RE = re.compile(r"backgrounded · ([0-9a-f]{6,})")
 KINDS = {"working": "running", "blocked": "needs_you", "done": "done"}
 # Address runs only propose fixes and draft replies: never commit, push or post to GitHub.
 ADDRESS_DENY = ["Bash(git commit:*)", "Bash(git push:*)", "Bash(gh pr comment:*)", "Bash(gh pr review:*)"]
+# User messages that Claude Code writes itself (not typed): task results, sub-agent hand-backs, command output.
+AUTOMATIC = ("<task-notification>", "Another Claude session sent a message", "<local-command", "<system-reminder>",
+             "Caveat:")
 ROUND_NOTE = (" — round {n}: re-review this PR. First check whether each finding from round {prev} was addressed "
               "(fixed, answered, or still open), then review only what changed since round {prev}.")
 
@@ -160,9 +163,57 @@ def view(record: dict, agent: Optional[dict], now: float) -> dict:
     return {"kind": kind, "text": text}
 
 
-def observe(records: Dict[str, dict], agents: Dict[str, dict], now: float) -> bool:
+def transcript(session_id: str) -> Optional[Path]:
+    from chip import sessions
+    return next(sessions.projects_dir().glob(f"*/{session_id}.jsonl"), None)
+
+
+def _typed(entry: dict) -> bool:
+    """A prompt someone typed (chip's review prompt or the user's own), not one Claude Code wrote."""
+    if entry.get("type") != "user" or entry.get("isMeta") or entry.get("isSidechain"):
+        return False
+    content = entry.get("message", {}).get("content")
+    return isinstance(content, str) and not content.startswith(AUTOMATIC)
+
+
+def finished_before_follow_up(path: Optional[Path], started_at: float) -> Optional[float]:
+    """When the user typed in a review's session after chip's prompt, the review had finished: the end of the
+    last turn before that message (or the message's time). None while nobody has typed after chip."""
+    if not path:
+        return None
+    prompts: List[float] = []
+    ends: List[float] = []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if '"user"' not in line and '"turn_duration"' not in line:  # skip parsing the rest
+                    continue
+                try:
+                    entry = json.loads(line)
+                    stamp = model.parse_ts(entry["timestamp"]).timestamp()
+                except (ValueError, KeyError, TypeError):
+                    continue
+                if stamp < started_at - 5:
+                    continue  # an earlier round in the same session
+                if _typed(entry):
+                    prompts.append(stamp)
+                    if len(prompts) == 2:
+                        break
+                elif entry.get("subtype") == "turn_duration":
+                    ends.append(stamp)
+    except OSError:
+        return None
+    if len(prompts) < 2:
+        return None
+    before = [end for end in ends if prompts[0] < end < prompts[1]]
+    return max(before) if before else prompts[1]
+
+
+def observe(records: Dict[str, dict], agents: Dict[str, dict], now: float,
+            find_transcript: Callable[[str], Optional[Path]] = transcript) -> bool:
     """Stamp `done_at` the first time a run is seen done; True if changed. A finished round stays finished:
-    when the user opens the session and asks something, that is not another review."""
+    when the user opens the session and asks something, that is not another review. If they asked before
+    chip saw it done, the session's transcript tells when the review ended."""
     changed = False
     for record in records.values():
         agent = agents.get(record["id"])
@@ -171,9 +222,16 @@ def observe(records: Dict[str, dict], agents: Dict[str, dict], now: float) -> bo
         if agent.get("sessionId") and record.get("session_id") != agent["sessionId"]:
             record["session_id"] = agent["sessionId"]
             changed = True
-        if agent.get("state") == "done" and "done_at" not in record:
+        if "done_at" in record:
+            continue
+        if agent.get("state") == "done":
             record["done_at"] = now
             changed = True
+        elif record.get("session_id"):
+            ended = finished_before_follow_up(find_transcript(record["session_id"]), record["started_at"])
+            if ended is not None:
+                record["done_at"] = ended
+                changed = True
     return changed
 
 

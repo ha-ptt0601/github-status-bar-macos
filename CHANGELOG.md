@@ -2,6 +2,11 @@
 
 Each section is a release's notes on GitHub: `scripts/release.sh X.Y.Z` publishes the `## vX.Y.Z` section, followed by the install steps.
 
+## v0.1.15
+
+### Fixed
+- **A review you followed up on shows when it really finished.** If you opened a review's session and asked something before GitHubBar noticed the review had finished, the review stayed "running" during your follow-up and then showed the follow-up's end as its time. GitHubBar now reads the session: a message you typed after the review prompt means the review had finished, at the end of its last turn before your message.
+
 ## v0.1.14
 
 ### Changed

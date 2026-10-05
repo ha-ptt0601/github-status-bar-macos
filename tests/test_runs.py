@@ -1,8 +1,9 @@
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from chip import runs
@@ -84,6 +85,46 @@ class StatusTest(unittest.TestCase):
         self.assertFalse(runs.observe(records, {"ab": {"state": "working"}}, 70))  # the user chatting in it
         self.assertEqual(records["k"]["done_at"], 50)
         self.assertEqual(runs.view(records["k"], {"state": "working"}, 80)["kind"], "done")
+
+    def write_transcript(self, entries):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        path = Path(tmp) / "s.jsonl"
+        path.write_text("".join(json.dumps(e) + "\n" for e in entries))
+        return path
+
+    @staticmethod
+    def at(minute):
+        return datetime(2026, 10, 5, 8, minute, tzinfo=timezone.utc)
+
+    def entry(self, minute, content=None, subtype=None):
+        stamp = self.at(minute).isoformat().replace("+00:00", "Z")
+        if subtype:
+            return {"type": "system", "subtype": subtype, "timestamp": stamp}
+        return {"type": "user", "timestamp": stamp, "message": {"role": "user", "content": content}}
+
+    def test_a_typed_follow_up_marks_the_review_done_at_its_last_turn(self):
+        path = self.write_transcript([
+            self.entry(0, "old round prompt"), self.entry(5, subtype="turn_duration"),
+            self.entry(10, "<command-message>review-pr-by-haptt</command-message>"),
+            self.entry(13, subtype="turn_duration"),
+            self.entry(14, "<task-notification>agent done</task-notification>"),
+            self.entry(15, "Another Claude session sent a message: report"),
+            self.entry(18, subtype="turn_duration"),
+            self.entry(20, "comment lên với tiếng anh"), self.entry(22, subtype="turn_duration")])
+        started = self.at(10).timestamp()
+        self.assertEqual(runs.finished_before_follow_up(path, started), self.at(18).timestamp())
+        records = {"k": {"id": "ab", "session_id": "s", "started_at": started}}
+        self.assertTrue(runs.observe(records, {"ab": {"state": "working"}}, 9e9, lambda sid: path))
+        self.assertEqual(records["k"]["done_at"], self.at(18).timestamp())
+
+    def test_no_follow_up_means_still_running(self):
+        path = self.write_transcript([self.entry(10, "review this"), self.entry(14, "<task-notification>x"),
+                                      self.entry(18, subtype="turn_duration")])
+        self.assertIsNone(runs.finished_before_follow_up(path, self.at(10).timestamp()))
+        self.assertIsNone(runs.finished_before_follow_up(None, 0))
+        records = {"k": {"id": "ab", "session_id": "s", "started_at": self.at(10).timestamp()}}
+        self.assertFalse(runs.observe(records, {"ab": {"state": "working"}}, 9e9, lambda sid: path))
 
     def test_fetch_agents(self):
         out = json.dumps([{"id": "ab", "state": "done"}, {"name": "no id"}])
