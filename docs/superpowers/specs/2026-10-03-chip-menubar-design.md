@@ -362,3 +362,11 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 - **PATH.** launchd starts login items with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and ignores `LSEnvironment`'s PATH; GitHubBar puts the Info.plist PATH back in front at launch, and `bin/chip` adds `/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin` to a bare PATH.
 - **Sleep.** Every JSON file chip writes goes through `files.write_atomic` (temp file + rename), so a sleep mid-write cannot leave `last.json` half-written (which emptied the menu). A `gh api graphql` call that times out (45 s of wall time, which includes sleep) is retried once. GitHubBar refreshes 5 s after `NSWorkspace.didWakeNotification`.
 - **Login item.** GitHubBar registers itself with `SMAppService` on every launch unless the user turned Open at Login off (a reinstall drops the registration).
+
+## The .dmg (v0.1.12)
+
+- `installer.package()` builds GitHubBar for arm64 and x86_64 (`swift build --triple …`, then `lipo`; a multi-`--arch` build needs Xcode's xcbuild), lays out `GitHubBar.app` with a copy of chip in `Contents/Resources/chip` (`bin`, `chip`, `skill`, `LICENSE`, `config.example.json`), an Info.plist without `LSEnvironment`, signs it ad hoc and makes `dist/GitHubBar.dmg` (UDZO, with an `/Applications` link). `scripts/release.sh` attaches it to the release.
+- GitHubBar runs `CHIP_PLUGIN` (a source install) or else its bundled chip. On first launch and after each update (`setUpVersion` in UserDefaults) it runs the bundled `chip install`, which inside an app (`installer.bundled()`) only sets up the link, skill, MCP server and config. Without `LSEnvironment` it takes PATH from `$SHELL -l -i` (5 s limit).
+- `bin/chip` sets `sys.dont_write_bytecode` inside an app: `__pycache__` would change the signed bundle.
+- `chip update` from an app: `gh release download vX --pattern GitHubBar.dmg`, mount, `ditto` the app out, then a detached `sh` quits GitHubBar, swaps the bundles (the old one is put back if the move fails) and opens the new one. The "Updating…" notification waits in the outbox and shows after the restart.
+- Not notarized (no Developer ID): a browser download is quarantined, so the README explains Open Anyway / `xattr -dr com.apple.quarantine`.

@@ -97,14 +97,13 @@ GitHubBar posts them as native macOS notifications (allow them when macOS asks).
 - **Terminal:** `chip` opens an fzf picker. Choose a project, tick PRs with Tab, and press Enter to review each PR in its repo.
 
 ### Updates
-GitHubBar checks this repo's GitHub releases every 6 hours. When a newer version exists, the menu shows **Update available: vX — Update now**. Clicking it pulls the repo (fast-forward only), rebuilds and reinstalls.
+GitHubBar checks this repo's GitHub releases every 6 hours. When a newer version exists, the menu shows **Update available: vX — Update now**. Clicking it downloads the release's `GitHubBar.dmg`, replaces the app and opens the new one. Installed [from source](#from-source), it pulls the repo (fast-forward only), rebuilds and reinstalls instead.
 
 ## Install
 
 **Prerequisites:**
 - macOS 13 or later;
-- Python 3.9 or later;
-- Command Line Tools (`xcode-select --install`), which provide git and Swift;
+- Command Line Tools (`xcode-select --install`), which provide git and Python 3 (3.9 or later);
 - [GitHub CLI](https://cli.github.com) (`brew install gh`), logged in with `gh auth login` (see [Your GitHub account](#your-github-account));
 - [Claude Code](https://claude.com/claude-code);
 - optional: `brew install fzf` for the terminal picker.
@@ -119,21 +118,43 @@ chip has no login of its own: every request goes through `gh` with **your** toke
 - Only github.com is supported, not GitHub Enterprise Server.
 - Updates come from this repository's GitHub releases, read with your `gh` login.
 
-### Get it
+### Get the app
+
+1. Download **`GitHubBar.dmg`** from the [latest release](https://github.com/ha-ptt0601/github-status-bar-macos/releases/latest). While the repo is private, you need access to it; `gh` can download it too:
+   ```sh
+   gh release download --repo ha-ptt0601/github-status-bar-macos --pattern GitHubBar.dmg
+   ```
+2. Open the `.dmg` and drag **GitHubBar.app** to **Applications**.
+3. Open GitHubBar. The app is signed ad hoc, not notarized by Apple, so the first time macOS says it cannot verify the developer. Either:
+   - open **System Settings › Privacy & Security**, scroll down to the message about GitHubBar and click **Open Anyway**; or
+   - clear the download flag once in Terminal, then open the app:
+     ```sh
+     xattr -dr com.apple.quarantine /Applications/GitHubBar.app
+     ```
+   A `.dmg` fetched with `gh release download` carries no download flag, so macOS does not ask.
+
+On its first launch (and after each update), GitHubBar sets chip up from the copy it carries in `GitHubBar.app/Contents/Resources/chip`:
+1. links `~/.local/bin/chip`, so `chip` works in a shell;
+2. installs the `/chip` skill into `~/.claude/skills/chip`;
+3. registers the `chip` MCP server for the `@` picker;
+4. writes a default `~/.config/chip/config.json`.
+
+It also adds itself to Login Items; toggle **Open at Login** in its menu. It finds `gh`, `git` and `claude` through your login shell's `PATH`, the same as in Terminal.
+
+To remove it: run `chip uninstall` (removes the link, the skill and the MCP server; your config and cache are kept), quit GitHubBar and move it to the Trash.
+
+### From source
+
+For working on GitHubBar or chip. Do not install both ways on one Mac: they are the same app.
 
 ```sh
 git clone https://github.com/ha-ptt0601/github-status-bar-macos.git ~/work/github-status-bar-macos
 ~/work/github-status-bar-macos/bin/chip install
 ```
 
-`chip install` does the following:
-1. links `~/.local/bin/chip`;
-2. installs the `/chip` skill into `~/.claude/skills/chip`;
-3. registers the `chip` MCP server for the `@` picker;
-4. builds **GitHubBar.app** into `~/Applications`, signs it ad hoc, clears quarantine and launches it. The app adds itself to Login Items; toggle **Open at Login** in its menu;
-5. writes a default `~/.config/chip/config.json`.
+`chip install` does the same set-up as above, with chip running from the clone, and builds **GitHubBar.app** into `~/Applications` with Swift (Command Line Tools), signs it ad hoc, clears quarantine and launches it.
 
-It is safe to run again, and it never overwrites files it did not create. `chip uninstall` removes exactly what it added; your config and cache are kept.
+It is safe to run again, and it never overwrites files it did not create. `chip uninstall` removes exactly what it added, including the app; your config and cache are kept.
 
 ## Configuration
 
@@ -240,7 +261,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 
 | Command | What it does |
 |---|---|
-| `chip install` / `chip uninstall` / `chip update` | Set up, remove, or pull and reinstall |
+| `chip install` / `chip uninstall` / `chip update` | Set up, remove, or install the latest release (from source: pull and rebuild) |
 | `chip` | fzf picker in the terminal |
 | `chip list` | Markdown table of PRs to review |
 | `chip run <label> [--skill N \| --project] [--address]` | Start a background review: skill N from your config, or `--project` for the repo's own review (built-in if none); `--address` for your PR |
@@ -262,7 +283,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 - GitHubBar (`app/`, Swift, AppKit): `swift build -c release --package-path app`. Parser checks: `swift run --package-path app GitHubBarChecks [menu.txt]`. Command Line Tools ship no XCTest, so the checks are a plain executable.
 - After editing `skill/SKILL.md` or the app, run `chip install` to re-render the skill and rebuild the app.
 - README images: `python3 scripts/mockups.py` redraws `docs/images/*.svg` (made-up data).
-- Release from `main`: `scripts/release.sh X.Y.Z`. It bumps the version, runs the tests, tags and creates a GitHub release.
+- Release from `main`: `scripts/release.sh X.Y.Z`. It bumps the version, runs the tests, builds `dist/GitHubBar.dmg` (a universal app carrying chip), tags and creates a GitHub release with the `.dmg` attached. To build only the `.dmg`: `python3 -c 'from chip import installer; installer.package()'`.
 
 ## License
 
