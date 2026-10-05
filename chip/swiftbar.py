@@ -493,11 +493,14 @@ def _controls(plugin: str, rows: List[dict], hidden_projects: set, query: str, m
     if projects:
         lines.append(item("Projects", 0, sfimage="square.grid.2x2"))
         lines.append(item("Show all", 1, keep="all", **action(plugin, "project", "all")))
+        if live_search:
+            lines.append(separator(1))
         for proj in projects:
             checked = {} if proj in hidden_projects else {"checked": "true"}
-            lines.append(item(proj, 1, keep="toggle", **checked, **action(plugin, "project", "toggle", proj)))
-        if live_search:  # GitHubBar opens a window to drag projects into order
-            lines += [separator(1), item("Arrange…", 1, sfimage="arrow.up.arrow.down", arrange="true")]
+            # In GitHubBar, `projectrow` rows become one list you can drag to reorder, inside this submenu.
+            row_mark = {"projectrow": "true"} if live_search else {}
+            lines.append(item(proj, 1, keep="toggle", **row_mark, **checked,
+                              **action(plugin, "project", "toggle", proj)))
     return lines
 
 

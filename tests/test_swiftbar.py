@@ -482,7 +482,7 @@ class ProjectOrderTest(unittest.TestCase):
         self.assertEqual(self.headers(lines), ["ZETA", "MID", "API"])
         projects = [l.split(" | ")[0] for l in lines if "param2=toggle" in l]
         self.assertEqual(projects, ["--zeta", "--mid", "--api"])
-        self.assertIn("--Arrange… | sfimage=arrow.up.arrow.down arrange=true", lines)
+        self.assertTrue(all("projectrow=true" in l for l in lines if "param2=toggle" in l))
 
 
 class GitHubActionsTest(unittest.TestCase):
