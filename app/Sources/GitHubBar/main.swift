@@ -38,10 +38,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     private var reopenWith: ParsedMenu?
     private let queue = DispatchQueue(label: "githubbar.chip")
 
-    /// `CHIP_PLUGIN` comes from the bundle's LSEnvironment (written by `chip install`).
+    /// `CHIP_PLUGIN` comes from the bundle's LSEnvironment (written by `chip install` from a clone); the app
+    /// from the .dmg carries chip in Contents/Resources/chip.
     private var chip: String {
-        ProcessInfo.processInfo.environment["CHIP_PLUGIN"]
+        ProcessInfo.processInfo.environment["CHIP_PLUGIN"] ?? Self.bundledChip
             ?? (NSHomeDirectory() as NSString).appendingPathComponent(".local/bin/chip")
+    }
+
+    private static var bundledChip: String? {
+        guard let resources = Bundle.main.resourcePath else { return nil }
+        let path = (resources as NSString).appendingPathComponent("chip/bin/chip")
+        return FileManager.default.isExecutableFile(atPath: path) ? path : nil
+    }
+
+    /// The app from the .dmg sets chip up itself (the `chip` command, the /chip skill, the MCP server and the
+    /// config) on its first launch and after each update. It runs before the first refresh on the same queue.
+    private func setUpBundledChip() {
+        guard ProcessInfo.processInfo.environment["CHIP_PLUGIN"] == nil, let chip = Self.bundledChip else { return }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        guard UserDefaults.standard.string(forKey: "setUpVersion") != version else { return }
+        queue.async {
+            if Self.runWithStatus(chip, ["install"]).1 == 0 {
+                UserDefaults.standard.set(version, forKey: "setUpVersion")
+            }
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -49,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         // chip queues notifications for us instead of using osascript; `--deliver` hands them over.
         setenv("GITHUBBAR_NOTIFY", "1", 1)
         Self.restorePath()
+        setUpBundledChip()
         MenuBuilder.keepOpenHandler = { [weak self] view in self?.keepOpen(view) }
         ProjectListView.onChange = { [weak self] view in self?.projectListChanged(view) }
         SearchFieldView.onChange = { [weak self] text in
@@ -453,10 +474,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     static func restorePath() {
         let env = Bundle.main.object(forInfoDictionaryKey: "LSEnvironment") as? [String: String]
         let current = ProcessInfo.processInfo.environment["PATH"] ?? ""
-        let wanted = (env?["PATH"] ?? "/opt/homebrew/bin:/usr/local/bin").split(separator: ":").map(String.init)
+        let wanted = (env?["PATH"] ?? loginShellPath() ?? "/opt/homebrew/bin:/usr/local/bin")
+            .split(separator: ":").map(String.init)
         var seen = Set<String>()
         let merged = (wanted + current.split(separator: ":").map(String.init)).filter { seen.insert($0).inserted }
         setenv("PATH", merged.joined(separator: ":"), 1)
+    }
+
+    /// The PATH the user's terminal has (from their login shell's rc files), so gh, git and claude are found
+    /// wherever they were installed. nil if the shell does not answer within 5 seconds.
+    static func loginShellPath() -> String? {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: shell)
+        process.arguments = ["-l", "-i", "-c", "printf '__PATH__%s__PATH__' \"$PATH\""]
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        process.standardInput = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        let timer = DispatchWorkItem { process.terminate() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5, execute: timer)
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        timer.cancel()
+        let parts = (String(data: data, encoding: .utf8) ?? "").components(separatedBy: "__PATH__")
+        return parts.count >= 3 && !parts[1].isEmpty ? parts[1] : nil
     }
 
     /// Both tabs (switched in place) plus queued notifications.
