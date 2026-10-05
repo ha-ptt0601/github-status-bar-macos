@@ -49,6 +49,8 @@ DEFAULT = {
     "menu_bar_badges": False,
     "menu_bar_animate": True,
     "hidden_projects": [],
+    # Projects in this order first (both tabs); the others follow, busiest first. Set in Projects › Arrange….
+    "project_order": [],
 }
 
 
@@ -110,6 +112,9 @@ def validate(data) -> List[str]:
         errors.append("disallowed_tools must be a list of strings")
     if data.get("terminal", DEFAULT["terminal"]) not in TERMINALS:
         errors.append(f"terminal must be one of {', '.join(TERMINALS)}")
+    order = data.get("project_order", DEFAULT["project_order"])
+    if not isinstance(order, list) or not all(isinstance(p, str) for p in order):
+        errors.append("project_order must be a list of project names")
     hidden = data.get("hidden_projects", DEFAULT["hidden_projects"])
     if not isinstance(hidden, list) or not all(isinstance(p, str) for p in hidden):
         errors.append("hidden_projects must be a list of project names")
@@ -259,6 +264,14 @@ def toggle_project(name: str, path: Optional[Path] = None) -> None:
         if len(hidden) == len(data.get("hidden_projects", [])):
             hidden.append(name)
         data["hidden_projects"] = hidden
+    _update(path, change)
+
+
+def arrange_projects(order: List[str], hidden: List[str], path: Optional[Path] = None) -> None:
+    """Save the project order and the hidden projects chosen in the Arrange window."""
+    def change(data):
+        data["project_order"] = list(dict.fromkeys(order))
+        data["hidden_projects"] = list(dict.fromkeys(hidden))
     _update(path, change)
 
 

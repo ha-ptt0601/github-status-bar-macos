@@ -59,5 +59,6 @@
   "menu_bar_counts": true,
   "menu_bar_badges": false,
   "menu_bar_animate": true,
-  "hidden_projects": []
+  "hidden_projects": [],
+  "project_order": []
 }

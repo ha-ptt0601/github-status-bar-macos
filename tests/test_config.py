@@ -200,6 +200,14 @@ class AppliesTest(unittest.TestCase):
             self.assertIn("must be one of", config.set_value("menu_bar_badges", "maybe", path)[0])
         self.assertIn("true or false", config.validate({"menu_bar_animate": "yes"})[0])
 
+    def test_arrange_projects(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "c.json"
+            config.arrange_projects(["b", "a", "b"], ["c"], path)
+            cfg = config.load(path)
+            self.assertEqual((cfg["project_order"], cfg["hidden_projects"]), (["b", "a"], ["c"]))
+        self.assertIn("project_order", config.validate({"project_order": "a"})[0])
+
     def test_scope_validation(self):
         self.assertIn("repos must be a list", config.validate({"skills": [{"name": "A", "prompt": "x", "repos": "api"}]})[0])
         self.assertEqual(config.validate({"skills": [{"name": "A", "prompt": "x", "languages": ["Swift"]}]}), [])
