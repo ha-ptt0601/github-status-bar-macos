@@ -43,16 +43,24 @@ class FetchError(RuntimeError):
     pass
 
 
+TIMEOUT = 45
+
+
 def run_gh_graphql(search: str, after: Optional[str]) -> dict:
     cmd = ["gh", "api", "graphql", "-f", f"query={QUERY}", "-f", f"q={search}"]
     if after:
         cmd += ["-f", f"after={after}"]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    except FileNotFoundError:
-        raise FetchError("gh command not found")
-    except subprocess.TimeoutExpired:
-        raise FetchError("gh api graphql took longer than 60s")
+    for attempt in (1, 2):
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT)
+            break
+        except FileNotFoundError:
+            raise FetchError("gh command not found")
+        except subprocess.TimeoutExpired:
+            # Usually the Mac slept during the call (the timeout counts wall time) or the network is
+            # still waking up: try once more before giving up.
+            if attempt == 2:
+                raise FetchError(f"GitHub did not answer within {TIMEOUT}s (offline, or the Mac just woke up)")
     if proc.returncode != 0:
         raise FetchError(proc.stderr.strip() or f"gh exited with code {proc.returncode}")
     data = json.loads(proc.stdout)

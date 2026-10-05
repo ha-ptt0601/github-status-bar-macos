@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 
 from chip import fetch
@@ -68,3 +69,27 @@ class FetchAllTest(unittest.TestCase):
     def test_query_asks_for_review_threads(self):
         self.assertIn("reviewThreads(first: 100)", fetch.QUERY)
         self.assertEqual(fetch.MINE_SEARCH, "is:pr is:open author:@me")
+
+
+class TimeoutRetryTest(unittest.TestCase):
+    def test_retries_once_after_a_timeout(self):
+        from unittest import mock
+        calls = []
+
+        def run(cmd, **kw):
+            calls.append(cmd)
+            if len(calls) == 1:
+                raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+            return subprocess.CompletedProcess(cmd, 0, '{"data": {"viewer": {"login": "me"}}}', "")
+        with mock.patch("chip.fetch.subprocess.run", run):
+            self.assertEqual(fetch.run_gh_graphql("q", None), {"viewer": {"login": "me"}})
+        self.assertEqual(len(calls), 2)
+
+    def test_gives_up_after_two_timeouts(self):
+        from unittest import mock
+
+        def run(cmd, **kw):
+            raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+        with mock.patch("chip.fetch.subprocess.run", run):
+            with self.assertRaisesRegex(fetch.FetchError, "just woke up"):
+                fetch.run_gh_graphql("q", None)
