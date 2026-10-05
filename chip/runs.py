@@ -148,7 +148,7 @@ def view(record: dict, agent: Optional[dict], now: float) -> dict:
     if agent is None:
         return {"kind": "gone", "text": "session gone"}
     state = agent.get("state") or ""
-    kind = KINDS.get(state, "other")
+    kind = "done" if "done_at" in record else KINDS.get(state, "other")  # chatting in it later is not a review
     if kind == "running":
         text = f"running {format_elapsed(now - record['started_at'])}"
     elif kind == "needs_you":
@@ -161,7 +161,8 @@ def view(record: dict, agent: Optional[dict], now: float) -> dict:
 
 
 def observe(records: Dict[str, dict], agents: Dict[str, dict], now: float) -> bool:
-    """Stamp `done_at` the first time a run is seen done (cleared if it resumes); True if changed."""
+    """Stamp `done_at` the first time a run is seen done; True if changed. A finished round stays finished:
+    when the user opens the session and asks something, that is not another review."""
     changed = False
     for record in records.values():
         agent = agents.get(record["id"])
@@ -172,9 +173,6 @@ def observe(records: Dict[str, dict], agents: Dict[str, dict], now: float) -> bo
             changed = True
         if agent.get("state") == "done" and "done_at" not in record:
             record["done_at"] = now
-            changed = True
-        elif agent.get("state") != "done" and "done_at" in record:
-            del record["done_at"]
             changed = True
     return changed
 

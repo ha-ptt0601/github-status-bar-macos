@@ -76,13 +76,14 @@ class StatusTest(unittest.TestCase):
         self.assertEqual(runs.format_elapsed(10), "1m")
         self.assertEqual(runs.format_elapsed(3720), "1h02m")
 
-    def test_observe_stamps_done_once_and_clears_on_resume(self):
+    def test_observe_stamps_done_once_and_keeps_it(self):
         records = {"k": {"id": "ab", "started_at": 0}}
         self.assertTrue(runs.observe(records, {"ab": {"state": "done"}}, 50))
         self.assertFalse(runs.observe(records, {"ab": {"state": "done"}}, 60))
         self.assertEqual(records["k"]["done_at"], 50)
-        self.assertTrue(runs.observe(records, {"ab": {"state": "working"}}, 70))
-        self.assertNotIn("done_at", records["k"])
+        self.assertFalse(runs.observe(records, {"ab": {"state": "working"}}, 70))  # the user chatting in it
+        self.assertEqual(records["k"]["done_at"], 50)
+        self.assertEqual(runs.view(records["k"], {"state": "working"}, 80)["kind"], "done")
 
     def test_fetch_agents(self):
         out = json.dumps([{"id": "ab", "state": "done"}, {"name": "no id"}])
