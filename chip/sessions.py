@@ -15,6 +15,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from chip import files
+
 BRANCH_RE = re.compile(r'"gitBranch":"([^"]*)"')
 CWD_RE = re.compile(r'"cwd":"([^"]*)"')
 TRUNKS = {"", "HEAD", "main", "master", "dev", "develop", "staging", "build-staging"}
@@ -35,7 +37,7 @@ def _load(path) -> dict:
 
 def _save(path, data: dict) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(data))
+    files.write_atomic(Path(path), json.dumps(data))
 
 
 def _first_prompt(line: str) -> str:

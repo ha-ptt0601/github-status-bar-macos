@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable, List, Optional, Set
 
-from chip import config, model
+from chip import config, files, model
 from chip.render import STATUS_LABEL
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -46,7 +46,7 @@ def load_picked(path) -> Set[int]:
 
 def save_picked(path, picked: Set[int]) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(sorted(picked)))
+    files.write_atomic(Path(path), json.dumps(sorted(picked)))
 
 
 def toggle_picked(path, index: int) -> None:

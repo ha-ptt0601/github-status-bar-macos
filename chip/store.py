@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from chip import fetch, menu, model
+from chip import files, fetch, menu, model
 
 CACHE_TTL_SECONDS = 180
 # With GitHub Notifications watched (chip/watch.py), changes trigger a fetch, so the full refresh can be rarer.
@@ -83,7 +83,7 @@ def load_all(runner, force: bool = False, ttl: int = CACHE_TTL_SECONDS) -> Tuple
     inbox["fetched_at"] = time.time()
     inbox["all_rows"] = True
     cache_dir().mkdir(parents=True, exist_ok=True)
-    _last().write_text(json.dumps(inbox, ensure_ascii=False, indent=1))
+    files.write_atomic(_last(), json.dumps(inbox, ensure_ascii=False, indent=1))
     return inbox, None
 
 
@@ -97,7 +97,7 @@ def load_query() -> str:
 
 def save_query(query: str) -> None:
     cache_dir().mkdir(parents=True, exist_ok=True)
-    (cache_dir() / "filter.json").write_text(json.dumps({"q": query.strip()}, ensure_ascii=False))
+    files.write_atomic((cache_dir() / "filter.json"), json.dumps({"q": query.strip()}, ensure_ascii=False))
 
 
 VIEWS = ("review", "mine")
@@ -114,4 +114,4 @@ def load_view() -> str:
 
 def save_view(view: str) -> None:
     cache_dir().mkdir(parents=True, exist_ok=True)
-    (cache_dir() / "view.json").write_text(json.dumps({"view": view}))
+    files.write_atomic((cache_dir() / "view.json"), json.dumps({"view": view}))

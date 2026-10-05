@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from chip import model
+from chip import files, model
 
 LIMIT = 3
 HISTORY = 10
@@ -134,7 +134,7 @@ def load_list(path) -> List[dict]:
 
 def _write(path, data) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(data, ensure_ascii=False))
+    files.write_atomic(Path(path), json.dumps(data, ensure_ascii=False))
 
 
 def send(messages: List[str], runner=None) -> None:
@@ -154,4 +154,4 @@ def load(path) -> Optional[dict]:
 
 def save(path, state: dict) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(state, ensure_ascii=False))
+    files.write_atomic(Path(path), json.dumps(state, ensure_ascii=False))

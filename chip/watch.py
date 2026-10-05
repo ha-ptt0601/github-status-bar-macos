@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Optional, Tuple
 
+from chip import files
+
 # Notification reasons that can change what the menu shows.
 REASONS = {"review_requested", "author", "comment", "mention", "team_mention", "state_change", "ci_activity",
            "assign", "manual", "subscribed"}
@@ -30,7 +32,7 @@ def _load(path) -> dict:
 
 def _save(path, state: dict) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(state))
+    files.write_atomic(Path(path), json.dumps(state))
 
 
 def parse_response(text: str) -> Tuple[int, dict, str]:

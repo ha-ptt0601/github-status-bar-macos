@@ -8,6 +8,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
 
+from chip import files
+
 REPO = os.environ.get("CHIP_UPDATE_REPO", "ha-ptt0601/github-status-bar-macos")
 CHECK_EVERY_SECONDS = 6 * 3600
 VERSION_RE = re.compile(r'^__version__ = "([^"]+)"', re.M)
@@ -47,7 +49,7 @@ def latest_release(cache_path, runner=None, now: float = 0.0, force: bool = Fals
         tag = ""
     latest = tag.lstrip("v") or None
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps({"checked_at": now, "latest": latest}))
+    files.write_atomic(cache_path, json.dumps({"checked_at": now, "latest": latest}))
     return latest
 
 

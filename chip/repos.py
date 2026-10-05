@@ -8,6 +8,8 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from chip import files
+
 REMOTE_RE = re.compile(r"github\.com[:/]+([^/\s]+)/([^/\s]+?)(?:\.git)?/?$")
 SKIP_DIRS = {"node_modules", "vendor"}
 CLONE_DIR = ".chip-repos"  # where chip cloned before v0.1.2 (<work_root>/.chip-repos); still recognised
@@ -60,7 +62,7 @@ def _load(cache) -> Dict[str, str]:
 def _save(cache, data: Dict[str, str]) -> None:
     cache = Path(cache)
     cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps(data, indent=1, sort_keys=True))
+    files.write_atomic(cache, json.dumps(data, indent=1, sort_keys=True))
 
 
 def _roots(roots) -> List[Path]:

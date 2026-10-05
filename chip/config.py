@@ -8,6 +8,8 @@ import string
 from pathlib import Path
 from typing import List, Optional
 
+from chip import files
+
 PLACEHOLDERS = {"url", "repo", "number", "label", "title", "base"}
 TERMINALS = ("Terminal", "iTerm")
 STATUS_STYLES = ("dots", "emoji", "symbols")
@@ -216,7 +218,7 @@ def init(path: Optional[Path] = None, **values) -> bool:
     if path.exists():
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(template(**values), ensure_ascii=False, indent=2) + "\n")
+    files.write_atomic(path, json.dumps(template(**values), ensure_ascii=False, indent=2) + "\n")
     return True
 
 
@@ -238,7 +240,7 @@ def set_value(key: str, value: str, path: Optional[Path] = None) -> List[str]:
     if errors:
         return errors
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    files.write_atomic(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
     return []
 
 
@@ -247,7 +249,7 @@ def _update(path: Optional[Path], change) -> None:
     data = json.loads(path.read_text()) if path.exists() else {}
     change(data)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    files.write_atomic(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
 def toggle_project(name: str, path: Optional[Path] = None) -> None:

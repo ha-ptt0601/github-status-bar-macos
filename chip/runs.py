@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from chip import config, model
+from chip import config, files, model
 
 BG_ID_RE = re.compile(r"backgrounded · ([0-9a-f]{6,})")
 KINDS = {"working": "running", "blocked": "needs_you", "done": "done"}
@@ -36,7 +36,7 @@ def load(path) -> Dict[str, dict]:
 
 def save(path, records: Dict[str, dict]) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(records, ensure_ascii=False, indent=1))
+    files.write_atomic(Path(path), json.dumps(records, ensure_ascii=False, indent=1))
 
 
 def build_command(prompt: str, label: str, skill_name: str, cfg: dict) -> List[str]:
