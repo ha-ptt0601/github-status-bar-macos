@@ -1,4 +1,8 @@
-"""`chip install` / `chip uninstall`: wire this clone into ~/.local/bin, Claude Code and the GitHubBar app."""
+"""`chip install` / `chip uninstall`: wire chip into ~/.local/bin, Claude Code and the GitHubBar app.
+
+chip runs either from a clone (it builds GitHubBar.app into ~/Applications) or from inside GitHubBar.app,
+which carries a copy of chip in Contents/Resources/chip (the .dmg from the releases; `package` builds it).
+"""
 from __future__ import annotations
 
 import os
@@ -6,6 +10,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Callable, List, Mapping, Optional
 
@@ -20,6 +25,18 @@ REQUIRED = (("gh", "brew install gh"), ("claude", "see https://claude.com/claude
 LSREGISTER = ("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework"
               "/Support/lsregister")
 ICON_SIZES = (16, 32, 128, 256, 512)
+BUNDLED = ("bin", "chip", "skill", "LICENSE", "config.example.json")  # what GitHubBar.app carries
+ARCHS = ("arm64", "x86_64")
+DMG = f"{APP_NAME}.dmg"
+
+
+def bundled(repo: Path = REPO_DIR) -> Optional[Path]:
+    """The GitHubBar.app this chip came inside (…/GitHubBar.app/Contents/Resources/chip); None for a clone."""
+    repo = Path(repo).resolve()
+    app = repo.parents[2] if len(repo.parents) > 2 else None
+    if repo.parent.name == "Resources" and repo.parent.parent.name == "Contents" and app and app.suffix == ".app":
+        return app
+    return None
 
 
 def render_skill(template: str, chip_bin: Path) -> str:
@@ -30,10 +47,10 @@ def app_path(home: Path) -> Path:
     return home / "Applications" / f"{APP_NAME}.app"
 
 
-def info_plist(chip_bin: Path, path_dirs: List[str]) -> dict:
-    """The bundle's Info.plist: name, menu-bar-only, and the environment GitHubBar passes to chip."""
-    path = ":".join(dict.fromkeys(path_dirs + ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]))
-    return {
+def info_plist(chip_bin: Optional[Path], path_dirs: List[str]) -> dict:
+    """The bundle's Info.plist: name, menu-bar-only, and the environment GitHubBar passes to chip. Without
+    `chip_bin` (the .dmg), GitHubBar runs the chip it carries and takes PATH from the login shell."""
+    plist = {
         "CFBundleName": APP_NAME,
         "CFBundleDisplayName": APP_NAME,
         "CFBundleIdentifier": BUNDLE_ID,
@@ -44,8 +61,11 @@ def info_plist(chip_bin: Path, path_dirs: List[str]) -> dict:
         "CFBundleVersion": __version__,
         "LSMinimumSystemVersion": "13.0",
         "LSUIElement": True,
-        "LSEnvironment": {"PATH": path, "CHIP_PLUGIN": str(chip_bin)},
     }
+    if chip_bin:
+        path = ":".join(dict.fromkeys(path_dirs + ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]))
+        plist["LSEnvironment"] = {"PATH": path, "CHIP_PLUGIN": str(chip_bin)}
+    return plist
 
 
 def _link(dst: Path, target: Path, out) -> None:
@@ -107,34 +127,91 @@ def _make_icon(repo: Path, resources: Path, runner) -> None:
     shutil.rmtree(iconset, ignore_errors=True)
 
 
+def _build(repo: Path, runner, arch: Optional[str] = None):
+    """Build the GitHubBar binary (for `arch`, else this Mac). Returns its path, or the build error."""
+    cmd = ["swift", "build", "-c", "release", "--package-path", str(repo / "app"), "--product", APP_NAME]
+    if arch:
+        cmd += ["--triple", f"{arch}-apple-macosx13.0"]
+    build = runner(cmd, capture_output=True, text=True)
+    binary = repo / "app" / ".build" / (f"{arch}-apple-macosx" if arch else "") / "release" / APP_NAME
+    if build.returncode != 0 or not binary.exists():
+        return (build.stderr or build.stdout or "swift build failed").strip()[-400:]
+    return binary
+
+
+def _assemble(app: Path, binary: Path, repo: Path, info: dict, runner, carry_chip: bool) -> None:
+    """Lay out GitHubBar.app (binary, Info.plist, icon and, for the .dmg, chip itself) and sign it ad hoc."""
+    contents = app / "Contents"
+    (contents / "MacOS").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(binary, contents / "MacOS" / APP_NAME)
+    (contents / "MacOS" / APP_NAME).chmod(0o755)
+    (contents / "Info.plist").write_bytes(plistlib.dumps(info))
+    _make_icon(repo, contents / "Resources", runner)
+    if carry_chip:
+        dst = contents / "Resources" / "chip"
+        shutil.rmtree(dst, ignore_errors=True)
+        dst.mkdir(parents=True)
+        for name in BUNDLED:
+            src = repo / name
+            if src.is_dir():
+                shutil.copytree(src, dst / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            elif src.exists():
+                shutil.copy2(src, dst / name)
+    runner(["codesign", "--force", "--sign", "-", str(app)], capture_output=True, text=True)
+
+
 def _install_app(repo: Path, home: Path, chip_bin: Path, runner, which, out) -> bool:
     """Build GitHubBar, assemble the .app, sign it ad hoc and launch it (it adds itself to Login Items). False on failure."""
     if not which("swift"):
         out("note  GitHubBar needs Swift from the Command Line Tools: xcode-select --install")
         return True
-    build = runner(["swift", "build", "-c", "release", "--package-path", str(repo / "app")],
-                   capture_output=True, text=True)
-    binary = repo / "app" / ".build" / "release" / APP_NAME
-    if build.returncode != 0 or not binary.exists():
-        out(f"error GitHubBar build failed: {(build.stderr or build.stdout).strip()[-400:]}")
+    binary = _build(repo, runner)
+    if isinstance(binary, str):
+        out(f"error GitHubBar build failed: {binary}")
         return False
     app = app_path(home)
     runner(["osascript", "-e", f'quit app "{APP_NAME}"'], capture_output=True, text=True)
-    contents = app / "Contents"
-    (contents / "MacOS").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(binary, contents / "MacOS" / APP_NAME)
-    (contents / "MacOS" / APP_NAME).chmod(0o755)
     path_dirs = [str(Path(p).parent) for p in (which(t) for t in ("gh", "claude", "git", "python3")) if p]
-    (contents / "Info.plist").write_bytes(plistlib.dumps(info_plist(chip_bin, path_dirs)))
-    _make_icon(repo, contents / "Resources", runner)
-    for cmd in (["codesign", "--force", "--sign", "-", str(app)],
-                ["xattr", "-dr", "com.apple.quarantine", str(app)],
-                [LSREGISTER, "-f", str(app)]):
+    _assemble(app, binary, repo, info_plist(chip_bin, path_dirs), runner, carry_chip=False)
+    for cmd in (["xattr", "-dr", "com.apple.quarantine", str(app)], [LSREGISTER, "-f", str(app)]):
         runner(cmd, capture_output=True, text=True)
     # The app registers itself as a login item (SMAppService) on first launch: no Apple-events permission needed.
     runner(["open", str(app)], capture_output=True, text=True)
     out(f"app   {app} (opens at login; toggle in its menu)")
     return True
+
+
+def package(repo: Path = REPO_DIR, out_dir: Optional[Path] = None, runner=None, out=print) -> Optional[Path]:
+    """Build GitHubBar.dmg: a universal GitHubBar.app carrying chip, next to a link to /Applications."""
+    runner = runner or subprocess.run
+    repo = Path(repo)
+    out_dir = Path(out_dir or repo / "dist")
+    binaries = []
+    for arch in ARCHS:
+        binary = _build(repo, runner, arch)
+        if isinstance(binary, str):
+            out(f"error GitHubBar build failed ({arch}): {binary}")
+            return None
+        binaries.append(binary)
+    with tempfile.TemporaryDirectory() as tmp:
+        stage = Path(tmp) / APP_NAME
+        universal = Path(tmp) / f"{APP_NAME}.bin"
+        lipo = runner(["lipo", "-create", "-output", str(universal)] + [str(b) for b in binaries],
+                      capture_output=True, text=True)
+        if lipo.returncode != 0:
+            out(f"error lipo failed: {(lipo.stderr or lipo.stdout).strip()}")
+            return None
+        _assemble(stage / f"{APP_NAME}.app", universal, repo, info_plist(None, []), runner, carry_chip=True)
+        (stage / "Applications").symlink_to("/Applications")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        dmg = out_dir / DMG
+        made = runner(["hdiutil", "create", "-volname", APP_NAME, "-srcfolder", str(stage), "-ov",
+                       "-format", "UDZO", str(dmg)], capture_output=True, text=True)
+        if made.returncode != 0:
+            out(f"error hdiutil failed: {(made.stderr or made.stdout).strip()}")
+            return None
+    out(f"dmg   {dmg}")
+    return dmg
 
 
 def _report_folders(config_file, out) -> None:
@@ -181,7 +258,8 @@ def install(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None,
         out(f"note  add {link.parent} to PATH to use `chip` in a shell")
     _install_skill(repo, home, chip_bin, out)
     _install_mcp(chip_bin, runner, out)
-    app_ok = _install_app(repo, home, chip_bin, runner, which, out)
+    # Inside GitHubBar.app (the .dmg) the app is already there: GitHubBar runs this on its first launch.
+    app_ok = bundled(repo) is not None or _install_app(repo, home, chip_bin, runner, which, out)
     if config.init(config_file):
         out(f"conf  {config_file or config.config_path()}")
     _report_folders(config_file, out)
@@ -206,6 +284,10 @@ def uninstall(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None, o
     if got.returncode == 0 and str(chip_bin) in got.stdout:
         runner(["claude", "mcp", "remove", "chip", "--scope", "user"], capture_output=True, text=True)
         out("rm    MCP server chip")
+    if bundled(repo):
+        out(f"note  quit GitHubBar and move {bundled(repo)} to the Trash to remove the app")
+        out("done  config and cache are kept (~/.config/chip, ~/.cache/chip)")
+        return 0
     app = app_path(home)
     info = app / "Contents" / "Info.plist"
     if info.exists() and plistlib.loads(info.read_bytes()).get("CFBundleIdentifier") == BUNDLE_ID:

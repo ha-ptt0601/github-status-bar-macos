@@ -46,9 +46,18 @@ class InstallTest(unittest.TestCase):
         if cmd[:2] == ["swift", "build"]:
             if self.build_fails:
                 return subprocess.CompletedProcess(cmd, 1, "", "error: boom")
-            binary = self.repo / "app" / ".build" / "release" / "GitHubBar"
+            triple = cmd[cmd.index("--triple") + 1] if "--triple" in cmd else ""
+            arch = triple.split("-")[0] + "-apple-macosx" if triple else ""
+            binary = self.repo / "app" / ".build" / arch / "release" / "GitHubBar"
             binary.parent.mkdir(parents=True, exist_ok=True)
             binary.write_text("binary")
+        if cmd[0] == "lipo":
+            Path(cmd[3]).write_text("universal")
+        if cmd[:2] == ["hdiutil", "create"]:
+            stage = Path(cmd[cmd.index("-srcfolder") + 1])
+            self.staged = sorted(str(p.relative_to(stage)) for p in stage.rglob("*"))
+            self.staged_info = plistlib.loads((stage / "GitHubBar.app" / "Contents" / "Info.plist").read_bytes())
+            Path(cmd[-1]).write_text("dmg")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     def which(self, name):
@@ -71,7 +80,8 @@ class InstallTest(unittest.TestCase):
 
     def test_builds_and_bundles_githubbar(self):
         self.install()
-        self.assertIn(["swift", "build", "-c", "release", "--package-path", str(self.repo / "app")], self.calls)
+        self.assertIn(["swift", "build", "-c", "release", "--package-path", str(self.repo / "app"),
+                       "--product", "GitHubBar"], self.calls)
         binary = self.app / "Contents" / "MacOS" / "GitHubBar"
         self.assertEqual(binary.read_text(), "binary")
         self.assertTrue(binary.stat().st_mode & stat.S_IXUSR)
@@ -143,3 +153,50 @@ class InstallTest(unittest.TestCase):
         self.assertIn(["claude", "mcp", "remove", "chip", "--scope", "user"], self.calls)
         self.assertTrue(any(c[0] == "osascript" and "delete login item" in c[-1] for c in self.calls))
         self.assertTrue(self.config.exists())
+
+    def bundle(self):
+        """A copy of chip inside GitHubBar.app, as the .dmg installs it."""
+        inner = self.home / "Apps" / "GitHubBar.app" / "Contents" / "Resources" / "chip"
+        inner.parent.mkdir(parents=True)
+        os.rename(self.repo, inner)
+        self.repo = inner
+        return inner.parents[2]
+
+    def test_bundled_finds_the_app_only_inside_one(self):
+        self.assertIsNone(installer.bundled(self.repo))
+        app = self.bundle()
+        self.assertEqual(installer.bundled(self.repo), app.resolve())
+
+    def test_install_from_the_app_sets_up_chip_without_building(self):
+        app = self.bundle()
+        self.assertEqual(self.install(), 0)
+        self.assertEqual((self.home / ".local" / "bin" / "chip").resolve(), self.chip_bin.resolve())
+        self.assertIn(str(self.chip_bin), (self.home / ".claude" / "skills" / "chip" / "SKILL.md").read_text())
+        self.assertFalse(any(c[0] in ("swift", "open", "osascript") for c in self.calls))
+        installer.uninstall(self.repo, self.home, runner=self.runner, out=self.out.append)
+        self.assertTrue(app.exists())
+        self.assertFalse((self.home / ".local" / "bin" / "chip").exists())
+
+    def test_package_builds_a_universal_app_carrying_chip(self):
+        (self.repo / "chip" / "cli.py").write_text("x")
+        (self.repo / "chip" / "__pycache__").mkdir()
+        (self.repo / "chip" / "__pycache__" / "cli.pyc").write_text("x")
+        (self.repo / "LICENSE").write_text("MIT")
+        (self.repo / "tests").mkdir()
+        dmg = installer.package(self.repo, self.home / "dist", runner=self.runner, out=self.out.append)
+        self.assertEqual(dmg, self.home / "dist" / "GitHubBar.dmg")
+        self.assertTrue(dmg.exists())
+        for arch in ("arm64", "x86_64"):
+            self.assertTrue(any(c[:2] == ["swift", "build"] and f"{arch}-apple-macosx13.0" in c for c in self.calls))
+        self.assertIn("Applications", self.staged)
+        self.assertIn("GitHubBar.app/Contents/Resources/chip/chip/cli.py", self.staged)
+        self.assertIn("GitHubBar.app/Contents/Resources/chip/bin/chip", self.staged)
+        self.assertIn("GitHubBar.app/Contents/Resources/chip/skill/SKILL.md", self.staged)
+        self.assertIn("GitHubBar.app/Contents/Resources/chip/LICENSE", self.staged)
+        self.assertFalse(any("__pycache__" in p or "tests" in p for p in self.staged))
+        self.assertNotIn("LSEnvironment", self.staged_info)
+
+    def test_package_stops_when_a_build_fails(self):
+        self.build_fails = True
+        self.assertIsNone(installer.package(self.repo, self.home / "dist", runner=self.runner, out=self.out.append))
+        self.assertTrue(any("boom" in line for line in self.out))
