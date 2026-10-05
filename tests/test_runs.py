@@ -210,3 +210,15 @@ class AddressRunTest(unittest.TestCase):
         self.assertEqual(records["a"]["resolved_by"], "new commits")
         self.assertEqual(records["b"]["resolved_by"], "approved")
         self.assertNotIn("resolved_at", records["c"])
+
+
+class RelabelTest(unittest.TestCase):
+    def test_follows_a_label_change_by_url(self):
+        records = {"api#7::Full review": {"label": "api#7", "skill": "Full review", "url": "https://x/7"},
+                   "web#1::Full review": {"label": "web#1", "skill": "Full review", "url": "https://x/1"}}
+        rows = {"acme/api#7": {"label": "acme/api#7", "url": "https://x/7"},
+                "web#1": {"label": "web#1", "url": "https://x/1"}}
+        self.assertTrue(runs.relabel(records, rows))
+        self.assertEqual(sorted(records), ["acme/api#7::Full review", "web#1::Full review"])
+        self.assertEqual(records["acme/api#7::Full review"]["label"], "acme/api#7")
+        self.assertFalse(runs.relabel(records, rows))

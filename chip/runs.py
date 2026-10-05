@@ -97,6 +97,21 @@ def start(row: dict, skill: dict, cfg: dict, cwd: str, path, runner=None,
     return record
 
 
+def relabel(records: Dict[str, dict], rows_by_label: Dict[str, dict]) -> bool:
+    """A PR's label can change (e.g. `api#7` → `acme/api#7` when another owner's `api` shows up): follow it
+    by URL, so the review is not taken for a closed PR. True if any record moved."""
+    by_url = {r["url"]: r for r in rows_by_label.values() if r.get("url")}
+    changed = False
+    for key, record in list(records.items()):
+        row = by_url.get(record.get("url"))
+        if row and record["label"] != row["label"]:
+            record["label"] = row["label"]
+            del records[key]
+            records[run_key(row["label"], record["skill"])] = record
+            changed = True
+    return changed
+
+
 def clean_worktrees(records: Dict[str, dict], runner=None) -> bool:
     """Remove the PR worktree of project-skill runs whose PR was merged or closed; True if any changed."""
     from chip import project
