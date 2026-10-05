@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chip import (actions, config, fetch, sessions, installer, mcp_server, menu, model, notify, project, render, repos, runs, store,
+from chip import (__version__, actions, config, fetch, sessions, installer, mcp_server, menu, model, notify, project, render, repos, runs, store,
                   terminal, tui, updates)
 from chip.selection import SelectionError, parse_selection
 
@@ -550,6 +550,15 @@ def cmd_update(args) -> int:
         latest = updates.latest_release(cache_dir() / "update.json", now=time.time(), force=True)
         print(latest or "no release found")
         return 0
+    app = installer.bundled()
+    if app:
+        latest = updates.latest_release(cache_dir() / "update.json", now=time.time(), force=True)
+        if not latest or not updates.is_newer(latest, __version__):
+            print(f"GitHubBar v{__version__} is up to date")
+            return 0
+        ok, message = updates.update_app(app, latest)
+        notify.send([message if ok else f"GitHubBar update stopped: {message}"])
+        return 0 if ok else 1
     repo = installer.REPO_DIR
     ok, message = updates.update_repo(str(repo))
     if not ok:
@@ -634,7 +643,7 @@ def main(argv=None, runner=None) -> int:
     sub.add_parser("view", help="switch the menu tab: review | mine").add_argument("tab", choices=list(store.VIEWS))
     sub.add_parser("install", help="link chip, install the /chip skill, MCP server and menu bar plugin")
     sub.add_parser("uninstall", help="remove what `chip install` added")
-    p_update = sub.add_parser("update", help="pull the latest chip and reinstall")
+    p_update = sub.add_parser("update", help="install the latest release (a clone pulls and rebuilds)")
     p_update.add_argument("--check", action="store_true", help="only check GitHub for a newer release")
     args = parser.parse_args(argv)
 

@@ -74,3 +74,39 @@ class UpdateRepoTest(unittest.TestCase):
         ok, message = updates.update_repo("/r", self.script(pull=(1, "", "Not possible to fast-forward")))
         self.assertFalse(ok)
         self.assertIn("fast-forward", message)
+
+
+class UpdateAppTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.work = Path(self.tmp.name)
+        self.calls, self.spawned, self.fail = [], [], None
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def runner(self, cmd, **kw):
+        self.calls.append(cmd)
+        code = 1 if self.fail and cmd[0] == self.fail else 0
+        return subprocess.CompletedProcess(cmd, code, "", "nope" if code else "")
+
+    def update(self):
+        return updates.update_app(Path("/Applications/GitHubBar.app"), "0.2.0", self.runner,
+                                  spawn=self.spawned.append, work=self.work)
+
+    def test_downloads_unpacks_and_swaps_detached(self):
+        self.assertEqual(self.update(), (True, "Updating GitHubBar to v0.2.0…"))
+        self.assertEqual(self.calls[0][:4], ["gh", "release", "download", "v0.2.0"])
+        self.assertIn("GitHubBar.dmg", self.calls[0])
+        self.assertEqual([c[0] for c in self.calls[1:]], ["hdiutil", "ditto", "hdiutil"])
+        self.assertEqual(self.calls[-1][:2], ["hdiutil", "detach"])
+        self.assertEqual(self.spawned[0][-2:], ["/Applications/GitHubBar.app", str(self.work / "GitHubBar.app")])
+
+    def test_a_failed_step_stops_before_the_swap(self):
+        for tool in ("gh", "ditto"):
+            self.calls, self.spawned, self.fail = [], [], tool
+            ok, message = self.update()
+            self.assertFalse(ok)
+            self.assertEqual(message, "nope")
+            self.assertEqual(self.spawned, [])
+        self.assertEqual(self.calls[-1][:2], ["hdiutil", "detach"])  # unmounted even when the copy fails
