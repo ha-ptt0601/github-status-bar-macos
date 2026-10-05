@@ -43,6 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         }
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refresh() }
+        // After sleep, refresh once the network is back instead of waiting for the next minute.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
+                                                          queue: .main) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self?.refresh() }
+        }
     }
 
     func refresh() {
