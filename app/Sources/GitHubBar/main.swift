@@ -11,31 +11,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     private var pending: ParsedMenu?
     private var refreshing = false
     private var lastParsed: ParsedMenu?
-    private var arrangeWindow: ArrangeWindowController?
 
-    /// Projects › Arrange…: the projects of both tabs, in the menu's order, with their shown state.
-    private func openArrange() {
-        var seen = Set<String>()
-        var projects: [(name: String, shown: Bool)] = []
-        for entry in lastParsed?.items ?? [] where entry.text == "Projects" {
-            for child in entry.children where child.params["param2"] == "toggle" && seen.insert(child.text).inserted {
-                projects.append((child.text, child.params["checked"] == "true"))
-            }
-        }
-        let controller = ArrangeWindowController(projects: projects)
-        controller.onSave = { [weak self] order, hidden in
+    /// A project was dragged or ticked in the Projects list: save the order and hidden projects, then
+    /// rebuild the rest of the menu so the PR lists follow at once (the open Projects submenu stays).
+    private func projectListChanged(_ view: ProjectListView) {
+        let open = view.enclosingMenuItem?.menu
+        let args = ["project", "arrange", "--order"] + view.order + ["--hidden"] + view.hiddenNames
+        queue.async { [weak self] in
             guard let self else { return }
-            var args = ["project", "arrange", "--order"] + (order ?? [])
-            args += ["--hidden"] + (hidden ?? [])
-            self.queue.async {
-                _ = Self.run(self.chip, args)
-                DispatchQueue.main.async { self.refresh() }
+            _ = Self.run(self.chip, args)
+            let parsed = MenuParser.parse(Self.run(self.chip, Self.render))
+            self.onMainDuringMenu {
+                if self.menuIsOpen {
+                    self.pending = parsed
+                    self.updateInPlace(parsed, open: open)
+                } else {
+                    self.apply(parsed)
+                }
             }
         }
-        arrangeWindow = controller
-        NSApp.activate(ignoringOtherApps: true)
-        controller.window?.center()
-        controller.showWindow(nil)
     }
     private var iconBase: NSImage?
     private var iconAttention = false
@@ -56,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         setenv("GITHUBBAR_NOTIFY", "1", 1)
         Self.restorePath()
         MenuBuilder.keepOpenHandler = { [weak self] view in self?.keepOpen(view) }
+        ProjectListView.onChange = { [weak self] view in self?.projectListChanged(view) }
         SearchFieldView.onChange = { [weak self] text in
             MenuBuilder.query = text
             if let menu = self?.statusItem.menu { MenuBuilder.updateVisibility(menu) }
@@ -157,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         case "setting": view.checked.toggle()
         case "all":
             siblings.filter { $0.entry.params["keep"] == "toggle" }.forEach { $0.checked = true }
+            view.enclosingMenuItem?.menu?.items.compactMap { $0.view as? ProjectListView }.forEach { $0.showAll() }
             MenuBuilder.hiddenProjects = []
         default: break
         }
@@ -190,7 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 }
                 if self.menuIsOpen {
                     self.pending = parsed
-                    self.updateInPlace(parsed, from: view)
+                    self.updateInPlace(parsed, open: view.enclosingMenuItem?.menu)
                 } else {
                     self.apply(parsed)
                 }
@@ -202,10 +198,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     /// top-level item whose submenu is open (removing that item while its submenu is open is unsafe).
     /// That item only gets its new title and icon; its submenu is refreshed when the menu closes
     /// (`pending`). Everything else (PR rows, the review list, counts, other tabs) shows the new state now.
-    private func updateInPlace(_ parsed: ParsedMenu, from view: KeepOpenView) {
+    private func updateInPlace(_ parsed: ParsedMenu, open: NSMenu?) {
         lastParsed = parsed
         setTitle(parsed.title)
-        guard let menu = statusItem.menu, let open = view.enclosingMenuItem?.menu,
+        guard let menu = statusItem.menu, let open,
               let keep = menu.items.first(where: { $0.submenu === open || ($0.submenu.map { Self.contains($0, open) } ?? false) })
         else { return }
         let keepIndex = menu.items.firstIndex(of: keep) ?? 0
@@ -433,7 +429,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     @objc func runEntry(_ sender: NSMenuItem) {
         guard let entry = sender.representedObject as? MenuEntry else { return }
-        if entry.params["arrange"] == "true" { return openArrange() }
         handle(entry)
     }
 

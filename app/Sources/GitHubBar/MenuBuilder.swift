@@ -36,7 +36,16 @@ enum MenuBuilder {
                 continue
             }
             let added: NSMenuItem
-            if let tabAction, entry.params["tab"] != nil {
+            if entry.params["projectrow"] == "true" {
+                // The project rows of the Projects submenu: one list you can drag to reorder.
+                var rows: [MenuEntry] = []
+                while index < entries.count, entries[index].params["projectrow"] == "true" {
+                    rows.append(entries[index])
+                    index += 1
+                }
+                added = NSMenuItem()
+                added.view = ProjectListView(rows)
+            } else if let tabAction, entry.params["tab"] != nil {
                 var tabs: [MenuEntry] = []
                 while index < entries.count, entries[index].params["tab"] != nil {
                     tabs.append(entries[index])
@@ -146,8 +155,7 @@ enum MenuBuilder {
         item.representedObject = entry
         if !entry.children.isEmpty {
             item.submenu = menu(entry.children, target: target, action: action)
-        } else if item.isEnabled && (entry.params["bash"] != nil || entry.params["href"] != nil
-                                     || entry.params["arrange"] == "true") {
+        } else if item.isEnabled && (entry.params["bash"] != nil || entry.params["href"] != nil) {
             item.target = target
             item.action = action
         }
@@ -313,5 +321,105 @@ final class KeepOpenView: NSView {
         }
         let text = NSAttributedString(string: statusText ?? entry.text, attributes: [.font: font, .foregroundColor: color])
         text.draw(at: NSPoint(x: x, y: (bounds.height - text.size().height) / 2))
+    }
+}
+
+/// The projects of the Projects submenu as one list, inside the menu: drag a row by its ≡ handle (or
+/// anywhere on the name) to reorder, click the box to show or hide. Every change calls `onChange` at once.
+final class ProjectListView: NSView {
+    static var onChange: ((ProjectListView) -> Void)?
+    private(set) var rows: [(name: String, shown: Bool)]
+    private var dragging: Int?
+    private var moved = false
+    private let rowHeight: CGFloat = 26
+
+    var order: [String] { rows.map(\.name) }
+    var hiddenNames: [String] { rows.filter { !$0.shown }.map(\.name) }
+
+    init(_ entries: [MenuEntry]) {
+        rows = entries.map { ($0.text, $0.params["checked"] == "true") }
+        let width = (entries.map { MenuBuilder.attributedText($0).size().width }.max() ?? 120) + 110
+        super.init(frame: NSRect(x: 0, y: 0, width: max(width, 220), height: CGFloat(entries.count) * 26 + 6))
+        autoresizingMask = [.width]
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
+    func showAll() {
+        for i in rows.indices { rows[i].shown = true }
+        needsDisplay = true
+    }
+
+    private func row(at point: NSPoint) -> Int {
+        min(max(Int((point.y - 3) / rowHeight), 0), rows.count - 1)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let index = row(at: point)
+        if point.x < 44 {  // the checkbox
+            rows[index].shown.toggle()
+            needsDisplay = true
+            Self.onChange?(self)
+            return
+        }
+        dragging = index
+        moved = false
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let from = dragging else { return }
+        let to = row(at: convert(event.locationInWindow, from: nil))
+        guard to != from else { return }
+        rows.insert(rows.remove(at: from), at: to)
+        dragging = to
+        moved = true
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let changed = moved
+        dragging = nil
+        moved = false
+        needsDisplay = true
+        if changed { Self.onChange?(self) }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let font = NSFont.menuFont(ofSize: 0)
+        for (i, row) in rows.enumerated() {
+            let y = 3 + CGFloat(i) * rowHeight
+            if i == dragging {
+                NSColor.selectedContentBackgroundColor.setFill()
+                NSBezierPath(roundedRect: NSRect(x: 5, y: y, width: bounds.width - 10, height: rowHeight - 2),
+                             xRadius: 5, yRadius: 5).fill()
+            }
+            let color: NSColor = i == dragging ? .selectedMenuItemTextColor : .labelColor
+            let box = NSRect(x: 20, y: y + 5, width: 14, height: 14)
+            let path = NSBezierPath(roundedRect: box, xRadius: 3.5, yRadius: 3.5)
+            if row.shown {
+                NSColor.controlAccentColor.setFill()
+                path.fill()
+                let tick = NSBezierPath()
+                tick.move(to: NSPoint(x: box.minX + 3, y: box.midY))
+                tick.line(to: NSPoint(x: box.minX + 6, y: box.maxY - 3.5))
+                tick.line(to: NSPoint(x: box.maxX - 3, y: box.minY + 3.5))
+                tick.lineWidth = 1.8
+                NSColor.white.setStroke()
+                tick.stroke()
+            } else {
+                NSColor.secondaryLabelColor.setStroke()
+                path.lineWidth = 1.2
+                path.stroke()
+            }
+            let name = NSAttributedString(string: row.name, attributes: [.font: font, .foregroundColor: color])
+            name.draw(at: NSPoint(x: 44, y: y + (rowHeight - 2 - name.size().height) / 2))
+            let handle = NSAttributedString(string: "≡", attributes: [
+                .font: font, .foregroundColor: i == dragging ? color : NSColor.tertiaryLabelColor])
+            handle.draw(at: NSPoint(x: bounds.width - 30, y: y + (rowHeight - 2 - handle.size().height) / 2))
+        }
     }
 }
