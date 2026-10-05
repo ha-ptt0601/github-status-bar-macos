@@ -85,6 +85,7 @@ GitHubBar posts them as native macOS notifications (allow them when macOS asks).
 ### Search and filters
 - **Search pull requests** is a field at the top of the menu, focused when the menu opens. Type and the tab shows only the PRs whose number, project, title, author, reviewers or Jira key contain all of your words, including PRs under *N more*, *Older than 30 days* and *Show approved & drafts* (up to 40 results). Clear the field to get the full list back. The text stays when you switch tabs.
 - **Projects ›** hides or shows a project's PRs at once (✓ = shown). The choice is saved in your config.
+- **Projects › Arrange…** opens a small window: drag projects into the order you want (one order for both tabs) and untick the ones to hide. Projects you have not placed follow, busiest first. **Reset order** goes back to that default.
 - Outside GitHubBar (`chip swiftbar` without `--panes`, e.g. in SwiftBar), **Search…** opens a small dialog instead.
 
 ### Other ways to pick PRs
@@ -230,6 +231,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 | `terminal` | `Terminal` or `iTerm`, used by View session |
 | `menu_bar_counts`, `menu_bar_badges`, `menu_bar_animate` | What the menu bar shows (true/false; defaults true, false, true). Also under **Settings › Menu bar** |
 | `status_style` | `dots` (🟠🟢⚪ + label), `emoji` (🔁 🆕 💬 ⏳ + legend) or `symbols` (SF Symbols). Also under **Settings → Status style** |
+| `project_order` | Projects listed first, in this order (both tabs). Also under **Projects › Arrange…** |
 | `hidden_projects` | Projects hidden from the menu. Also under **Projects ›** |
 
 ## Command reference
@@ -247,7 +249,7 @@ A PR gets the skills that match it, plus the repo's own review skill. If none of
 | `chip act <label> approve\|request-changes\|comment\|merge\|close\|ready\|draft` | Act on a PR on GitHub (asks first in a dialog where it matters) |
 | `chip view review\|mine` | Switch the menu tab |
 | `chip notifications --clear` | Empty the Recent notifications menu |
-| `chip search [--clear]` · `chip project toggle <name>\|all` | Search and project filter |
+| `chip search [--clear]` · `chip project toggle <name>\|all` · `chip project arrange --order … --hidden …` | Search, project filter and order |
 | `chip config init\|check\|path\|open\|example\|set <key> <value>` | Configuration (`example` prints a filled-in config) |
 | `chip swiftbar [--view review\|mine] [--panes] [--deliver]` | Print the menu. GitHubBar uses `--panes` (both tabs, in-menu search) and `--deliver` (queued notifications) |
 | `chip mcp` | MCP server used by Claude Code's `@` picker |
