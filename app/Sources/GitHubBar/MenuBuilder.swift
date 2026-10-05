@@ -146,7 +146,8 @@ enum MenuBuilder {
         item.representedObject = entry
         if !entry.children.isEmpty {
             item.submenu = menu(entry.children, target: target, action: action)
-        } else if item.isEnabled && (entry.params["bash"] != nil || entry.params["href"] != nil) {
+        } else if item.isEnabled && (entry.params["bash"] != nil || entry.params["href"] != nil
+                                     || entry.params["arrange"] == "true") {
             item.target = target
             item.action = action
         }

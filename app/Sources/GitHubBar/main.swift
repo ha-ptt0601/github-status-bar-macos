@@ -10,6 +10,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     private var menuIsOpen = false
     private var pending: ParsedMenu?
     private var refreshing = false
+    private var lastParsed: ParsedMenu?
+    private var arrangeWindow: ArrangeWindowController?
+
+    /// Projects › Arrange…: the projects of both tabs, in the menu's order, with their shown state.
+    private func openArrange() {
+        var seen = Set<String>()
+        var projects: [(name: String, shown: Bool)] = []
+        for entry in lastParsed?.items ?? [] where entry.text == "Projects" {
+            for child in entry.children where child.params["param2"] == "toggle" && seen.insert(child.text).inserted {
+                projects.append((child.text, child.params["checked"] == "true"))
+            }
+        }
+        let controller = ArrangeWindowController(projects: projects)
+        controller.onSave = { [weak self] order, hidden in
+            guard let self else { return }
+            var args = ["project", "arrange", "--order"] + (order ?? [])
+            args += ["--hidden"] + (hidden ?? [])
+            self.queue.async {
+                _ = Self.run(self.chip, args)
+                DispatchQueue.main.async { self.refresh() }
+            }
+        }
+        arrangeWindow = controller
+        NSApp.activate(ignoringOtherApps: true)
+        controller.window?.center()
+        controller.showWindow(nil)
+    }
     private var iconBase: NSImage?
     private var iconAttention = false
     private var spinTimer: Timer?
@@ -75,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     /// Sets the menu bar title and (re)fills `menu`, which may be open.
     private func fill(_ menu: NSMenu, _ parsed: ParsedMenu) {
+        lastParsed = parsed
         setTitle(parsed.title)
         menu.removeAllItems()
         MenuBuilder.hiddenProjects = []
@@ -175,6 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     /// That item only gets its new title and icon; its submenu is refreshed when the menu closes
     /// (`pending`). Everything else (PR rows, the review list, counts, other tabs) shows the new state now.
     private func updateInPlace(_ parsed: ParsedMenu, from view: KeepOpenView) {
+        lastParsed = parsed
         setTitle(parsed.title)
         guard let menu = statusItem.menu, let open = view.enclosingMenuItem?.menu,
               let keep = menu.items.first(where: { $0.submenu === open || ($0.submenu.map { Self.contains($0, open) } ?? false) })
@@ -404,6 +433,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     @objc func runEntry(_ sender: NSMenuItem) {
         guard let entry = sender.representedObject as? MenuEntry else { return }
+        if entry.params["arrange"] == "true" { return openArrange() }
         handle(entry)
     }
 
