@@ -131,8 +131,7 @@ git clone https://github.com/ha-ptt0601/github-status-bar-macos.git ~/work/githu
 2. installs the `/chip` skill into `~/.claude/skills/chip`;
 3. registers the `chip` MCP server for the `@` picker;
 4. builds **GitHubBar.app** into `~/Applications`, signs it ad hoc, clears quarantine and launches it. The app adds itself to Login Items; toggle **Open at Login** in its menu;
-5. removes the SwiftBar plugin that older chip versions used (SwiftBar is no longer needed);
-6. writes a default `~/.config/chip/config.json`.
+5. writes a default `~/.config/chip/config.json`.
 
 It is safe to run again, and it never overwrites files it did not create. `chip uninstall` removes exactly what it added; your config and cache are kept.
 

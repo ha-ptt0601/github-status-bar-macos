@@ -13,7 +13,7 @@ class InstallTest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         tmp = Path(self.tmpdir.name)
-        self.home, self.repo, self.plugin_dir = tmp / "home", tmp / "repo", tmp / "plugins"
+        self.home, self.repo = tmp / "home", tmp / "repo"
         (self.repo / "bin").mkdir(parents=True)
         (self.repo / "bin" / "chip").write_text("#!/usr/bin/env python3\n")
         (self.repo / "skill").mkdir()
@@ -25,7 +25,6 @@ class InstallTest(unittest.TestCase):
         self.calls, self.out = [], []
         self.mcp_registered = ""
         self.tools = {"gh", "claude", "git", "python3", "fzf", "swift"}
-        self.defaults_dir = self.plugin_dir
         self.build_fails = False
 
     def tearDown(self):
@@ -41,10 +40,6 @@ class InstallTest(unittest.TestCase):
 
     def runner(self, cmd, **kw):
         self.calls.append(cmd)
-        if cmd[:3] == ["defaults", "read", "com.ameba.SwiftBar"]:
-            if self.defaults_dir is None:
-                return subprocess.CompletedProcess(cmd, 1, "", "does not exist")
-            return subprocess.CompletedProcess(cmd, 0, f"{self.defaults_dir}\n", "")
         if cmd[:3] == ["claude", "mcp", "get"]:
             code = 0 if self.mcp_registered else 1
             return subprocess.CompletedProcess(cmd, code, self.mcp_registered, "")
@@ -104,16 +99,6 @@ class InstallTest(unittest.TestCase):
         self.assertFalse(self.app.exists())
         self.assertTrue(any("boom" in line for line in self.out))
 
-    def test_removes_chip_swiftbar_plugins_only(self):
-        self.plugin_dir.mkdir()
-        for name in ("chip.1m.sh", "chip.3m.sh", "chip-mine.1m.sh"):
-            (self.plugin_dir / name).write_text(f"#!/bin/bash\n# {installer.MARKER}\n")
-        (self.plugin_dir / "weather.5m.sh").write_text("#!/bin/sh\necho sun\n")
-        (self.plugin_dir / "chip.1m.sh.bak").write_text("keep")
-        self.install()
-        self.assertEqual(sorted(p.name for p in self.plugin_dir.iterdir()), ["chip.1m.sh.bak", "weather.5m.sh"])
-        self.assertTrue(any("brew uninstall --cask swiftbar" in line for line in self.out))
-
     def test_second_install_is_idempotent(self):
         self.install()
         self.mcp_registered = f"chip:\n  Command: {self.chip_bin}\n  Args: mcp\n"
@@ -128,13 +113,10 @@ class InstallTest(unittest.TestCase):
         skill_dir = self.home / ".claude" / "skills" / "chip"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("someone else's skill")
-        self.plugin_dir.mkdir()
-        (self.plugin_dir / "chip.1m.sh").write_text("#!/bin/sh\necho mine\n")
         self.mcp_registered = "chip:\n  Command: /other/chip\n"
         self.install()
         self.assertEqual(os.readlink(link), "/somewhere/else")
         self.assertEqual((skill_dir / "SKILL.md").read_text(), "someone else's skill")
-        self.assertIn("echo mine", (self.plugin_dir / "chip.1m.sh").read_text())
         self.assertGreaterEqual(sum("skip" in line for line in self.out), 3)
 
     def test_dev_symlink_skill_is_replaced(self):

@@ -15,9 +15,6 @@ REPO_DIR = Path(__file__).resolve().parents[1]
 MARKER = "installed by chip"
 APP_NAME = "GitHubBar"
 BUNDLE_ID = "com.ha-ptt0601.githubbar"
-SWIFTBAR_DOMAIN = "com.ameba.SwiftBar"
-# SwiftBar plugins earlier chip versions installed; GitHubBar replaces them.
-OLD_PLUGIN_NAMES = ("chip.1m.sh", "chip.3m.sh", "chip-mine.1m.sh")
 REQUIRED = (("gh", "brew install gh"), ("claude", "see https://claude.com/claude-code"),
             ("git", "xcode-select --install"))
 LSREGISTER = ("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework"
@@ -94,28 +91,6 @@ def _install_mcp(chip_bin: Path, runner, out) -> None:
     runner(["claude", "mcp", "add", "--scope", "user", "chip", "--", str(chip_bin), "mcp"],
            capture_output=True, text=True)
     out("mcp   chip (user scope)")
-
-
-def _swiftbar_folders(runner, home: Path) -> List[Path]:
-    folders = [home / ".swiftbar", home / "Library" / "Application Support" / "SwiftBar" / "Plugins"]
-    proc = runner(["defaults", "read", SWIFTBAR_DOMAIN, "PluginDirectory"], capture_output=True, text=True)
-    if proc.returncode == 0 and proc.stdout.strip():
-        folders.insert(0, Path(os.path.expanduser(proc.stdout.strip())))
-    return list(dict.fromkeys(folders))
-
-
-def _remove_old_plugins(runner, home: Path, out) -> None:
-    """Remove the SwiftBar plugins earlier chip versions wrote (only files carrying chip's marker)."""
-    removed = False
-    for folder in _swiftbar_folders(runner, home):
-        for name in OLD_PLUGIN_NAMES:
-            plugin = folder / name
-            if plugin.is_file() and MARKER in plugin.read_text():
-                plugin.unlink()
-                removed = True
-                out(f"rm    {plugin} (GitHubBar replaces the SwiftBar plugin)")
-    if removed:
-        out("note  chip no longer needs SwiftBar; if nothing else uses it: brew uninstall --cask swiftbar")
 
 
 def _make_icon(repo: Path, resources: Path, runner) -> None:
@@ -206,7 +181,6 @@ def install(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None,
         out(f"note  add {link.parent} to PATH to use `chip` in a shell")
     _install_skill(repo, home, chip_bin, out)
     _install_mcp(chip_bin, runner, out)
-    _remove_old_plugins(runner, home, out)
     app_ok = _install_app(repo, home, chip_bin, runner, which, out)
     if config.init(config_file):
         out(f"conf  {config_file or config.config_path()}")
@@ -232,7 +206,6 @@ def uninstall(repo: Path = REPO_DIR, home: Optional[Path] = None, runner=None, o
     if got.returncode == 0 and str(chip_bin) in got.stdout:
         runner(["claude", "mcp", "remove", "chip", "--scope", "user"], capture_output=True, text=True)
         out("rm    MCP server chip")
-    _remove_old_plugins(runner, home, out)
     app = app_path(home)
     info = app / "Contents" / "Info.plist"
     if info.exists() and plistlib.loads(info.read_bytes()).get("CFBundleIdentifier") == BUNDLE_ID:
