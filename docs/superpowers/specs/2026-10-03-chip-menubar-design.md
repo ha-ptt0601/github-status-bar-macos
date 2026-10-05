@@ -131,7 +131,7 @@ A chip review of a PR is a **round**. The record for `<label>::<skill>` keeps th
 
 ## Tabs, search and project filter
 
-- **One icon, two tabs.** The top of the menu has two checkable items, `Review requests · N` (the default tab) and `My pull requests · M · 🔴K`. Clicking the other one runs `chip view <tab>`, which is saved in `~/.cache/chip/view.json`, and refreshes. The menu closes on click, so the user reopens it to see the other tab. The icon title combines the review count, 🔴 (the user's PRs with changes requested) and run badges. Each tab lists only its own runs (review runs or address runs). There is one plugin, `chip.1m.sh`, and it sends all notifications.
+- **One icon, two tabs.** The top of the menu has two checkable items, `Review requests · N` (the default tab) and `My pull requests · M · 🔴K`. Clicking the other one runs `chip view <tab>`, which is saved in `~/.cache/chip/view.json`, and refreshes. In SwiftBar the menu closes on click, so the user reopens it to see the other tab; GitHubBar switches in place (see *In-place menu*). The icon title combines the review count, 🔴 (the user's PRs with changes requested) and run badges. Each tab lists only its own runs (review runs or address runs). There is one plugin, `chip.1m.sh`, and it sends all notifications.
 - **Search…** opens a native `display dialog`, because menus have no text field. Its buttons are Clear, Cancel and Search. The query is saved in `~/.cache/chip/filter.json`. Both tabs show only matching rows (all words; label, repo, title, author, Jira, reviewers) and a `"q" · N matches — Clear search` line. Counts in the title and tabs ignore the search.
 - **Projects ›** lists the tab's projects with ✓ on the shown ones. Clicking one toggles it in `hidden_projects` in the config (`chip project toggle <name>`), and **Show all** clears the list (`chip project all`).
 
@@ -285,7 +285,7 @@ People who install chip should see an app named **GitHubBar** with the GitHub ic
 AppKit closes a menu after a click on a plain item, so GitHubBar changes the open menu in place instead:
 
 - **Panes.** The app runs `chip swiftbar --deliver --panes`. Both tabs are printed, each after a ` | pane=<tab>` marker (`active=true` on the remembered one). Tab items carry `tab=<name>` and become one segmented control. Switching hides the other pane's items and runs `chip view <tab>` in the background. The menu's minimum width is measured with both panes shown.
-- **Projects.** Project sections carry `proj=<name>` (and `hidden=true` for hidden projects, which are still printed). Rows with `keep=toggle|all|radio|refresh` are custom views that run their command without closing the menu. Project toggles hide or show the sections at once; other changes (counts, older/approved lists) apply when the menu closes.
+- **Projects.** Project sections carry `proj=<name>` (and `hidden=true` for hidden projects, which are still printed). Rows with `keep=toggle|all|radio|refresh` are custom views that run their command without closing the menu. Project toggles hide or show the sections at once. Since v0.1.7 every action also rebuilds the rest of the menu at once (see *Actions keep the menu open*).
 - **Refresh now** (`keep=refresh`) shows a spinner and "Refreshing…", refills the open menu with `performSelector(onMainThread:…modes:)` in the event-tracking mode, then shows "✓ Up to date" for 2 s.
 - **Live search.** With `--panes`, *Search…* becomes ` | searchfield=true` (an `NSSearchField` view, focused on open). Each pane's lists are tagged `body=true`, followed by every PR of the tab as a hidden row with `searchonly=true find="<label repo title author jira reviewers>"` and a `nomatch=true` line. While the field has text, `body` items are hidden and up to 40 matching `searchonly` rows are shown.
 
@@ -323,3 +323,42 @@ AppKit closes a menu after a click on a plain item, so GitHubBar changes the ope
 
 - `chip/watch.py`: each `chip swiftbar` (unless `--force`) calls `gh api -i notifications` with `If-Modified-Since`, at most every `X-Poll-Interval` (60 s). `304` → nothing; `200` with a PullRequest notification newer than the last seen (`review_requested`, `author`, `comment`, `mention`, `state_change`, `ci_activity`…) → `load_all(force=True)`. The first check only records. State: `~/.cache/chip/notifications.json`. Not available (non-200) → back off 5 min and use the 3-minute cache; available → the cache lasts 5 min.
 - Counts: icon `review to-do · ⚠mine to-do` + run badges, with a tooltip; tabs `to do / all`. Review to-do = `model.needs_review` (re-review, or new and younger than 30 days); mine to-do = `model.MINE_ACTION` (changes, CI failed, conflict, threads, ready).
+
+## PR order in a project (v0.1.6)
+
+- `model._group`: PRs waiting on the user (`needs_review`: re-review, or new and younger than 30 days) form group 0 together; then waiting on the author; then stale; then approved.
+- Inside a group, the latest change first: `model.last_activity` = the later of `created_at` and `last_commit_at` (ties: newer `created_at`). A request that just arrived is on top.
+
+## Menu bar options (v0.1.7)
+
+- Config `menu_bar_counts` (true), `menu_bar_badges` (false), `menu_bar_animate` (true), set from **Settings › Menu bar** (`keep=setting` rows, `chip config set <key> on|off`).
+- The title line shows the counts and/or the `🔵N 🟡N` badges. With animation on and badges off it carries `animate=true` (a review runs) and `attention=true` (one needs the user); GitHubBar draws a spinning ring (a `.common`-mode timer, 80 ms) and a yellow dot on the icon, otherwise the plain template image. The tooltip always has the full counts.
+
+## Actions keep the menu open (v0.1.7)
+
+- Rows with `keep=run` (Run, Continue review, Stop, Remove, Re-request review, Copy link, Clear, Ready/Draft) carry `busy=` and `done=` texts. The row shows a spinner and `busy`, runs the command, then `done` (exit status 0) or "Failed: see the notification".
+- After any action from a submenu (and Status style, Menu bar, Projects), the app renders the menu again and **rebuilds every top-level item except the one whose submenu is open** (`updateInPlace`): that item only gets its new title and icon, and its submenu is replaced when the menu closes (`pending`). Removing the open item under its submenu crashed AppKit, so nothing else touches it. Items are matched across rebuilds by pane plus PR label, review key (`label · skill · `) or text; a removed review's row is greyed out until the menu closes.
+- Refresh now refills the open menu directly (it is a top-level item).
+
+## Acting on PRs (v0.1.7)
+
+- `chip act <label> <action>` (`chip/actions.py`): review PRs get `approve`, `request-changes`, `comment` (`gh pr review`); the user's own PRs get `merge` (when `READY`; the repo's preferred method: squash, else merge, else rebase; branch kept), `close`, `comment` (`gh pr comment`), `ready` / `draft` (`gh pr ready [--undo]`).
+- Everything but ready/draft asks first in an `osascript display dialog` (approve and comment take text; request changes requires it). Cancel does nothing. On success chip refetches (`store.load_all(force=True)`) and notifies, so the next menu shows the new state everywhere.
+
+## Feature sessions (v0.1.7)
+
+- `chip/sessions.py` indexes `~/.claude/projects/*/*.jsonl` (top-level sessions; chip's own worktree sessions skipped) into `sessions.json`: per file the line count per `gitBranch`, the cwd per branch, the start cwd, the first prompt, the last timestamp and the mtime. Only new or changed files are read, within a time budget (1.5 s per menu refresh; a full first pass took 3.6 s for 257 sessions).
+- A PR's feature session: a hand-made link in `links.json` (`chip session link <label> [id]`, a dialog asks for the id), else the session with the most lines on the PR's head branch whose cwd is in that repo's clone (trunk names never match).
+- **Address review in feature session** (`chip run <label> --address --feature`) continues that session in the background in its start folder (`runs.start(..., resume=<id>)`), so later rounds continue it too. **Open feature session** runs `cd <start cwd> && claude --resume <id>` in Terminal.
+
+## Project order (v0.1.8–v0.1.9)
+
+- Config `project_order`: projects listed first in this order, in both tabs and in the Projects submenu; the others follow, busiest first (`swiftbar._project_order`).
+- In GitHubBar the Projects submenu's project rows (`projectrow=true`) become one `ProjectListView`: drag a row to reorder, click its box to show/hide. Every change runs `chip project arrange --order <this tab's projects> --hidden <hidden ones>` and rebuilds the rest of the menu. `config.arrange_projects` keeps the other tab's projects after the given ones and keeps their hidden state.
+- v0.1.8 used a separate "Arrange projects" window; v0.1.9 replaced it with the in-menu list.
+
+## Reliability (v0.1.5–v0.1.8)
+
+- **PATH.** launchd starts login items with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and ignores `LSEnvironment`'s PATH; GitHubBar puts the Info.plist PATH back in front at launch, and `bin/chip` adds `/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin` to a bare PATH.
+- **Sleep.** Every JSON file chip writes goes through `files.write_atomic` (temp file + rename), so a sleep mid-write cannot leave `last.json` half-written (which emptied the menu). A `gh api graphql` call that times out (45 s of wall time, which includes sleep) is retried once. GitHubBar refreshes 5 s after `NSWorkspace.didWakeNotification`.
+- **Login item.** GitHubBar registers itself with `SMAppService` on every launch unless the user turned Open at Login off (a reinstall drops the registration).
