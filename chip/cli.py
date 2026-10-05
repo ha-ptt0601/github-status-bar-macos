@@ -515,6 +515,9 @@ def cmd_search(args) -> int:
 
 
 def cmd_project(args) -> int:
+    if args.action == "arrange":
+        config.arrange_projects(args.order or [], args.hidden or [])
+        return 0
     if args.action == "all":
         config.show_all_projects()
     elif args.name:
@@ -602,9 +605,11 @@ def main(argv=None, runner=None) -> int:
                        help="run the repo's own review skill on the PR in a worktree (built-in review if it has none)")
     p_search = sub.add_parser("search", help="search the menu (native dialog); --clear removes the search")
     p_search.add_argument("--clear", action="store_true")
-    p_project = sub.add_parser("project", help="hide/show a project in the menu: toggle NAME | all")
-    p_project.add_argument("action", choices=["toggle", "all"])
+    p_project = sub.add_parser("project", help="projects in the menu: toggle NAME | all | arrange --order … --hidden …")
+    p_project.add_argument("action", choices=["toggle", "all", "arrange"])
     p_project.add_argument("name", nargs="?")
+    p_project.add_argument("--order", nargs="*", help="arrange: projects in this order first")
+    p_project.add_argument("--hidden", nargs="*", help="arrange: the projects to hide")
     sub.add_parser("nudge", help="re-request review from reviewers who have not approved").add_argument("label")
     p_session = sub.add_parser("session", help="open | link [id] | unlink the feature session of your PR")
     p_session.add_argument("action", choices=["open", "link", "unlink"])
