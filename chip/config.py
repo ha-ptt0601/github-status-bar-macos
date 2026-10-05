@@ -279,5 +279,33 @@ def arrange_projects(order: List[str], hidden: List[str], path: Optional[Path] =
     _update(path, change)
 
 
+def rename_projects(current: List[str], path: Optional[Path] = None) -> bool:
+    """A saved project name that no longer exists but matches exactly one current `owner/<name>` (its
+    label gained the owner) is renamed in project_order and hidden_projects. True if anything changed."""
+    path = Path(path) if path else config_path()
+    try:
+        data = json.loads(path.read_text()) if path.exists() else {}
+    except ValueError:
+        return False
+    names = set(current)
+
+    def renamed(name):
+        if name in names:
+            return name
+        matches = [c for c in current if c.endswith("/" + name)]
+        return matches[0] if len(matches) == 1 else name
+    changed = False
+    for key in ("project_order", "hidden_projects"):
+        old = data.get(key)
+        if isinstance(old, list):
+            new = list(dict.fromkeys(renamed(n) for n in old))
+            if new != old:
+                data[key] = new
+                changed = True
+    if changed:
+        files.write_atomic(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    return changed
+
+
 def show_all_projects(path: Optional[Path] = None) -> None:
     _update(path, lambda data: data.__setitem__("hidden_projects", []))

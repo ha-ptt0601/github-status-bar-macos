@@ -680,8 +680,11 @@ def build_menu(plugin: str, force: bool = False, fetch_runner=None, runner=None,
     agents = runs.fetch_agents(runner) if records else {}
     every_row = (inbox_all or {}).get("rows", []) + (inbox_all or {}).get("mine", [])
     rows_by_label = {r["label"]: r for r in every_row}  # mine too, or address rounds would look "closed"
+    if every_row and config.rename_projects(sorted({_project(r) for r in every_row})):
+        cfg = config.load()  # saved project names followed a label change
     observed = runs.observe(records, agents, now)
-    resolved = runs.resolve(records, rows_by_label, now, fetched=inbox_all is not None and not error)
+    relabelled = runs.relabel(records, rows_by_label)
+    resolved = runs.resolve(records, rows_by_label, now, fetched=inbox_all is not None and not error) or relabelled
     if runs.clean_worktrees(records) or resolved or observed:
         runs.save(runs_path, records)
     views = {key: runs.view(rec, agents.get(rec["id"]), now) for key, rec in records.items()}

@@ -214,6 +214,18 @@ class AppliesTest(unittest.TestCase):
             self.assertEqual(cfg["hidden_projects"], ["c", "y"])
         self.assertIn("project_order", config.validate({"project_order": "a"})[0])
 
+    def test_rename_projects_after_a_label_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "c.json"
+            config.arrange_projects(["b2b", "api", "acme/api", "web"], ["api"], path)
+            self.assertFalse(config.rename_projects(["b2b", "acme/api", "other/api", "web"], path))
+            cfg = config.load(path)  # "api" is ambiguous (two owners): left alone
+            self.assertEqual(cfg["project_order"], ["b2b", "api", "acme/api", "web"])
+            self.assertTrue(config.rename_projects(["b2b", "acme/api", "web"], path))
+            cfg = config.load(path)
+            self.assertEqual((cfg["project_order"], cfg["hidden_projects"]), (["b2b", "acme/api", "web"], ["acme/api"]))
+            self.assertFalse(config.rename_projects(["b2b", "acme/api", "web"], path))
+
     def test_scope_validation(self):
         self.assertIn("repos must be a list", config.validate({"skills": [{"name": "A", "prompt": "x", "repos": "api"}]})[0])
         self.assertEqual(config.validate({"skills": [{"name": "A", "prompt": "x", "languages": ["Swift"]}]}), [])
