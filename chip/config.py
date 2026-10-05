@@ -268,10 +268,14 @@ def toggle_project(name: str, path: Optional[Path] = None) -> None:
 
 
 def arrange_projects(order: List[str], hidden: List[str], path: Optional[Path] = None) -> None:
-    """Save the project order and the hidden projects chosen in the Arrange window."""
+    """Save a dragged project list. `order` is every project of one tab, in the new order: projects that
+    only the other tab has keep their place after them, and their hidden state."""
     def change(data):
-        data["project_order"] = list(dict.fromkeys(order))
-        data["hidden_projects"] = list(dict.fromkeys(hidden))
+        shown_here = set(order)
+        rest = [p for p in data.get("project_order", []) if p not in shown_here]
+        data["project_order"] = list(dict.fromkeys(list(order) + rest))
+        kept = [p for p in data.get("hidden_projects", []) if p not in shown_here]
+        data["hidden_projects"] = list(dict.fromkeys(kept + list(hidden)))
     _update(path, change)
 
 

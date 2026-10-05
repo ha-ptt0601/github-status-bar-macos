@@ -206,6 +206,12 @@ class AppliesTest(unittest.TestCase):
             config.arrange_projects(["b", "a", "b"], ["c"], path)
             cfg = config.load(path)
             self.assertEqual((cfg["project_order"], cfg["hidden_projects"]), (["b", "a"], ["c"]))
+            # The other tab's projects (z, hidden y) keep their place and state.
+            config.arrange_projects(["x", "z", "y"], ["y"], path)
+            config.arrange_projects(["a", "b"], [], path)
+            cfg = config.load(path)
+            self.assertEqual(cfg["project_order"], ["a", "b", "x", "z", "y"])
+            self.assertEqual(cfg["hidden_projects"], ["c", "y"])
         self.assertIn("project_order", config.validate({"project_order": "a"})[0])
 
     def test_scope_validation(self):
