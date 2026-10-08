@@ -2,6 +2,11 @@
 
 Each section is a release's notes on GitHub: `scripts/release.sh X.Y.Z` publishes the `## vX.Y.Z` section, followed by the install steps.
 
+## v0.1.17
+
+### Changed
+- **"Open feature session" finds the session that opened the PR.** When Claude Code creates a PR (`gh pr create`), it records the link in that session. GitHubBar now picks that session as the PR's feature session, before the busiest session on the PR's branch, so a branch worked on in several sessions no longer opens the wrong one. A session you linked by hand still wins.
+
 ## v0.1.16
 
 ### Fixed
