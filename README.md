@@ -26,7 +26,7 @@
 - **Your open PRs, grouped by project.** Each row shows its status, first match wins: 🔴 Changes requested · ❌ CI failed · ⚠️ Conflict · 💬 N unresolved threads · ✅ Approved · ⚪ Waiting · ⚪ Draft.
 - **Reviewer column:** `bob ✗ carol ✓` (✓ approved, ✗ changes requested, 💬 commented), or `→ bob, carol` while you are still waiting on requested reviewers.
 - **Address review:** runs a skill that reads every unresolved thread, then **only proposes** the code change and drafts a reply for each one. It never edits files, commits, pushes or posts. `git commit`, `git push`, `gh pr comment` and `gh pr review` are blocked for these runs.
-- **Feature session:** chip finds the Claude Code session where you built the PR (the session with the most work on the PR's branch, from `~/.claude/projects`), or one you link by hand (**Link feature session…**, paste the session id). Then:
+- **Feature session:** chip finds the Claude Code session where you built the PR (the session that opened it, which Claude Code records when it runs `gh pr create`; else the session with the most work on the PR's branch, from `~/.claude/projects`), or one you link by hand (**Link feature session…**, paste the session id). Then:
   - **Address review in feature session** continues that very session in the background, so Claude remembers how the feature was built while it answers the reviewers (don't keep that session open elsewhere at the same time);
   - **Open feature session** resumes it in Terminal, in the folder it started in;
   - **Link another session…** / **Unlink** change the link.

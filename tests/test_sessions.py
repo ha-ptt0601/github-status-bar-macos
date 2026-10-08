@@ -63,6 +63,28 @@ class SessionsTest(unittest.TestCase):
         sessions.unlink(links_path, "api#9")
         self.assertEqual(sessions.load_links(links_path), {})
 
+    def test_the_session_that_opened_the_pr_beats_the_busiest_one(self):
+        api = "/Users/me/work/acme/api"
+        opened = json.dumps({"type": "pr-link", "sessionId": "opener", "prNumber": 9,
+                             "prUrl": "https://github.com/Acme/API/pull/9", "prRepository": "Acme/API"})
+        self.session("-Users-me-work-acme-api", "opener", [line("feature/export", api), opened])
+        self.session("-Users-me-work-acme-api", "busy", [line("feature/export", api)] * 9)
+        index = sessions.update_index(self.index_path, budget=5, root=self.root)
+        row = {"label": "api#9", "repo": "acme/api", "number": 9, "head": "feature/export"}
+        found = sessions.for_rows([row, dict(row, label="api#10", number=10)], index, {}, {"acme/api": api})
+        self.assertEqual((found["api#9"]["id"], found["api#9"]["cwd"]), ("opener", api))
+        self.assertEqual(found["api#10"]["id"], "busy")  # no session opened #10: the branch decides
+        self.assertEqual(sessions.find_by_pr(index, "acme/api", 9)["id"], "opener")
+        self.assertIsNone(sessions.find_by_pr(index, "acme/api", 10))
+
+    def test_an_index_from_before_pr_links_is_read_again(self):
+        path = self.session("-p", "a", [line("feature/x", "/r"), json.dumps(
+            {"type": "pr-link", "prNumber": 3, "prRepository": "acme/api"})])
+        stale = {"files": {str(path): {"branches": {"feature/x": 1}, "mtime": path.stat().st_mtime}}}
+        self.index_path.write_text(json.dumps(stale))
+        index = sessions.update_index(self.index_path, root=self.root)
+        self.assertEqual(index["files"][str(path)]["prs"], ["acme/api#3"])
+
 
 class ResumeTest(unittest.TestCase):
     def test_round_one_continues_the_given_session(self):
