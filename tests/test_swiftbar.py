@@ -548,12 +548,14 @@ class BuildMenuTest(unittest.TestCase):
         return subprocess.CompletedProcess(cmd, 0, "[]", "")
 
     def test_first_cycle_silent_then_notifies_new_pr(self):
-        out = swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner, now=1000)
+        # env={}: a GITHUBBAR_NOTIFY in the shell running the tests would queue notes instead of sending them
+        out = swiftbar.build_menu(PLUGIN, fetch_runner=self.fetch_runner, runner=self.runner, now=1000, env={})
         self.assertTrue(out.startswith("1 | templateImage="))
         self.assertFalse(any(c[0] == "osascript" for c in self.calls))
         self.assertTrue(Path(self.tmp.name, "notify.json").exists())
         self.nodes.append(make_node(id="b", number=2, url="https://github.com/acme/api/pull/2"))
-        swiftbar.build_menu(PLUGIN, force=True, fetch_runner=self.fetch_runner, runner=self.runner, now=2000)
+        swiftbar.build_menu(PLUGIN, force=True, fetch_runner=self.fetch_runner, runner=self.runner, now=2000,
+                            env={})
         notes = [c for c in self.calls if c[0] == "osascript"]
         self.assertEqual(len(notes), 1)
         self.assertIn("New review request: api#2", notes[0][2])
