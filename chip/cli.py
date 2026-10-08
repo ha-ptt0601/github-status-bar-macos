@@ -314,13 +314,13 @@ FEATURE_SKILL = "Address review (feature session)"
 
 
 def feature_session(row: dict) -> Optional[dict]:
-    """The session linked to this PR, else the one found on its branch."""
+    """The session linked to this PR, else the one that opened it, else the one found on its branch."""
     links = sessions.load_links(cache_dir() / "links.json")
     if row["label"] in links:
         return links[row["label"]]
     index = sessions.update_index(cache_dir() / "sessions.json", budget=5)
-    clone = repos._load(cache_dir() / "repos.json").get(row["repo"].lower())
-    return sessions.find(index, row.get("head", ""), clone)
+    clones = repos._load(cache_dir() / "repos.json")
+    return sessions.for_rows([row], index, {}, clones).get(row["label"])
 
 
 def _run_in_feature_session(row: dict, skill: dict, cfg: dict) -> int:

@@ -3,8 +3,9 @@
 Claude Code stores each session as ~/.claude/projects/<dir>/<session-id>.jsonl, and every line records
 `gitBranch` and `cwd`. An index (`sessions.json` in chip's cache) keeps, per session file, how many lines
 were on each branch, the cwd used on it, the first prompt and the file's mtime; only new or changed files
-are read again, within a time budget per refresh. A PR's feature session is the one with the most activity
-on the PR's head branch in that repo. A session the user links by hand (`links.json`) always wins.
+are read again, within a time budget per refresh. A PR's feature session is the one that opened it (Claude
+Code writes a `pr-link` line when a session creates a PR), else the one with the most activity on the PR's
+head branch in that repo. A session the user links by hand (`links.json`) always wins.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from chip import files
 
 BRANCH_RE = re.compile(r'"gitBranch":"([^"]*)"')
 CWD_RE = re.compile(r'"cwd":"([^"]*)"')
+PR_LINK_RE = re.compile(r'"type":\s*"pr-link"')
 TRUNKS = {"", "HEAD", "main", "master", "dev", "develop", "staging", "build-staging"}
 SKIP_DIRS = ("-cache-chip-worktrees-",)  # chip's own review sessions
 
@@ -51,10 +53,21 @@ def _first_prompt(line: str) -> str:
     return text if not text.startswith("<") else ""  # skip command/meta wrappers
 
 
+def _pr_link(line: str) -> str:
+    """`owner/repo#number` of a `pr-link` line (lowercased), or ""."""
+    try:
+        entry = json.loads(line)
+    except ValueError:
+        return ""
+    repo, number = entry.get("prRepository"), entry.get("prNumber")
+    return f"{repo.lower()}#{number}" if isinstance(repo, str) and isinstance(number, int) else ""
+
+
 def scan(file: Path) -> dict:
-    """Branch activity, cwd per branch, first prompt and last time of one session file."""
+    """Branch activity, cwd per branch, PRs it opened, first prompt and last time of one session file."""
     branches: Dict[str, int] = {}
     cwds: Dict[str, str] = {}
+    prs: List[str] = []
     prompt, last, start = "", "", ""
     with open(file, encoding="utf-8", errors="replace") as handle:
         for line in handle:
@@ -68,12 +81,16 @@ def scan(file: Path) -> dict:
             if not start:
                 cwd = CWD_RE.search(line)
                 start = cwd.group(1) if cwd else ""
+            if PR_LINK_RE.search(line):
+                pr = _pr_link(line)
+                if pr and pr not in prs:
+                    prs.append(pr)
             if not prompt and '"type":"user"' in line:
                 prompt = _first_prompt(line)
             stamp = re.search(r'"timestamp":"([^"]+)"', line)
             if stamp:
                 last = stamp.group(1)
-    return {"branches": branches, "cwds": cwds, "prompt": prompt[:80], "last": last, "start": start}
+    return {"branches": branches, "cwds": cwds, "prs": prs, "prompt": prompt[:80], "last": last, "start": start}
 
 
 def update_index(path, budget: float = 1.5, root: Optional[Path] = None) -> dict:
@@ -90,7 +107,8 @@ def update_index(path, budget: float = 1.5, root: Optional[Path] = None) -> dict
         key = str(file)
         seen.add(key)
         mtime = file.stat().st_mtime
-        if files.get(key, {}).get("mtime") == mtime:
+        known = files.get(key, {})
+        if known.get("mtime") == mtime and "prs" in known:  # an entry without "prs" predates PR links
             continue
         if time.monotonic() > deadline:
             break  # the rest on the next refresh
@@ -128,6 +146,19 @@ def find(index: dict, branch: str, clone: Optional[str] = None) -> Optional[dict
     return _session(best[1], best[2], branch) if best else None
 
 
+def find_by_pr(index: dict, repo: str, number: int) -> Optional[dict]:
+    """The session that opened `repo#number` (the latest, should several have), or None."""
+    pr = f"{repo.lower()}#{number}"
+    best = None
+    for key, info in index.get("files", {}).items():
+        if pr in info.get("prs", []) and (best is None or info.get("last", "") > best[1].get("last", "")):
+            best = (key, info)
+    if best is None:
+        return None
+    branches = best[1].get("branches") or {"": 1}
+    return _session(best[0], best[1], max(branches, key=branches.get))
+
+
 def by_id(index: dict, session_id: str, root: Optional[Path] = None) -> Optional[dict]:
     """A session by id, from the index or the projects folder."""
     for key, info in index.get("files", {}).items():
@@ -158,14 +189,15 @@ def unlink(path, label: str) -> None:
 
 
 def for_rows(rows: List[dict], index: dict, links: Dict[str, dict], clones: Dict[str, str]) -> Dict[str, dict]:
-    """label → feature session (linked by hand, else found by branch) for the user's own PRs."""
+    """label → feature session (linked by hand, else the one that opened the PR, else found by branch)."""
     found = {}
     for row in rows:
         session = links.get(row["label"])
         if session:
             found[row["label"]] = dict(session, linked=True)
             continue
-        session = find(index, row.get("head", ""), clones.get(row["repo"].lower()))
+        session = (find_by_pr(index, row["repo"], row["number"]) if row.get("number") else None) \
+            or find(index, row.get("head", ""), clones.get(row["repo"].lower()))
         if session:
             found[row["label"]] = dict(session, linked=False)
     return found
